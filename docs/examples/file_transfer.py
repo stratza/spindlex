@@ -2,15 +2,15 @@
 """
 SFTP File Transfer Examples
 
-This module demonstrates file transfer operations using SSH Library's SFTP client.
+This module demonstrates file transfer operations using Spindle's SFTP client.
 """
 
 import os
 import tempfile
 from pathlib import Path
 
-from ssh_library import SSHClient, AutoAddPolicy
-from ssh_library.exceptions import SFTPError, SSHException
+from spindle import SSHClient, AutoAddPolicy
+from spindle.exceptions import SFTPError, SSHException
 
 
 def basic_file_transfer_example():
@@ -377,7 +377,7 @@ def sftp_context_manager_example():
 
 def main():
     """Run all SFTP examples."""
-    print("SSH Library SFTP Examples")
+    print("Spindle SFTP Examples")
     print("=" * 30)
     
     examples = [

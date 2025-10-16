@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+All notable changes to Spindle will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -8,14 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Initial implementation of SSH client and server functionality
+- Initial implementation of Spindle SSH client and server functionality
 - SFTP client and server support
 - Modern cryptographic algorithms (Ed25519, ECDSA, ChaCha20-Poly1305)
 - Comprehensive logging and monitoring system
 - Port forwarding capabilities
 - GSSAPI authentication support
 - Async/await support for high-performance applications
-- Command-line tools (ssh-keygen, ssh-benchmark)
+- Command-line tools (spindle-keygen, spindle-benchmark)
 
 ### Security
 - Secure defaults with modern cipher suites

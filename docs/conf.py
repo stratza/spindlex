@@ -16,9 +16,9 @@ sys.path.insert(0, str(project_root))
 
 # -- Project information -----------------------------------------------------
 
-project = 'SSH Library'
-copyright = '2024, SSH Library Team'
-author = 'SSH Library Team'
+project = 'Spindle'
+copyright = '2024, Spindle Team'
+author = 'Spindle Team'
 
 # The full version, including alpha/beta/rc tags
 try:
