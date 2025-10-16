@@ -75,6 +75,9 @@ class Transport:
         # Authentication state
         self._userauth_service_requested = False
         
+        # Server interface for authentication callbacks
+        self._server_interface: Optional[Any] = None
+        
         # Port forwarding
         self._port_forwarding_manager = None
     
@@ -1395,6 +1398,24 @@ class Transport:
     def session_id(self) -> Optional[bytes]:
         """Get session ID."""
         return self._session_id
+    
+    def set_server_interface(self, server_interface: Any) -> None:
+        """
+        Set server interface for authentication callbacks.
+        
+        Args:
+            server_interface: Server interface implementing authentication methods
+        """
+        self._server_interface = server_interface
+    
+    def get_server_interface(self) -> Optional[Any]:
+        """
+        Get server interface.
+        
+        Returns:
+            Server interface or None if not set
+        """
+        return self._server_interface
     
     def get_port_forwarding_manager(self) -> "PortForwardingManager":
         """

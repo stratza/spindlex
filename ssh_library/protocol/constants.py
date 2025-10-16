@@ -150,6 +150,11 @@ KEX_COOKIE_SIZE = 16  # Size of random cookie in KEXINIT
 MAX_AUTH_ATTEMPTS = 6  # Maximum authentication attempts
 AUTH_PARTIAL_SUCCESS = "partial success"
 
+# Authentication result codes
+AUTH_SUCCESSFUL = 0
+AUTH_FAILED = 1
+AUTH_PARTIAL = 2
+
 # Channel constants
 CHANNEL_WINDOW_ADJUST_SIZE = 1048576  # 1MB
 MAX_CHANNELS = 100  # Maximum number of channels per connection
