@@ -4,92 +4,90 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "spindle"
-dynamic = ["version"]
-description = "Spindle - A pure-Python SSHv2 client/server library with modern security"
+version = "0.1.0"
+description = "A pure-Python SSHv2 client/server library"
 readme = "README.md"
-license = {text = "Apache-2.0"}
+license = {text = "MIT"}
 authors = [
-    {name = "Spindle Team", email = "team@spindle.dev"}
+    {name = "Spindle Team", email = "team@spindle.org"}
 ]
 maintainers = [
-    {name = "Spindle Team", email = "team@spindle.dev"}
+    {name = "Spindle Team", email = "team@spindle.org"}
 ]
-keywords = ["ssh", "sftp", "security", "networking", "cryptography", "spindle"]
+keywords = ["ssh", "sftp", "client", "server", "cryptography", "security"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "Intended Audience :: System Administrators",
-    "License :: OSI Approved :: Apache Software License",
+    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9", 
+    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3 :: Only",
     "Topic :: Internet",
-    "Topic :: Internet :: File Transfer Protocol (FTP)",
     "Topic :: Security :: Cryptography",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: System :: Networking",
-    "Topic :: System :: Systems Administration",
-    "Typing :: Typed",
 ]
 requires-python = ">=3.8"
 dependencies = [
-    "cryptography>=41.0.0",
-    "typing-extensions>=4.0.0; python_version<'3.10'",
+    "cryptography>=3.0",
+    "typing-extensions>=4.0; python_version<'3.10'",
 ]
 
 [project.optional-dependencies]
-dev = [
-    "pytest>=7.0.0",
-    "pytest-cov>=4.0.0",
-    "pytest-asyncio>=0.21.0",
-    "black>=23.0.0",
-    "isort>=5.12.0",
-    "mypy>=1.0.0",
-    "flake8>=6.0.0",
-    "pre-commit>=3.0.0",
-]
-docs = [
-    "sphinx>=6.0.0",
-    "sphinx-rtd-theme>=1.2.0",
-    "myst-parser>=1.0.0",
+async = [
+    "asyncio-dgram>=2.0",
 ]
 gssapi = [
-    "gssapi>=1.8.0; sys_platform!='win32'",
+    "gssapi>=1.6.0; sys_platform!='win32'",
 ]
-async = [
-    "asyncio-dgram>=2.1.0",
+dev = [
+    "black>=22.0",
+    "isort>=5.0",
+    "flake8>=4.0",
+    "mypy>=0.900",
+    "pre-commit>=2.15",
+    "pytest>=6.0",
+    "pytest-cov>=3.0",
+    "pytest-asyncio>=0.18",
+    "pytest-xdist>=2.0",
+]
+docs = [
+    "sphinx>=5.0",
+    "sphinx-rtd-theme>=1.0",
+    "myst-parser>=0.18",
+    "sphinx-autobuild>=2021.3.14",
+    "sphinxcontrib-spelling>=7.6",
+]
+test = [
+    "pytest>=6.0",
+    "pytest-cov>=3.0",
+    "pytest-asyncio>=0.18",
+    "pytest-xdist>=2.0",
+    "coverage>=6.0",
 ]
 
 [project.urls]
-Homepage = "https://github.com/spindle-dev/spindle"
+Homepage = "https://gitlab.com/daveops.world/development/python/spindle"
 Documentation = "https://spindle.readthedocs.io/"
-Repository = "https://github.com/spindle-dev/spindle.git"
-"Bug Tracker" = "https://github.com/spindle-dev/spindle/issues"
-Changelog = "https://github.com/spindle-dev/spindle/blob/main/CHANGELOG.md"
-"Source Code" = "https://github.com/spindle-dev/spindle"
-"Funding" = "https://github.com/sponsors/spindle-dev"
-
-[project.scripts]
-spindle-keygen = "ssh_library.tools.keygen:main"
-spindle-benchmark = "ssh_library.tools.benchmark:main"
+Repository = "https://gitlab.com/daveops.world/development/python/spindle.git"
+Issues = "https://gitlab.com/daveops.world/development/python/spindle/-/issues"
+Changelog = "https://gitlab.com/daveops.world/development/python/spindle/-/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
-include = ["ssh_library*"]
+where = ["."]
+include = ["spindle*"]
+exclude = ["tests*", "docs*"]
 
 [tool.setuptools.package-data]
-ssh_library = ["py.typed"]
-
-[tool.setuptools.dynamic]
-version = {attr = "ssh_library._version.__version__"}
+spindle = ["py.typed"]
 
 [tool.black]
 line-length = 88
-target-version = ['py38', 'py39', 'py310', 'py311', 'py312']
+target-version = ['py38']
 include = '\.pyi?$'
 extend-exclude = '''
 /(
@@ -109,7 +107,7 @@ extend-exclude = '''
 profile = "black"
 multi_line_output = 3
 line_length = 88
-known_first_party = ["ssh_library"]
+known_first_party = ["spindle"]
 
 [tool.mypy]
 python_version = "3.8"
@@ -131,24 +129,25 @@ module = "tests.*"
 disallow_untyped_defs = false
 
 [tool.pytest.ini_options]
-minversion = "7.0"
-addopts = "-ra -q --strict-markers --strict-config"
 testpaths = ["tests"]
-python_files = ["test_*.py", "*_test.py"]
+python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--tb=short",
+]
 markers = [
-    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-    "integration: marks tests as integration tests",
-    "unit: marks tests as unit tests",
-    "crypto: marks tests as cryptography tests",
-    "network: marks tests requiring network access",
-    "performance: marks tests as performance benchmarks",
-    "stress: marks tests as stress tests",
+    "unit: Unit tests",
+    "integration: Integration tests requiring external services",
+    "performance: Performance and benchmark tests",
+    "security: Security-focused tests",
+    "slow: Tests that take a long time to run",
 ]
 
 [tool.coverage.run]
-source = ["ssh_library"]
+source = ["spindle"]
 omit = [
     "*/tests/*",
     "*/test_*",
@@ -168,7 +167,3 @@ exclude_lines = [
     "class .*\\bProtocol\\):",
     "@(abc\\.)?abstractmethod",
 ]
-
-[tool.bandit]
-exclude_dirs = ["tests"]
-skips = ["B101", "B601"]  # Skip assert_used and shell_injection for tests
