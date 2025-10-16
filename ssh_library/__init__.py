@@ -48,6 +48,15 @@ from .exceptions import (
     ProtocolException
 )
 
+# Logging imports
+from .logging import (
+    SSHLogger,
+    get_logger,
+    configure_logging,
+    get_performance_monitor,
+    get_protocol_analyzer
+)
+
 __all__ = [
     # Version info
     "__version__",
@@ -89,4 +98,11 @@ __all__ = [
     "SFTPError",
     "TransportException",
     "ProtocolException",
+    
+    # Logging
+    "SSHLogger",
+    "get_logger",
+    "configure_logging", 
+    "get_performance_monitor",
+    "get_protocol_analyzer",
 ]
