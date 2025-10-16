@@ -5,7 +5,7 @@ High-level SSH client for establishing connections, executing commands,
 and managing SSH sessions with comprehensive authentication support.
 """
 
-from typing import Optional, Tuple, Union, Any, IO
+from typing import Optional, Tuple, Union, Any, IO, Dict
 import socket
 import logging
 import io
@@ -408,6 +408,14 @@ class SSHClient:
         try:
             if self._transport:
                 self._logger.debug(f"Closing connection to {self._hostname}:{self._port}")
+                
+                # Close all port forwarding tunnels
+                try:
+                    forwarding_manager = self._transport.get_port_forwarding_manager()
+                    forwarding_manager.close_all_tunnels()
+                except Exception as e:
+                    self._logger.warning(f"Error closing port forwarding tunnels: {e}")
+                
                 self._transport.close()
                 self._transport = None
                 self._logger.info(f"Connection closed to {self._hostname}:{self._port}")
@@ -437,6 +445,117 @@ class SSHClient:
             Transport instance or None if not connected
         """
         return self._transport
+    
+    def create_local_port_forward(self, local_port: int, remote_host: str, remote_port: int,
+                                local_host: str = "127.0.0.1") -> str:
+        """
+        Create local port forwarding tunnel.
+        
+        Args:
+            local_port: Local port to listen on
+            remote_host: Remote host to connect to
+            remote_port: Remote port to connect to
+            local_host: Local interface to bind to
+            
+        Returns:
+            Tunnel ID for management
+            
+        Raises:
+            SSHException: If tunnel creation fails
+        """
+        if not self.is_connected():
+            raise SSHException("Not connected to SSH server")
+        
+        try:
+            forwarding_manager = self._transport.get_port_forwarding_manager()
+            return forwarding_manager.create_local_tunnel(local_port, remote_host, remote_port, local_host)
+        except Exception as e:
+            if isinstance(e, SSHException):
+                raise
+            raise SSHException(f"Failed to create local port forwarding: {e}")
+    
+    def create_remote_port_forward(self, remote_port: int, local_host: str, local_port: int,
+                                 remote_host: str = "") -> str:
+        """
+        Create remote port forwarding tunnel.
+        
+        Args:
+            remote_port: Remote port to listen on
+            local_host: Local host to connect to
+            local_port: Local port to connect to
+            remote_host: Remote interface to bind to
+            
+        Returns:
+            Tunnel ID for management
+            
+        Raises:
+            SSHException: If tunnel creation fails
+        """
+        if not self.is_connected():
+            raise SSHException("Not connected to SSH server")
+        
+        try:
+            forwarding_manager = self._transport.get_port_forwarding_manager()
+            return forwarding_manager.create_remote_tunnel(remote_port, local_host, local_port, remote_host)
+        except Exception as e:
+            if isinstance(e, SSHException):
+                raise
+            raise SSHException(f"Failed to create remote port forwarding: {e}")
+    
+    def close_port_forward(self, tunnel_id: str) -> None:
+        """
+        Close port forwarding tunnel.
+        
+        Args:
+            tunnel_id: Tunnel identifier returned by create_*_port_forward
+            
+        Raises:
+            SSHException: If tunnel closure fails
+        """
+        if not self.is_connected():
+            raise SSHException("Not connected to SSH server")
+        
+        try:
+            forwarding_manager = self._transport.get_port_forwarding_manager()
+            forwarding_manager.close_tunnel(tunnel_id)
+        except Exception as e:
+            if isinstance(e, SSHException):
+                raise
+            raise SSHException(f"Failed to close port forwarding tunnel: {e}")
+    
+    def get_port_forwards(self) -> Dict[str, Any]:
+        """
+        Get all active port forwarding tunnels.
+        
+        Returns:
+            Dictionary of tunnel ID to tunnel information
+            
+        Raises:
+            SSHException: If operation fails
+        """
+        if not self.is_connected():
+            raise SSHException("Not connected to SSH server")
+        
+        try:
+            forwarding_manager = self._transport.get_port_forwarding_manager()
+            tunnels = forwarding_manager.get_all_tunnels()
+            
+            # Convert to serializable format
+            result = {}
+            for tunnel_id, tunnel in tunnels.items():
+                result[tunnel_id] = {
+                    'local_addr': tunnel.local_addr,
+                    'remote_addr': tunnel.remote_addr,
+                    'tunnel_type': tunnel.tunnel_type,
+                    'active': tunnel.active,
+                    'connections': len(tunnel.connections)
+                }
+            
+            return result
+        except Exception as e:
+            if isinstance(e, SSHException):
+                raise
+            raise SSHException(f"Failed to get port forwarding tunnels: {e}")
     
     def __enter__(self) -> "SSHClient":
         """Context manager entry."""

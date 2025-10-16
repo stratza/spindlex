@@ -74,6 +74,9 @@ class Transport:
         
         # Authentication state
         self._userauth_service_requested = False
+        
+        # Port forwarding
+        self._port_forwarding_manager = None
     
     def start_client(self, timeout: Optional[float] = None) -> None:
         """
@@ -597,9 +600,118 @@ class Transport:
             self._handle_channel_failure(msg)
         elif msg.msg_type == MSG_CHANNEL_REQUEST:
             self._handle_channel_request(msg)
+        elif msg.msg_type == MSG_CHANNEL_OPEN:
+            self._handle_channel_open(msg)
+        elif msg.msg_type == MSG_GLOBAL_REQUEST:
+            self._handle_global_request(msg)
         else:
             # Unknown channel message - ignore or log
             pass
+    
+    def _handle_channel_open(self, msg: Message) -> None:
+        """
+        Handle incoming channel open request.
+        
+        Args:
+            msg: Channel open message
+        """
+        try:
+            if isinstance(msg, ChannelOpenMessage):
+                channel_type = msg.channel_type
+                sender_channel = msg.sender_channel
+                initial_window_size = msg.initial_window_size
+                maximum_packet_size = msg.maximum_packet_size
+                type_specific_data = msg.type_specific_data
+                
+                # Handle forwarded-tcpip channels
+                if channel_type == CHANNEL_FORWARDED_TCPIP:
+                    self._handle_forwarded_tcpip_open(
+                        sender_channel, initial_window_size, maximum_packet_size, type_specific_data
+                    )
+                else:
+                    # Unknown channel type - send failure
+                    failure_msg = ChannelOpenFailureMessage(
+                        recipient_channel=sender_channel,
+                        reason_code=SSH_OPEN_UNKNOWN_CHANNEL_TYPE,
+                        description=f"Unknown channel type: {channel_type}",
+                        language_tag=""
+                    )
+                    self._send_message(failure_msg)
+                    
+        except Exception as e:
+            # Send failure response
+            try:
+                failure_msg = ChannelOpenFailureMessage(
+                    recipient_channel=sender_channel,
+                    reason_code=SSH_OPEN_CONNECT_FAILED,
+                    description=f"Channel open failed: {e}",
+                    language_tag=""
+                )
+                self._send_message(failure_msg)
+            except:
+                pass
+    
+    def _handle_forwarded_tcpip_open(self, sender_channel: int, initial_window_size: int,
+                                   maximum_packet_size: int, type_specific_data: bytes) -> None:
+        """
+        Handle forwarded-tcpip channel open.
+        
+        Args:
+            sender_channel: Remote channel ID
+            initial_window_size: Initial window size
+            maximum_packet_size: Maximum packet size
+            type_specific_data: Channel type specific data
+        """
+        try:
+            # Parse forwarded-tcpip data
+            offset = 0
+            connected_address_bytes, offset = read_string(type_specific_data, offset)
+            connected_port, offset = read_uint32(type_specific_data, offset)
+            originator_address_bytes, offset = read_string(type_specific_data, offset)
+            originator_port, offset = read_uint32(type_specific_data, offset)
+            
+            connected_address = connected_address_bytes.decode(SSH_STRING_ENCODING)
+            originator_address = originator_address_bytes.decode(SSH_STRING_ENCODING)
+            
+            # Create local channel
+            with self._lock:
+                channel_id = self._next_channel_id
+                self._next_channel_id += 1
+                
+                channel = Channel(self, channel_id)
+                channel._remote_channel_id = sender_channel
+                channel._remote_window_size = initial_window_size
+                channel._remote_max_packet_size = maximum_packet_size
+                channel._local_window_size = DEFAULT_WINDOW_SIZE
+                channel._local_max_packet_size = DEFAULT_MAX_PACKET_SIZE
+                
+                self._channels[channel_id] = channel
+            
+            # Send confirmation
+            confirm_msg = ChannelOpenConfirmationMessage(
+                recipient_channel=sender_channel,
+                sender_channel=channel_id,
+                initial_window_size=DEFAULT_WINDOW_SIZE,
+                maximum_packet_size=DEFAULT_MAX_PACKET_SIZE,
+                type_specific_data=b""
+            )
+            self._send_message(confirm_msg)
+            
+            # Handle the forwarded connection
+            if self._port_forwarding_manager:
+                origin_addr = (originator_address, originator_port)
+                dest_addr = (connected_address, connected_port)
+                self._port_forwarding_manager.handle_forwarded_connection(channel, origin_addr, dest_addr)
+            
+        except Exception as e:
+            # Send failure response
+            failure_msg = ChannelOpenFailureMessage(
+                recipient_channel=sender_channel,
+                reason_code=SSH_OPEN_CONNECT_FAILED,
+                description=f"Forwarded connection failed: {e}",
+                language_tag=""
+            )
+            self._send_message(failure_msg)
     
     def _handle_channel_data(self, msg: Message) -> None:
         """Handle channel data message."""
@@ -820,6 +932,148 @@ class Transport:
             msg.add_uint32(channel._remote_channel_id)
             
             self._send_message(msg)
+    
+    def _send_global_request(self, request_name: str, want_reply: bool, data: bytes = b"") -> bool:
+        """
+        Send global request message.
+        
+        Args:
+            request_name: Name of the global request
+            want_reply: Whether to wait for reply
+            data: Request-specific data
+            
+        Returns:
+            True if request succeeded (when want_reply=True)
+            
+        Raises:
+            TransportException: If request fails
+        """
+        if not self._active:
+            raise TransportException("Transport not active")
+        
+        try:
+            # Build global request message
+            msg = Message(MSG_GLOBAL_REQUEST)
+            msg.add_string(request_name)
+            msg.add_boolean(want_reply)
+            if data:
+                msg._data.extend(data)
+            
+            # Send request
+            self._send_message(msg)
+            
+            if want_reply:
+                # Wait for response
+                response = self._recv_message()
+                
+                if response.msg_type == MSG_REQUEST_SUCCESS:
+                    return True
+                elif response.msg_type == MSG_REQUEST_FAILURE:
+                    return False
+                else:
+                    raise TransportException(f"Unexpected response to global request: {type(response).__name__}")
+            
+            return True  # No reply requested
+            
+        except Exception as e:
+            if isinstance(e, TransportException):
+                raise
+            raise TransportException(f"Failed to send global request: {e}")
+    
+    def _handle_global_request(self, msg: Message) -> None:
+        """
+        Handle incoming global request.
+        
+        Args:
+            msg: Global request message
+        """
+        try:
+            # Parse global request message
+            data = msg._data
+            offset = 0
+            
+            request_name_bytes, offset = read_string(data, offset)
+            want_reply, offset = read_boolean(data, offset)
+            request_data = data[offset:] if offset < len(data) else b""
+            
+            request_name = request_name_bytes.decode(SSH_STRING_ENCODING)
+            
+            # Handle specific request types
+            success = False
+            
+            if request_name == "tcpip-forward":
+                success = self._handle_tcpip_forward_request(request_data)
+            elif request_name == "cancel-tcpip-forward":
+                success = self._handle_cancel_tcpip_forward_request(request_data)
+            else:
+                # Unknown request type
+                success = False
+            
+            # Send reply if requested
+            if want_reply:
+                if success:
+                    reply_msg = Message(MSG_REQUEST_SUCCESS)
+                else:
+                    reply_msg = Message(MSG_REQUEST_FAILURE)
+                
+                self._send_message(reply_msg)
+                
+        except Exception as e:
+            # Send failure reply if requested
+            if want_reply:
+                try:
+                    reply_msg = Message(MSG_REQUEST_FAILURE)
+                    self._send_message(reply_msg)
+                except:
+                    pass
+    
+    def _handle_tcpip_forward_request(self, data: bytes) -> bool:
+        """
+        Handle tcpip-forward global request.
+        
+        Args:
+            data: Request data
+            
+        Returns:
+            True if request should be accepted
+        """
+        try:
+            offset = 0
+            bind_address_bytes, offset = read_string(data, offset)
+            bind_port, offset = read_uint32(data, offset)
+            
+            bind_address = bind_address_bytes.decode(SSH_STRING_ENCODING)
+            
+            # For now, accept all tcpip-forward requests
+            # Server implementations can override this behavior
+            return True
+            
+        except Exception:
+            return False
+    
+    def _handle_cancel_tcpip_forward_request(self, data: bytes) -> bool:
+        """
+        Handle cancel-tcpip-forward global request.
+        
+        Args:
+            data: Request data
+            
+        Returns:
+            True if request should be accepted
+        """
+        try:
+            offset = 0
+            bind_address_bytes, offset = read_string(data, offset)
+            bind_port, offset = read_uint32(data, offset)
+            
+            bind_address = bind_address_bytes.decode(SSH_STRING_ENCODING)
+            
+            # For now, accept all cancel requests
+            # Server implementations can override this behavior
+            return True
+            
+        except Exception:
+            return False
     
     def close(self) -> None:
         """Close transport and cleanup resources."""
@@ -1141,3 +1395,16 @@ class Transport:
     def session_id(self) -> Optional[bytes]:
         """Get session ID."""
         return self._session_id
+    
+    def get_port_forwarding_manager(self) -> "PortForwardingManager":
+        """
+        Get port forwarding manager.
+        
+        Returns:
+            Port forwarding manager instance
+        """
+        if self._port_forwarding_manager is None:
+            from .forwarding import PortForwardingManager
+            self._port_forwarding_manager = PortForwardingManager(self)
+        
+        return self._port_forwarding_manager
