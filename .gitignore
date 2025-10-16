@@ -70,6 +70,7 @@ instance/
 
 # Sphinx documentation
 docs/_build/
+docs/.doctrees/
 
 # PyBuilder
 .pybuilder/
@@ -155,98 +156,46 @@ cython_debug/
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
 #  be added to the global gitignore or merged into this project gitignore.  For a PyCharm
-#  project, it is recommended to include the following files in version control:
-#  - .idea/modules.xml
-#  - .idea/*.iml
-#  - .idea/misc.xml
-#  - .idea/vcs.xml
-#  - .idea/workspace.xml
-#  - .idea/tasks.xml
-#  - .idea/usage.statistics.xml
-#  - .idea/dictionaries
-#  - .idea/shelf
-#
-#  Sensitive or high-churn files:
-#  - .idea/dataSources/
-#  - .idea/dataSources.ids
-#  - .idea/dataSources.local.xml
-#  - .idea/sqlDataSources.xml
-#  - .idea/dynamic.xml
-#  - .idea/uiDesigner.xml
-#  - .idea/dbnavigator.xml
-#
+#  project, it is not recommended to check the .idea/ directory into version control.
 .idea/
 
 # VS Code
 .vscode/
 
-# Sublime Text
-*.sublime-project
-*.sublime-workspace
+# macOS
+.DS_Store
 
-# Vim
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# SSH keys and sensitive files
+*.pem
+*.key
+id_*
+known_hosts
+
+# Temporary files
+*.tmp
+*.temp
 *.swp
 *.swo
 *~
 
-# Emacs
-*~
-\#*\#
-/.emacs.desktop
-/.emacs.desktop.lock
-*.elc
-auto-save-list
-tramp
-.\#*
-
-# OS generated files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# SSH Library specific
-# Test reports and temporary files
-test_reports/
+# Log files
 *.log
-*.tmp
-*.temp
 
-# Performance benchmarks output
-benchmark_results/
-performance_reports/
+# Database files
+*.db
+*.sqlite
 
-# SSH keys (for testing - never commit real keys!)
-test_keys/
-*.pem
-*.key
-id_rsa*
-id_ed25519*
-id_ecdsa*
-known_hosts*
+# Configuration files with secrets
+config.ini
+secrets.yaml
+.secrets
 
-# Local configuration files
-local_config.py
-local_settings.py
-.env.local
-
-# Temporary SSH server files
-ssh_server_temp/
-sftp_temp/
-
-# Documentation build artifacts
-docs/build/
-docs/_static/generated/
-
-# Profiling output
-*.prof
-*.pstats
-
-# Memory profiling
-*.mprof
-
-# Line profiling
-*.lprof
+# Test artifacts
+test_results/
+test_output/
+.coverage.*

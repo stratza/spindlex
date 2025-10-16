@@ -1,5 +1,5 @@
 Spindle Documentation
-=====================
+====================
 
 Welcome to Spindle's documentation! Spindle is a pure-Python SSHv2 client/server library that provides secure, high-performance SSH and SFTP operations without GPL/LGPL dependencies.
 
