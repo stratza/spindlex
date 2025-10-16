@@ -433,6 +433,53 @@ class Transport:
             msg.add_string(response)
         return msg
     
+    def auth_gssapi(
+        self, 
+        username: str, 
+        gss_host: Optional[str] = None,
+        gss_deleg_creds: bool = False
+    ) -> bool:
+        """
+        Authenticate using GSSAPI method.
+        
+        Args:
+            username: Username for authentication
+            gss_host: GSSAPI hostname (optional)
+            gss_deleg_creds: Whether to delegate credentials
+            
+        Returns:
+            True if authentication successful
+            
+        Raises:
+            AuthenticationException: If authentication fails
+        """
+        if not self._active:
+            raise AuthenticationException("Transport not active")
+        
+        if self._authenticated:
+            return True
+        
+        try:
+            from ..auth.gssapi import GSSAPIAuth
+            
+            # Create GSSAPI authenticator
+            gssapi_auth = GSSAPIAuth(self)
+            
+            # Perform GSSAPI authentication
+            result = gssapi_auth.authenticate(username, gss_host, gss_deleg_creds)
+            
+            # Clean up GSSAPI resources
+            gssapi_auth.cleanup()
+            
+            return result
+            
+        except ImportError:
+            raise AuthenticationException("GSSAPI authentication not available")
+        except Exception as e:
+            if isinstance(e, AuthenticationException):
+                raise
+            raise AuthenticationException(f"GSSAPI authentication failed: {e}")
+    
     def _request_userauth_service(self) -> None:
         """Request ssh-userauth service."""
         if self._userauth_service_requested:
