@@ -13,6 +13,9 @@ __license__ = "Apache-2.0"
 from .client.ssh_client import SSHClient
 from .client.sftp_client import SFTPClient
 
+# SFTP imports
+from .protocol.sftp_messages import SFTPAttributes
+
 # Core server imports  
 from .server.ssh_server import SSHServer
 from .server.sftp_server import SFTPServer
@@ -53,6 +56,9 @@ __all__ = [
     # Client classes
     "SSHClient",
     "SFTPClient",
+    
+    # SFTP classes
+    "SFTPAttributes",
     
     # Server classes
     "SSHServer", 
