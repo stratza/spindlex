@@ -11,7 +11,7 @@ Creating and Configuring a Client
 
 .. code-block:: python
 
-   from ssh_library import SSHClient, AutoAddPolicy
+   from spindle import SSHClient, AutoAddPolicy
 
    # Create client
    client = SSHClient()
@@ -40,7 +40,7 @@ Public Key Authentication
 
 .. code-block:: python
 
-   from ssh_library.crypto.pkey import Ed25519Key
+   from spindle.crypto.pkey import Ed25519Key
 
    # Load key from file
    private_key = Ed25519Key.from_private_key_file('/path/to/key')
@@ -175,7 +175,7 @@ Connection Persistence
 .. code-block:: python
 
    import time
-   from ssh_library.exceptions import SSHException
+   from spindle.exceptions import SSHException
 
    class PersistentSSHClient:
        def __init__(self, **connect_kwargs):
@@ -205,7 +205,7 @@ Host Key Policies
 
 .. code-block:: python
 
-   from ssh_library.hostkeys.policy import (
+   from spindle.hostkeys.policy import (
        AutoAddPolicy, RejectPolicy, WarningPolicy
    )
 
@@ -223,7 +223,7 @@ Custom Host Key Policy
 
 .. code-block:: python
 
-   from ssh_library.hostkeys.policy import MissingHostKeyPolicy
+   from spindle.hostkeys.policy import MissingHostKeyPolicy
 
    class CustomHostKeyPolicy(MissingHostKeyPolicy):
        def missing_host_key(self, client, hostname, key):
@@ -252,7 +252,7 @@ Common Exceptions
 
 .. code-block:: python
 
-   from ssh_library.exceptions import (
+   from spindle.exceptions import (
        SSHException,
        AuthenticationException,
        BadHostKeyException,

@@ -1,12 +1,12 @@
 Security Guidelines
 ===================
 
-SSH Library is designed with security as a primary concern. This document outlines security best practices and guidelines for using the library safely.
+Spindle is designed with security as a primary concern. This document outlines security best practices and guidelines for using the library safely.
 
 Secure Defaults
 ---------------
 
-SSH Library uses secure defaults to protect against common security issues:
+Spindle uses secure defaults to protect against common security issues:
 
 * **Modern Cryptography**: Defaults to Ed25519 keys and ChaCha20-Poly1305 encryption
 * **Strong Key Exchange**: Uses Curve25519 and ECDH key exchange algorithms
@@ -23,8 +23,8 @@ Always prefer key-based authentication over passwords:
 
 .. code-block:: python
 
-   from ssh_library import SSHClient
-   from ssh_library.crypto.pkey import Ed25519Key
+   from spindle import SSHClient
+   from spindle.crypto.pkey import Ed25519Key
 
    # Generate a strong key
    private_key = Ed25519Key.generate()
@@ -44,7 +44,7 @@ If you must use password authentication:
 .. code-block:: python
 
    import getpass
-   from ssh_library import SSHClient
+   from spindle import SSHClient
 
    # Never hardcode passwords
    password = getpass.getpass("Enter SSH password: ")
@@ -65,8 +65,8 @@ Always verify host keys in production:
 
 .. code-block:: python
 
-   from ssh_library import SSHClient
-   from ssh_library.hostkeys.policy import RejectPolicy
+   from spindle import SSHClient
+   from spindle.hostkeys.policy import RejectPolicy
 
    client = SSHClient()
    
@@ -86,8 +86,8 @@ Implement custom verification logic:
 
 .. code-block:: python
 
-   from ssh_library.hostkeys.policy import MissingHostKeyPolicy
-   from ssh_library.exceptions import SSHException
+   from spindle.hostkeys.policy import MissingHostKeyPolicy
+   from spindle.exceptions import SSHException
 
    class SecureHostKeyPolicy(MissingHostKeyPolicy):
        def __init__(self, trusted_keys_db):
@@ -115,7 +115,7 @@ Use secure connection practices:
 
 .. code-block:: python
 
-   from ssh_library import SSHClient
+   from spindle import SSHClient
    import socket
 
    client = SSHClient()
@@ -154,7 +154,7 @@ Generate strong keys:
 
 .. code-block:: python
 
-   from ssh_library.crypto.pkey import Ed25519Key, RSAKey
+   from spindle.crypto.pkey import Ed25519Key, RSAKey
 
    # Preferred: Ed25519 (fast and secure)
    ed25519_key = Ed25519Key.generate()
@@ -172,7 +172,7 @@ Configure strong algorithms:
 
 .. code-block:: python
 
-   from ssh_library.crypto.backend import get_crypto_backend
+   from spindle.crypto.backend import get_crypto_backend
 
    backend = get_crypto_backend()
    
@@ -199,7 +199,7 @@ Protect sensitive data in memory:
 .. code-block:: python
 
    import os
-   from ssh_library import SSHClient
+   from spindle import SSHClient
 
    def secure_connect(hostname, username, password):
        client = SSHClient()
@@ -223,7 +223,7 @@ Sanitize logs to prevent information leakage:
 
 .. code-block:: python
 
-   from ssh_library.logging import configure_logging, SSHLogger
+   from spindle.logging import configure_logging, SSHLogger
 
    # Configure secure logging
    configure_logging(
@@ -253,8 +253,8 @@ When implementing SSH servers:
 
 .. code-block:: python
 
-   from ssh_library import SSHServer
-   from ssh_library.crypto.pkey import Ed25519Key
+   from spindle import SSHServer
+   from spindle.crypto.pkey import Ed25519Key
 
    class SecureSSHServer(SSHServer):
        def __init__(self):
@@ -289,8 +289,8 @@ Implement comprehensive monitoring:
 
 .. code-block:: python
 
-   from ssh_library.logging import get_performance_monitor
-   from ssh_library.exceptions import AuthenticationException
+   from spindle.logging import get_performance_monitor
+   from spindle.exceptions import AuthenticationException
 
    monitor = get_performance_monitor()
 
@@ -322,7 +322,7 @@ Implement comprehensive monitoring:
 Security Checklist
 -------------------
 
-Before deploying SSH Library in production:
+Before deploying Spindle in production:
 
 **Authentication**
 - [ ] Use key-based authentication

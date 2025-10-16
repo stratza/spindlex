@@ -1,7 +1,7 @@
-SSH Library Documentation
-=========================
+Spindle Documentation
+=====================
 
-Welcome to SSH Library's documentation! SSH Library is a pure-Python SSHv2 client/server library that provides secure, high-performance SSH and SFTP operations without GPL/LGPL dependencies.
+Welcome to Spindle's documentation! Spindle is a pure-Python SSHv2 client/server library that provides secure, high-performance SSH and SFTP operations without GPL/LGPL dependencies.
 
 .. toctree::
    :maxdepth: 2
@@ -31,17 +31,17 @@ Features
 Quick Start
 -----------
 
-Install SSH Library:
+Install Spindle:
 
 .. code-block:: bash
 
-   pip install ssh-library
+   pip install spindle
 
 Basic SSH client usage:
 
 .. code-block:: python
 
-   from ssh_library import SSHClient
+   from spindle import SSHClient
 
    # Create client and connect
    client = SSHClient()

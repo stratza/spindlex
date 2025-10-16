@@ -1,5 +1,5 @@
 """
-Python SSHv2 Library - A pure-Python SSH client/server library.
+Spindle - A pure-Python SSH client/server library.
 
 A secure, high-performance SSH and SFTP implementation without GPL/LGPL dependencies.
 Provides modern cryptographic standards and comprehensive RFC 4251-4254 compliance.
@@ -7,7 +7,7 @@ Provides modern cryptographic standards and comprehensive RFC 4251-4254 complian
 
 from ._version import __version__, __version_info__, get_version, get_version_info
 
-__author__ = "SSH Library Team"
+__author__ = "Spindle Team"
 __license__ = "Apache-2.0"
 
 # Core client imports

@@ -2,7 +2,7 @@
 """
 SSH key generation tool.
 
-A simple command-line tool for generating SSH key pairs.
+A simple command-line tool for generating SSH key pairs (part of Spindle).
 """
 
 import argparse
@@ -58,9 +58,9 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519
-  ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -C "user@example.com"
-  ssh-keygen -t ecdsa -f ~/.ssh/id_ecdsa
+  spindle-keygen -t ed25519 -f ~/.ssh/id_ed25519
+  spindle-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -C "user@example.com"
+  spindle-keygen -t ecdsa -f ~/.ssh/id_ecdsa
         """
     )
     
@@ -119,6 +119,7 @@ Examples:
         # Show fingerprint
         fingerprint = public_key.get_fingerprint()
         print(f"Key fingerprint: {fingerprint}")
+        print(f"Generated with Spindle SSH key generator")
         
     except Exception as e:
         print(f"Error generating key: {e}")

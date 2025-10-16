@@ -1,10 +1,10 @@
-# Makefile for SSH Library development tasks
+# Makefile for Spindle development tasks
 
 .PHONY: help install install-dev test test-all lint format type-check security clean build docs serve-docs release
 
 # Default target
 help:
-	@echo "SSH Library Development Commands"
+	@echo "Spindle Development Commands"
 	@echo "================================"
 	@echo ""
 	@echo "Setup:"
@@ -121,10 +121,10 @@ pre-commit:
 
 # Docker support (if needed)
 docker-build:
-	docker build -t ssh-library .
+	docker build -t spindle .
 
 docker-test:
-	docker run --rm ssh-library pytest
+	docker run --rm spindle pytest
 
 # CI/CD helpers
 ci-install:

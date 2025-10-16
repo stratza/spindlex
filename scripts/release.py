@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Release automation script for ssh-library.
+Release automation script for Spindle.
 
 This script helps automate the release process including:
 - Version bumping
@@ -124,7 +124,7 @@ def create_git_tag(version: str) -> None:
 
 def main():
     """Main release function."""
-    parser = argparse.ArgumentParser(description="Release automation for ssh-library")
+    parser = argparse.ArgumentParser(description="Release automation for Spindle")
     parser.add_argument(
         "bump_type",
         choices=["major", "minor", "patch"],
