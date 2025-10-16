@@ -382,7 +382,7 @@ class SSHClient:
                 raise
             raise SSHException(f"Failed to invoke shell: {e}")
     
-    def open_sftp(self) -> Any:
+    def open_sftp(self) -> "SFTPClient":
         """
         Open SFTP session.
         
@@ -392,8 +392,16 @@ class SSHClient:
         Raises:
             SSHException: If SFTP session creation fails
         """
-        # Implementation will be added in later tasks
-        raise NotImplementedError("SSHClient.open_sftp will be implemented in task 7.2")
+        if not self.is_connected():
+            raise SSHException("Not connected to SSH server")
+        
+        try:
+            from .sftp_client import SFTPClient
+            return SFTPClient(self._transport)
+        except Exception as e:
+            if isinstance(e, SSHException):
+                raise
+            raise SSHException(f"Failed to open SFTP session: {e}")
     
     def close(self) -> None:
         """Close SSH connection and cleanup resources."""

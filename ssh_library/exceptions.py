@@ -94,6 +94,29 @@ class SFTPError(SSHException):
         super().__init__(message, sftp_code)
         self.sftp_code = sftp_code
         self.filename = filename
+    
+    @classmethod
+    def from_status(cls, status_code: int, message: str = "", filename: Optional[str] = None) -> "SFTPError":
+        """
+        Create SFTPError from SFTP status code.
+        
+        Args:
+            status_code: SFTP status code
+            message: Optional error message
+            filename: Optional filename context
+            
+        Returns:
+            SFTPError instance with appropriate message
+        """
+        from .protocol.sftp_constants import get_status_message
+        
+        if not message:
+            message = get_status_message(status_code)
+        
+        if filename:
+            message = f"{message}: {filename}"
+        
+        return cls(message, status_code, filename)
 
 
 class TransportException(SSHException):
