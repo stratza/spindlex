@@ -1,0 +1,93 @@
+Metadata-Version: 2.4
+Name: ssh-library
+Version: 0.1.0
+Summary: A pure-Python SSHv2 client/server library with modern security
+Author-email: SSH Library Team <team@ssh-library.org>
+Maintainer-email: SSH Library Team <team@ssh-library.org>
+License: Apache-2.0
+Project-URL: Homepage, https://github.com/ssh-library/ssh-library
+Project-URL: Documentation, https://ssh-library.readthedocs.io/
+Project-URL: Repository, https://github.com/ssh-library/ssh-library.git
+Project-URL: Bug Tracker, https://github.com/ssh-library/ssh-library/issues
+Project-URL: Changelog, https://github.com/ssh-library/ssh-library/blob/main/CHANGELOG.md
+Keywords: ssh,sftp,security,networking,cryptography
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: Apache Software License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Internet
+Classifier: Topic :: Security :: Cryptography
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Classifier: Topic :: System :: Networking
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: cryptography>=41.0.0
+Requires-Dist: typing-extensions>=4.0.0; python_version < "3.10"
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.0.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.21.0; extra == "dev"
+Requires-Dist: black>=23.0.0; extra == "dev"
+Requires-Dist: isort>=5.12.0; extra == "dev"
+Requires-Dist: mypy>=1.0.0; extra == "dev"
+Requires-Dist: flake8>=6.0.0; extra == "dev"
+Requires-Dist: pre-commit>=3.0.0; extra == "dev"
+Provides-Extra: docs
+Requires-Dist: sphinx>=6.0.0; extra == "docs"
+Requires-Dist: sphinx-rtd-theme>=1.2.0; extra == "docs"
+Requires-Dist: myst-parser>=1.0.0; extra == "docs"
+Provides-Extra: gssapi
+Requires-Dist: gssapi>=1.8.0; sys_platform != "win32" and extra == "gssapi"
+Provides-Extra: async
+Requires-Dist: asyncio-dgram>=2.1.0; extra == "async"
+
+# SSH Library
+
+A pure-Python SSHv2 client/server library offering secure, high-performance SSH and SFTP operations without GPL/LGPL dependencies.
+
+## Features
+
+- **Pure Python**: No native dependencies, works across platforms
+- **Modern Security**: Ed25519/ECDSA keys by default, modern cipher suites
+- **RFC Compliant**: Full SSHv2 protocol implementation (RFC 4251-4254)
+- **Pluggable Crypto**: Uses cryptography library backend
+- **Apache License**: No GPL/LGPL restrictions
+
+## Installation
+
+```bash
+pip install ssh-library
+```
+
+## Quick Start
+
+```python
+import ssh_library
+
+# SSH Client
+with ssh_library.SSHClient() as client:
+    client.connect('hostname', username='user', password='pass')
+    stdin, stdout, stderr = client.exec_command('ls -la')
+    print(stdout.read().decode())
+
+# SFTP Operations
+with ssh_library.SSHClient() as client:
+    client.connect('hostname', username='user', key_filename='~/.ssh/id_ed25519')
+    with client.open_sftp() as sftp:
+        sftp.put('local_file.txt', 'remote_file.txt')
+        sftp.get('remote_file.txt', 'downloaded_file.txt')
+```
+
+## Development Status
+
+This library is currently under development. See the implementation tasks in `.kiro/specs/python-ssh-library/tasks.md` for current progress.
+
+## License
+
+Apache License 2.0 - see LICENSE file for details.
