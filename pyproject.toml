@@ -3,18 +3,18 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ssh-library"
+name = "spindle"
 dynamic = ["version"]
-description = "A pure-Python SSHv2 client/server library with modern security"
+description = "Spindle - A pure-Python SSHv2 client/server library with modern security"
 readme = "README.md"
 license = {text = "Apache-2.0"}
 authors = [
-    {name = "SSH Library Team", email = "team@ssh-library.org"}
+    {name = "Spindle Team", email = "team@spindle.dev"}
 ]
 maintainers = [
-    {name = "SSH Library Team", email = "team@ssh-library.org"}
+    {name = "Spindle Team", email = "team@spindle.dev"}
 ]
-keywords = ["ssh", "sftp", "security", "networking", "cryptography"]
+keywords = ["ssh", "sftp", "security", "networking", "cryptography", "spindle"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -66,17 +66,17 @@ async = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/ssh-library/ssh-library"
-Documentation = "https://ssh-library.readthedocs.io/"
-Repository = "https://github.com/ssh-library/ssh-library.git"
-"Bug Tracker" = "https://github.com/ssh-library/ssh-library/issues"
-Changelog = "https://github.com/ssh-library/ssh-library/blob/main/CHANGELOG.md"
-"Source Code" = "https://github.com/ssh-library/ssh-library"
-"Funding" = "https://github.com/sponsors/ssh-library"
+Homepage = "https://github.com/spindle-dev/spindle"
+Documentation = "https://spindle.readthedocs.io/"
+Repository = "https://github.com/spindle-dev/spindle.git"
+"Bug Tracker" = "https://github.com/spindle-dev/spindle/issues"
+Changelog = "https://github.com/spindle-dev/spindle/blob/main/CHANGELOG.md"
+"Source Code" = "https://github.com/spindle-dev/spindle"
+"Funding" = "https://github.com/sponsors/spindle-dev"
 
 [project.scripts]
-ssh-keygen = "ssh_library.tools.keygen:main"
-ssh-benchmark = "ssh_library.tools.benchmark:main"
+spindle-keygen = "ssh_library.tools.keygen:main"
+spindle-benchmark = "ssh_library.tools.benchmark:main"
 
 [tool.setuptools.packages.find]
 include = ["ssh_library*"]
@@ -143,6 +143,8 @@ markers = [
     "unit: marks tests as unit tests",
     "crypto: marks tests as cryptography tests",
     "network: marks tests requiring network access",
+    "performance: marks tests as performance benchmarks",
+    "stress: marks tests as stress tests",
 ]
 
 [tool.coverage.run]

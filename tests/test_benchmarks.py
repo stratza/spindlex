@@ -1,5 +1,5 @@
 """
-Performance benchmark suite for ssh-library.
+Performance benchmark suite for Spindle.
 
 This module contains comprehensive performance tests and benchmarks
 to ensure the library meets performance requirements.
@@ -14,10 +14,10 @@ from typing import List, Dict, Any
 
 import pytest
 
-from ssh_library import SSHClient, AutoAddPolicy
-from ssh_library.crypto.pkey import Ed25519Key, ECDSAKey, RSAKey
-from ssh_library.crypto.backend import get_crypto_backend
-from ssh_library.logging import get_performance_monitor
+from spindle import SSHClient, AutoAddPolicy
+from spindle.crypto.pkey import Ed25519Key, ECDSAKey, RSAKey
+from spindle.crypto.backend import get_crypto_backend
+from spindle.logging import get_performance_monitor
 
 
 class BenchmarkResult:
@@ -412,7 +412,7 @@ class TestScalabilityBenchmarks:
         # This would require a connected client
         # For now, just test object creation
         
-        from ssh_library.transport.channel import Channel
+        from spindle.transport.channel import Channel
         
         def create_channels():
             channels = []
@@ -430,7 +430,7 @@ class TestScalabilityBenchmarks:
     
     def test_message_processing_scalability(self):
         """Test message processing performance."""
-        from ssh_library.protocol.messages import Message
+        from spindle.protocol.messages import Message
         
         def process_messages():
             messages = []
@@ -462,7 +462,7 @@ class TestScalabilityBenchmarks:
 
 # Async benchmarks (if available)
 try:
-    from ssh_library.client.async_ssh_client import AsyncSSHClient
+    from spindle.client.async_ssh_client import AsyncSSHClient
     
     class TestAsyncBenchmarks:
         """Benchmark async operations."""
