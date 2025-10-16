@@ -1,44 +1,321 @@
 # SSH Library
 
-A pure-Python SSHv2 client/server library offering secure, high-performance SSH and SFTP operations without GPL/LGPL dependencies.
+[![Build Status](https://github.com/ssh-library/ssh-library/workflows/Build%20and%20Test/badge.svg)](https://github.com/ssh-library/ssh-library/actions)
+[![Coverage Status](https://codecov.io/gh/ssh-library/ssh-library/branch/main/graph/badge.svg)](https://codecov.io/gh/ssh-library/ssh-library)
+[![PyPI version](https://badge.fury.io/py/ssh-library.svg)](https://badge.fury.io/py/ssh-library)
+[![Python versions](https://img.shields.io/pypi/pyversions/ssh-library.svg)](https://pypi.org/project/ssh-library/)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
+A pure-Python SSHv2 client/server library that provides secure, high-performance SSH and SFTP operations without GPL/LGPL dependencies. Built with modern security practices and comprehensive RFC 4251-4254 compliance.
 
 ## Features
 
-- **Pure Python**: No native dependencies, works across platforms
-- **Modern Security**: Ed25519/ECDSA keys by default, modern cipher suites
-- **RFC Compliant**: Full SSHv2 protocol implementation (RFC 4251-4254)
-- **Pluggable Crypto**: Uses cryptography library backend
-- **Apache License**: No GPL/LGPL restrictions
+- **🔒 Modern Security**: Ed25519, ECDSA, ChaCha20-Poly1305, and other modern cryptographic algorithms
+- **🐍 Pure Python**: No C extensions or system dependencies required
+- **🚀 High Performance**: Optimized for speed with optional async/await support
+- **📡 Full SSH Support**: Complete client and server implementations
+- **📁 SFTP Support**: Comprehensive SFTP client and server functionality
+- **🔄 Port Forwarding**: Local and remote port forwarding capabilities
+- **🔐 Multiple Auth Methods**: Password, public key, keyboard-interactive, and GSSAPI
+- **🛡️ Host Key Policies**: Flexible host key verification and management
+- **📊 Comprehensive Logging**: Structured logging with security event monitoring
+- **🧪 Well Tested**: Extensive test suite with high code coverage
+- **📝 Type Hints**: Fully typed codebase for better development experience
+- **⚖️ Apache 2.0 License**: No GPL/LGPL restrictions
 
-## Installation
+## Quick Start
+
+### Installation
 
 ```bash
 pip install ssh-library
 ```
 
-## Quick Start
+### Basic Usage
 
 ```python
-import ssh_library
+from ssh_library import SSHClient, AutoAddPolicy
 
-# SSH Client
-with ssh_library.SSHClient() as client:
-    client.connect('hostname', username='user', password='pass')
-    stdin, stdout, stderr = client.exec_command('ls -la')
-    print(stdout.read().decode())
+# Create and configure client
+client = SSHClient()
+client.set_missing_host_key_policy(AutoAddPolicy())
 
-# SFTP Operations
-with ssh_library.SSHClient() as client:
-    client.connect('hostname', username='user', key_filename='~/.ssh/id_ed25519')
-    with client.open_sftp() as sftp:
-        sftp.put('local_file.txt', 'remote_file.txt')
-        sftp.get('remote_file.txt', 'downloaded_file.txt')
+# Connect and execute commands
+client.connect('example.com', username='user', password='password')
+stdin, stdout, stderr = client.exec_command('ls -la')
+print(stdout.read().decode())
+
+# Use SFTP
+sftp = client.open_sftp()
+sftp.get('/remote/file.txt', '/local/file.txt')
+sftp.close()
+
+client.close()
 ```
 
-## Development Status
+### Key-Based Authentication
 
-This library is currently under development. See the implementation tasks in `.kiro/specs/python-ssh-library/tasks.md` for current progress.
+```python
+from ssh_library import SSHClient
+from ssh_library.crypto.pkey import Ed25519Key
+
+# Load private key
+private_key = Ed25519Key.from_private_key_file('/path/to/private_key')
+
+client = SSHClient()
+client.connect('example.com', username='user', pkey=private_key)
+```
+
+### Context Manager Support
+
+```python
+from ssh_library import SSHClient
+
+with SSHClient() as client:
+    client.connect('example.com', username='user', password='password')
+    
+    stdin, stdout, stderr = client.exec_command('whoami')
+    print(f"Logged in as: {stdout.read().decode().strip()}")
+    
+    with client.open_sftp() as sftp:
+        files = sftp.listdir('.')
+        print(f"Files: {files}")
+```
+
+## Advanced Features
+
+### Async Support
+
+```python
+import asyncio
+from ssh_library.client.async_ssh_client import AsyncSSHClient
+
+async def main():
+    async with AsyncSSHClient() as client:
+        await client.connect('example.com', username='user', password='password')
+        result = await client.exec_command('echo "Hello, Async World!"')
+        print(result.stdout.decode())
+
+asyncio.run(main())
+```
+
+### Port Forwarding
+
+```python
+from ssh_library import SSHClient
+
+client = SSHClient()
+client.connect('jump-server.com', username='user', password='password')
+
+# Local port forwarding
+transport = client.get_transport()
+local_port = transport.request_port_forward('', 8080, 'internal-server', 80)
+print(f"Forwarding localhost:{local_port} -> internal-server:80")
+```
+
+### SSH Server
+
+```python
+from ssh_library import SSHServer
+from ssh_library.crypto.pkey import Ed25519Key
+
+class MySSHServer(SSHServer):
+    def check_auth_password(self, username, password):
+        return self.AUTH_SUCCESSFUL if password == 'secret' else self.AUTH_FAILED
+    
+    def check_channel_exec_request(self, channel, command):
+        if command == b'whoami':
+            channel.send(b'ssh-library-user\n')
+            channel.send_exit_status(0)
+        channel.close()
+        return True
+
+# Start server
+host_key = Ed25519Key.generate()
+server = MySSHServer()
+# ... (additional server setup)
+```
+
+## Security
+
+SSH Library is designed with security as a primary concern:
+
+- **Secure Defaults**: Modern algorithms enabled by default
+- **Host Key Verification**: Strict host key checking available
+- **Constant-Time Operations**: Protection against timing attacks
+- **Sanitized Logging**: Automatic redaction of sensitive data
+- **Regular Security Audits**: Continuous security monitoring
+
+See our [Security Guidelines](https://ssh-library.readthedocs.io/en/latest/security.html) for detailed security information.
+
+## Performance
+
+SSH Library is optimized for performance:
+
+- **Efficient Crypto**: Leverages the `cryptography` library's optimized implementations
+- **Async Support**: Optional asyncio support for high-concurrency applications
+- **Connection Pooling**: Reuse connections for multiple operations
+- **Streaming**: Support for streaming large file transfers
+
+## Documentation
+
+- **[Quick Start Guide](https://ssh-library.readthedocs.io/en/latest/quickstart.html)**
+- **[User Guide](https://ssh-library.readthedocs.io/en/latest/user_guide/index.html)**
+- **[API Reference](https://ssh-library.readthedocs.io/en/latest/api_reference/index.html)**
+- **[Examples](https://ssh-library.readthedocs.io/en/latest/examples/index.html)**
+- **[Security Guidelines](https://ssh-library.readthedocs.io/en/latest/security.html)**
+
+## Installation Options
+
+### Basic Installation
+
+```bash
+pip install ssh-library
+```
+
+### Development Installation
+
+```bash
+pip install ssh-library[dev]
+```
+
+### Optional Features
+
+```bash
+# Async support
+pip install ssh-library[async]
+
+# GSSAPI authentication (Unix only)
+pip install ssh-library[gssapi]
+
+# Documentation building
+pip install ssh-library[docs]
+
+# All features
+pip install ssh-library[dev,async,gssapi,docs]
+```
+
+## Requirements
+
+- Python 3.8+
+- cryptography >= 41.0.0
+- typing-extensions >= 4.0.0 (Python < 3.10)
+
+## Supported Platforms
+
+- Linux
+- macOS
+- Windows
+
+## Supported Algorithms
+
+### Key Exchange
+- curve25519-sha256
+- ecdh-sha2-nistp256
+- diffie-hellman-group14-sha256
+
+### Host Key Types
+- ssh-ed25519
+- ecdsa-sha2-nistp256
+- rsa-sha2-256
+- rsa-sha2-512
+
+### Ciphers
+- chacha20-poly1305@openssh.com
+- aes256-gcm@openssh.com
+- aes128-gcm@openssh.com
+- aes256-ctr
+- aes192-ctr
+- aes128-ctr
+
+### MAC Algorithms
+- hmac-sha2-256
+- hmac-sha2-512
+- hmac-sha2-256-etm@openssh.com
+- hmac-sha2-512-etm@openssh.com
+
+## Command Line Tools
+
+SSH Library includes useful command-line tools:
+
+### SSH Key Generation
+
+```bash
+# Generate Ed25519 key
+ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519
+
+# Generate RSA key
+ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa
+```
+
+### Performance Benchmarking
+
+```bash
+# Benchmark cryptographic operations
+ssh-benchmark --crypto-only
+
+# Benchmark SSH operations
+ssh-benchmark -H example.com -u user -p password
+```
+
+## Contributing
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+
+### Development Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/ssh-library/ssh-library.git
+cd ssh-library
+
+# Install in development mode
+pip install -e .[dev]
+
+# Run tests
+pytest
+
+# Run linting
+black ssh_library tests
+isort ssh_library tests
+flake8 ssh_library tests
+mypy ssh_library
+```
 
 ## License
 
-Apache License 2.0 - see LICENSE file for details.
+SSH Library is licensed under the Apache License 2.0. See [LICENSE](LICENSE) for details.
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for version history and changes.
+
+## Support
+
+- **Documentation**: https://ssh-library.readthedocs.io/
+- **Issues**: https://github.com/ssh-library/ssh-library/issues
+- **Discussions**: https://github.com/ssh-library/ssh-library/discussions
+
+## Comparison with Other Libraries
+
+| Feature | SSH Library | Paramiko | AsyncSSH | Fabric |
+|---------|-------------|----------|----------|--------|
+| Pure Python | ✅ | ✅ | ✅ | ✅ |
+| Modern Crypto | ✅ | ⚠️ | ✅ | ⚠️ |
+| Async Support | ✅ | ❌ | ✅ | ❌ |
+| Type Hints | ✅ | ⚠️ | ✅ | ⚠️ |
+| Server Support | ✅ | ✅ | ✅ | ❌ |
+| License | Apache 2.0 | LGPL | EPL | BSD |
+| Python 3.8+ | ✅ | ✅ | ✅ | ✅ |
+
+## Acknowledgments
+
+SSH Library builds upon the excellent work of:
+
+- The [cryptography](https://cryptography.io/) library for cryptographic operations
+- The SSH protocol specifications (RFC 4251-4254)
+- The OpenSSH project for algorithm implementations and security practices
+
+---
+
+**Made with ❤️ by the SSH Library Team**
