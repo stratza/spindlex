@@ -10,22 +10,42 @@ __author__ = "Spindle Team"
 __email__ = "team@spindle.org"
 __license__ = "MIT"
 
-# Core imports for convenience
-from .client.ssh_client import SSHClient
-from .exceptions import (
-    SSHException,
-    AuthenticationException,
-    BadHostKeyException,
-    ChannelException,
-    SFTPError,
-)
+# For now, we'll create placeholder classes until the full implementation is ready
+class SSHClient:
+    """Placeholder SSH client class."""
+    pass
 
-# Host key policies
-from .hostkeys.policy import (
-    AutoAddPolicy,
-    RejectPolicy,
-    WarningPolicy,
-)
+class SSHException(Exception):
+    """Base SSH exception."""
+    pass
+
+class AuthenticationException(SSHException):
+    """Authentication failed exception."""
+    pass
+
+class BadHostKeyException(SSHException):
+    """Bad host key exception."""
+    pass
+
+class ChannelException(SSHException):
+    """Channel operation exception."""
+    pass
+
+class SFTPError(SSHException):
+    """SFTP operation exception."""
+    pass
+
+class AutoAddPolicy:
+    """Automatically add unknown host keys."""
+    pass
+
+class RejectPolicy:
+    """Reject unknown host keys."""
+    pass
+
+class WarningPolicy:
+    """Warn about unknown host keys."""
+    pass
 
 __all__ = [
     # Version info
