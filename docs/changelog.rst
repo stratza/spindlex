@@ -1,13 +1,16 @@
-# Changelog
+Changelog
+=========
 
 All notable changes to Spindle will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.0.0/>`_,
+and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0.html>`_.
 
-## [Unreleased]
+Unreleased
+----------
 
-### Added
+Added
+~~~~~
 - Comprehensive API documentation with Sphinx
 - Advanced usage examples and tutorials
 - Performance optimization guide
@@ -19,26 +22,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Built-in performance monitoring
 - Extensive logging and debugging capabilities
 
-### Changed
+Changed
+~~~~~~~
 - Improved error handling and exception hierarchy
 - Enhanced SFTP client with advanced features
 - Optimized cryptographic operations
 - Better memory management for large transfers
 
-### Fixed
+Fixed
+~~~~~
 - Various bug fixes and stability improvements
 - Memory leaks in long-running connections
 - Race conditions in concurrent operations
 
-### Security
+Security
+~~~~~~~~
 - Enhanced host key verification
 - Improved authentication security
 - Secure random number generation
 - Constant-time cryptographic comparisons
 
-## [0.1.0] - 2024-01-15
+[1.0.0] - 2024-01-15
+---------------------
 
-### Added
+Added
+~~~~~
 - Initial release of Spindle
 - Complete SSHv2 protocol implementation
 - SSH client with all major authentication methods
@@ -49,7 +57,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive test suite
 - Documentation and examples
 
-### Features
+Features
+~~~~~~~~
 - **SSH Client**: Password, public key, keyboard-interactive, GSSAPI authentication
 - **SFTP Client**: File upload/download, directory operations, attribute management
 - **SSH Server**: Custom server implementation with authentication hooks

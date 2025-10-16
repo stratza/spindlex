@@ -1,0 +1,227 @@
+# GitLab CI/CD configuration for Spindle
+
+stages:
+  - lint
+  - test
+  - security
+  - build
+  - deploy
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+cache:
+  paths:
+    - .cache/pip
+    - venv/
+
+# Lint stage
+lint:black:
+  stage: lint
+  image: python:3.11
+  before_script:
+    - pip install black
+  script:
+    - black --check --diff spindle/ tests/
+  allow_failure: false
+
+lint:isort:
+  stage: lint
+  image: python:3.11
+  before_script:
+    - pip install isort
+  script:
+    - isort --check-only --diff spindle/ tests/
+  allow_failure: false
+
+lint:flake8:
+  stage: lint
+  image: python:3.11
+  before_script:
+    - pip install flake8
+  script:
+    - flake8 spindle/ tests/
+  allow_failure: false
+
+lint:mypy:
+  stage: lint
+  image: python:3.11
+  before_script:
+    - pip install mypy types-all
+    - pip install -e .
+  script:
+    - mypy spindle/
+  allow_failure: true
+
+# Test stage
+.test_template: &test_template
+  stage: test
+  before_script:
+    - python -m venv venv
+    - source venv/bin/activate
+    - pip install --upgrade pip
+    - pip install -e ".[test]"
+  script:
+    - pytest tests/unit/ -v --cov=spindle --cov-report=xml --cov-report=term
+  coverage: '/TOTAL.*\s+(\d+%)$/'
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+    paths:
+      - coverage.xml
+      - htmlcov/
+    expire_in: 1 week
+
+test:python3.8:
+  <<: *test_template
+  image: python:3.8
+
+test:python3.9:
+  <<: *test_template
+  image: python:3.9
+
+test:python3.10:
+  <<: *test_template
+  image: python:3.10
+
+test:python3.11:
+  <<: *test_template
+  image: python:3.11
+
+test:python3.12:
+  <<: *test_template
+  image: python:3.12
+
+# Integration tests (only run if SSH server is available)
+test:integration:
+  stage: test
+  image: python:3.11
+  services:
+    - name: linuxserver/openssh-server:latest
+      alias: ssh-server
+  variables:
+    PUID: "1000"
+    PGID: "1000"
+    TZ: "UTC"
+    PASSWORD_ACCESS: "true"
+    USER_PASSWORD: "testpass"
+    USER_NAME: "testuser"
+  before_script:
+    - python -m venv venv
+    - source venv/bin/activate
+    - pip install --upgrade pip
+    - pip install -e ".[test]"
+    - sleep 30  # Wait for SSH server to start
+  script:
+    - TEST_SSH_HOST=ssh-server TEST_SSH_USER=testuser TEST_SSH_PASS=testpass pytest tests/integration/ -v
+  allow_failure: true
+  only:
+    - main
+    - merge_requests
+
+# Security stage
+security:bandit:
+  stage: security
+  image: python:3.11
+  before_script:
+    - pip install bandit[toml]
+  script:
+    - bandit -r spindle/ -f json -o bandit-report.json
+  artifacts:
+    reports:
+      sast: bandit-report.json
+    paths:
+      - bandit-report.json
+    expire_in: 1 week
+  allow_failure: true
+
+security:safety:
+  stage: security
+  image: python:3.11
+  before_script:
+    - pip install safety
+    - pip install -e .
+  script:
+    - safety check --json --output safety-report.json
+  artifacts:
+    paths:
+      - safety-report.json
+    expire_in: 1 week
+  allow_failure: true
+
+# Build stage
+build:package:
+  stage: build
+  image: python:3.11
+  before_script:
+    - pip install build twine
+  script:
+    - python -m build
+    - twine check dist/*
+  artifacts:
+    paths:
+      - dist/
+    expire_in: 1 week
+
+build:docs:
+  stage: build
+  image: python:3.11
+  before_script:
+    - pip install -e ".[docs]"
+  script:
+    - cd docs
+    - make html
+    - make linkcheck
+  artifacts:
+    paths:
+      - docs/_build/html/
+    expire_in: 1 week
+  allow_failure: true
+
+# Deploy stage
+pages:
+  stage: deploy
+  dependencies:
+    - build:docs
+  script:
+    - mkdir public
+    - cp -r docs/_build/html/* public/
+  artifacts:
+    paths:
+      - public
+  only:
+    - main
+
+deploy:pypi:
+  stage: deploy
+  image: python:3.11
+  dependencies:
+    - build:package
+  before_script:
+    - pip install twine
+  script:
+    - twine upload dist/*
+  only:
+    - tags
+  when: manual
+  environment:
+    name: pypi
+    url: https://pypi.org/project/spindle/
+
+# Release job
+release:
+  stage: deploy
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  script:
+    - echo "Creating release for $CI_COMMIT_TAG"
+  release:
+    tag_name: '$CI_COMMIT_TAG'
+    description: 'Release $CI_COMMIT_TAG'
+    assets:
+      links:
+        - name: 'Package'
+          url: 'https://pypi.org/project/spindle/$CI_COMMIT_TAG/'
+  only:
+    - tags

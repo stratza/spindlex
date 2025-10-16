@@ -22,7 +22,7 @@ author = 'Spindle Team'
 
 # The full version, including alpha/beta/rc tags
 try:
-    from ssh_library import __version__
+    from spindle import __version__
     release = __version__
     version = '.'.join(__version__.split('.')[:2])  # Major.minor
 except ImportError:
