@@ -225,26 +225,37 @@
     - Test file attribute handling and permissions
     - _Requirements: 3.1, 3.2, 3.3, 3.4_
 
-- [ ] 8. Implement port forwarding functionality
-  - [ ] 8.1 Create local port forwarding
+- [x] 8. Implement port forwarding functionality
+
+
+
+
+
+  - [x] 8.1 Create local port forwarding
+
+
     - Implement local port forwarding channel setup
     - Add local socket listening and connection handling
     - Implement data relay between local socket and SSH channel
     - _Requirements: 4.1, 4.3_
 
-  - [ ] 8.2 Create remote port forwarding
+  - [x] 8.2 Create remote port forwarding
+
     - Implement remote port forwarding request handling
     - Add remote connection acceptance and channel creation
     - Implement bidirectional data forwarding
     - _Requirements: 4.2, 4.3_
 
-  - [ ] 8.3 Add port forwarding management
+  - [x] 8.3 Add port forwarding management
+
     - Implement forwarding tunnel lifecycle management
     - Add methods to close and cleanup forwarding tunnels
     - Implement concurrent connection handling
     - _Requirements: 4.4, 4.5_
 
-  - [ ] 8.4 Write port forwarding tests
+  - [x] 8.4 Write port forwarding tests
+
+
     - Test local port forwarding functionality
     - Test remote port forwarding functionality
     - Test concurrent connection handling

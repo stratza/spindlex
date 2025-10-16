@@ -23,6 +23,7 @@ from .server.sftp_server import SFTPServer
 # Transport layer imports
 from .transport.transport import Transport
 from .transport.channel import Channel
+from .transport.forwarding import PortForwardingManager, ForwardingTunnel
 
 # Authentication imports
 from .auth.password import PasswordAuth
@@ -67,6 +68,8 @@ __all__ = [
     # Transport classes
     "Transport",
     "Channel",
+    "PortForwardingManager",
+    "ForwardingTunnel",
     
     # Authentication classes
     "PasswordAuth",
