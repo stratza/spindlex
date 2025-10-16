@@ -93,6 +93,7 @@ class SFTPError(SSHException):
     def __init__(self, message: str, sftp_code: Optional[int] = None, filename: Optional[str] = None) -> None:
         super().__init__(message, sftp_code)
         self.sftp_code = sftp_code
+        self.status_code = sftp_code  # Alias for compatibility
         self.filename = filename
     
     @classmethod
