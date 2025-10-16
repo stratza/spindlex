@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-Basic SSH Library Usage Examples
+Basic Spindle Usage Examples
 
-This module demonstrates fundamental SSH operations using ssh-library.
+This module demonstrates fundamental SSH operations using Spindle.
 """
 
 import sys
 from pathlib import Path
 
-from ssh_library import SSHClient, AutoAddPolicy, RejectPolicy
-from ssh_library.crypto.pkey import Ed25519Key
-from ssh_library.exceptions import AuthenticationException, SSHException
+from spindle import SSHClient, AutoAddPolicy, RejectPolicy
+from spindle.crypto.pkey import Ed25519Key
+from spindle.exceptions import AuthenticationException, SSHException
 
 
 def basic_connection_example():
@@ -251,7 +251,7 @@ def connection_info_example():
 
 def main():
     """Run all examples."""
-    print("SSH Library Basic Usage Examples")
+    print("Spindle Basic Usage Examples")
     print("=" * 40)
     
     examples = [

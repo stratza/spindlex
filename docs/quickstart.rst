@@ -1,34 +1,34 @@
 Quick Start Guide
 =================
 
-This guide will help you get started with SSH Library quickly.
+This guide will help you get started with Spindle quickly.
 
 Installation
 ------------
 
-Install SSH Library using pip:
+Install Spindle using pip:
 
 .. code-block:: bash
 
-   pip install ssh-library
+   pip install spindle
 
 For development features:
 
 .. code-block:: bash
 
-   pip install ssh-library[dev]
+   pip install spindle[dev]
 
 For async support:
 
 .. code-block:: bash
 
-   pip install ssh-library[async]
+   pip install spindle[async]
 
 For GSSAPI authentication (Unix only):
 
 .. code-block:: bash
 
-   pip install ssh-library[gssapi]
+   pip install spindle[gssapi]
 
 Basic SSH Client
 ----------------
@@ -37,7 +37,7 @@ Here's a simple example of using the SSH client:
 
 .. code-block:: python
 
-   from ssh_library import SSHClient, AutoAddPolicy
+   from spindle import SSHClient, AutoAddPolicy
 
    # Create and configure client
    client = SSHClient()
@@ -69,8 +69,8 @@ For key-based authentication:
 
 .. code-block:: python
 
-   from ssh_library import SSHClient
-   from ssh_library.crypto.pkey import Ed25519Key
+   from spindle import SSHClient
+   from spindle.crypto.pkey import Ed25519Key
 
    # Load private key
    private_key = Ed25519Key.from_private_key_file('/path/to/private_key')
@@ -89,7 +89,7 @@ Transfer files using SFTP:
 
 .. code-block:: python
 
-   from ssh_library import SSHClient
+   from spindle import SSHClient
 
    client = SSHClient()
    client.connect('example.com', username='user', password='pass')
@@ -120,7 +120,7 @@ Set up local port forwarding:
 
 .. code-block:: python
 
-   from ssh_library import SSHClient
+   from spindle import SSHClient
 
    client = SSHClient()
    client.connect('jump-server.com', username='user', password='pass')
@@ -143,7 +143,7 @@ Use context managers for automatic cleanup:
 
 .. code-block:: python
 
-   from ssh_library import SSHClient
+   from spindle import SSHClient
 
    with SSHClient() as client:
        client.connect('example.com', username='user', password='pass')
@@ -162,7 +162,7 @@ Handle common SSH errors:
 
 .. code-block:: python
 
-   from ssh_library import (
+   from spindle import (
        SSHClient, 
        AuthenticationException, 
        BadHostKeyException,

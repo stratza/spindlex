@@ -1,9 +1,9 @@
 #!/bin/bash
-# Build script for ssh-library
+# Build script for Spindle
 
 set -e
 
-echo "Building ssh-library distributions..."
+echo "Building Spindle distributions..."
 
 # Clean previous builds
 rm -rf dist/ build/ *.egg-info/

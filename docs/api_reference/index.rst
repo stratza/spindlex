@@ -1,7 +1,7 @@
 API Reference
 =============
 
-This section contains the complete API reference for SSH Library.
+This section contains the complete API reference for Spindle.
 
 .. toctree::
    :maxdepth: 2
