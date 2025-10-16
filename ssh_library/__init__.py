@@ -5,7 +5,8 @@ A secure, high-performance SSH and SFTP implementation without GPL/LGPL dependen
 Provides modern cryptographic standards and comprehensive RFC 4251-4254 compliance.
 """
 
-__version__ = "0.1.0"
+from ._version import __version__, __version_info__, get_version, get_version_info
+
 __author__ = "SSH Library Team"
 __license__ = "Apache-2.0"
 
@@ -60,6 +61,9 @@ from .logging import (
 __all__ = [
     # Version info
     "__version__",
+    "__version_info__",
+    "get_version",
+    "get_version_info",
     "__author__", 
     "__license__",
     

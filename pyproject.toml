@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ssh-library"
-version = "0.1.0"
+dynamic = ["version"]
 description = "A pure-Python SSHv2 client/server library with modern security"
 readme = "README.md"
 license = {text = "Apache-2.0"}
@@ -16,8 +16,9 @@ maintainers = [
 ]
 keywords = ["ssh", "sftp", "security", "networking", "cryptography"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
@@ -26,10 +27,14 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3 :: Only",
     "Topic :: Internet",
+    "Topic :: Internet :: File Transfer Protocol (FTP)",
     "Topic :: Security :: Cryptography",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: System :: Networking",
+    "Topic :: System :: Systems Administration",
+    "Typing :: Typed",
 ]
 requires-python = ">=3.8"
 dependencies = [
@@ -66,12 +71,21 @@ Documentation = "https://ssh-library.readthedocs.io/"
 Repository = "https://github.com/ssh-library/ssh-library.git"
 "Bug Tracker" = "https://github.com/ssh-library/ssh-library/issues"
 Changelog = "https://github.com/ssh-library/ssh-library/blob/main/CHANGELOG.md"
+"Source Code" = "https://github.com/ssh-library/ssh-library"
+"Funding" = "https://github.com/sponsors/ssh-library"
+
+[project.scripts]
+ssh-keygen = "ssh_library.tools.keygen:main"
+ssh-benchmark = "ssh_library.tools.benchmark:main"
 
 [tool.setuptools.packages.find]
 include = ["ssh_library*"]
 
 [tool.setuptools.package-data]
 ssh_library = ["py.typed"]
+
+[tool.setuptools.dynamic]
+version = {attr = "ssh_library._version.__version__"}
 
 [tool.black]
 line-length = 88
@@ -152,3 +166,7 @@ exclude_lines = [
     "class .*\\bProtocol\\):",
     "@(abc\\.)?abstractmethod",
 ]
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+skips = ["B101", "B601"]  # Skip assert_used and shell_injection for tests
