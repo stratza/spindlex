@@ -113,11 +113,14 @@ class SFTPMessage:
             SSH_FXP_RMDIR: SFTPRmdirMessage,
             SSH_FXP_REALPATH: SFTPRealPathMessage,
             SSH_FXP_RENAME: SFTPRenameMessage,
+            SSH_FXP_LINK: SFTPLinkMessage,
             SSH_FXP_STATUS: SFTPStatusMessage,
             SSH_FXP_HANDLE: SFTPHandleMessage,
             SSH_FXP_DATA: SFTPDataMessage,
             SSH_FXP_NAME: SFTPNameMessage,
             SSH_FXP_ATTRS: SFTPAttrsMessage,
+            SSH_FXP_EXTENDED: SFTPExtendedMessage,
+            SSH_FXP_EXTENDED_REPLY: SFTPExtendedReplyMessage,
         }
         
         message_class = message_classes.get(msg_type, SFTPMessage)
@@ -159,6 +162,25 @@ class SFTPMessage:
     def add_byte(self, value: int) -> None:
         """Add single byte to message."""
         self._data.extend(write_byte(value))
+    
+    def validate(self) -> bool:
+        """
+        Validate SFTP message content.
+        
+        Returns:
+            True if message is valid
+            
+        Raises:
+            ProtocolException: If message is invalid
+        """
+        if not validate_sftp_message_type(self.msg_type):
+            raise ProtocolException(f"Invalid SFTP message type: {self.msg_type}")
+        
+        # Validate message size
+        if len(self._data) > SFTP_MAX_PACKET_SIZE:
+            raise ProtocolException(f"SFTP message too large: {len(self._data)} bytes")
+        
+        return True
 
 
 class SFTPAttributes:
@@ -403,6 +425,34 @@ class SFTPOpenMessage(SFTPMessage):
         
         filename = filename_bytes.decode('utf-8')
         return cls(request_id, filename, pflags, attrs)
+    
+    def validate(self) -> bool:
+        """
+        Validate SFTP open message content.
+        
+        Returns:
+            True if message is valid
+            
+        Raises:
+            ProtocolException: If message is invalid
+        """
+        super().validate()
+        
+        # Validate filename
+        if not self.filename:
+            raise ProtocolException("Filename cannot be empty")
+        
+        # Validate flags
+        valid_flags = (SSH_FXF_READ | SSH_FXF_WRITE | SSH_FXF_APPEND | 
+                      SSH_FXF_CREAT | SSH_FXF_TRUNC | SSH_FXF_EXCL)
+        if self.pflags & ~valid_flags:
+            raise ProtocolException(f"Invalid open flags: {self.pflags}")
+        
+        # Must have at least read or write flag
+        if not (self.pflags & (SSH_FXF_READ | SSH_FXF_WRITE)):
+            raise ProtocolException("Must specify read or write flag")
+        
+        return True
 
 
 class SFTPHandleMessage(SFTPMessage):
@@ -941,3 +991,98 @@ class SFTPRenameMessage(SFTPMessage):
         oldpath = oldpath_bytes.decode('utf-8')
         newpath = newpath_bytes.decode('utf-8')
         return cls(request_id, oldpath, newpath)
+
+
+class SFTPLinkMessage(SFTPMessage):
+    """SFTP link message (SSH_FXP_LINK)."""
+    
+    def __init__(self, request_id: int, linkpath: str, targetpath: str) -> None:
+        """
+        Initialize SFTP link message.
+        
+        Args:
+            request_id: Request ID
+            linkpath: Path where link should be created
+            targetpath: Target path for the link
+        """
+        super().__init__(SSH_FXP_LINK, request_id)
+        self.linkpath = linkpath
+        self.targetpath = targetpath
+        
+        # Build message data
+        self.add_string(linkpath)
+        self.add_string(targetpath)
+    
+    @classmethod
+    def _unpack_data(cls, data: bytes) -> "SFTPLinkMessage":
+        """Unpack SFTP link message data."""
+        offset = 0
+        request_id, offset = read_uint32(data, offset)
+        linkpath_bytes, offset = read_string(data, offset)
+        targetpath_bytes, offset = read_string(data, offset)
+        
+        linkpath = linkpath_bytes.decode('utf-8')
+        targetpath = targetpath_bytes.decode('utf-8')
+        return cls(request_id, linkpath, targetpath)
+
+
+class SFTPExtendedMessage(SFTPMessage):
+    """SFTP extended message (SSH_FXP_EXTENDED)."""
+    
+    def __init__(self, request_id: int, extended_request: str, extended_data: bytes = b"") -> None:
+        """
+        Initialize SFTP extended message.
+        
+        Args:
+            request_id: Request ID
+            extended_request: Extended request name
+            extended_data: Extended request data
+        """
+        super().__init__(SSH_FXP_EXTENDED, request_id)
+        self.extended_request = extended_request
+        self.extended_data = extended_data
+        
+        # Build message data
+        self.add_string(extended_request)
+        if extended_data:
+            self._data.extend(extended_data)
+    
+    @classmethod
+    def _unpack_data(cls, data: bytes) -> "SFTPExtendedMessage":
+        """Unpack SFTP extended message data."""
+        offset = 0
+        request_id, offset = read_uint32(data, offset)
+        extended_request_bytes, offset = read_string(data, offset)
+        
+        extended_request = extended_request_bytes.decode('utf-8')
+        extended_data = data[offset:] if offset < len(data) else b""
+        
+        return cls(request_id, extended_request, extended_data)
+
+
+class SFTPExtendedReplyMessage(SFTPMessage):
+    """SFTP extended reply message (SSH_FXP_EXTENDED_REPLY)."""
+    
+    def __init__(self, request_id: int, extended_data: bytes = b"") -> None:
+        """
+        Initialize SFTP extended reply message.
+        
+        Args:
+            request_id: Request ID this reply responds to
+            extended_data: Extended reply data
+        """
+        super().__init__(SSH_FXP_EXTENDED_REPLY, request_id)
+        self.extended_data = extended_data
+        
+        # Build message data
+        if extended_data:
+            self._data.extend(extended_data)
+    
+    @classmethod
+    def _unpack_data(cls, data: bytes) -> "SFTPExtendedReplyMessage":
+        """Unpack SFTP extended reply message data."""
+        offset = 0
+        request_id, offset = read_uint32(data, offset)
+        extended_data = data[offset:] if offset < len(data) else b""
+        
+        return cls(request_id, extended_data)
