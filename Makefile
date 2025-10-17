@@ -29,7 +29,10 @@ help:
 	@echo "Build & Release:"
 	@echo "  clean        Clean build artifacts"
 	@echo "  build        Build wheel and source distribution"
-	@echo "  release      Build and upload to PyPI (requires credentials)"
+	@echo "  setup-ci     Setup GitLab CI variables for PyPI deployment"
+	@echo "  release-patch Create a patch release (0.0.X)"
+	@echo "  release-minor Create a minor release (0.X.0)"
+	@echo "  release-major Create a major release (X.0.0)"
 	@echo ""
 	@echo "Utilities:"
 	@echo "  benchmark    Run performance benchmarks"
@@ -51,7 +54,7 @@ test-all:
 	tox
 
 test-cov:
-	pytest tests/ -v --cov=ssh_library --cov-report=html --cov-report=term
+	pytest tests/ -v --cov=spindlex --cov-report=html --cov-report=term
 
 test-integration:
 	pytest tests/ -v -m integration
@@ -64,18 +67,18 @@ test-performance:
 
 # Code Quality
 lint: format type-check security
-	flake8 ssh_library tests
+	flake8 spindlex tests
 
 format:
-	black ssh_library tests
-	isort ssh_library tests
+	black spindlex tests
+	isort spindlex tests
 
 type-check:
-	mypy ssh_library
+	mypy spindlex
 
 security:
-	bandit -r ssh_library -f json -o bandit-report.json
-	bandit -r ssh_library
+	bandit -r spindlex -f json -o bandit-report.json
+	bandit -r spindlex
 
 # Documentation
 docs:
@@ -109,11 +112,11 @@ release: build
 
 # Development utilities
 benchmark:
-	python -m ssh_library.tools.benchmark --crypto-only
+	python -m spindlex.tools.benchmark --crypto-only
 
 keygen:
-	python -m ssh_library.tools.keygen -t ed25519 -f test_keys/test_ed25519
-	python -m ssh_library.tools.keygen -t rsa -b 2048 -f test_keys/test_rsa
+	python -m spindlex.tools.keygen -t ed25519 -f test_keys/test_ed25519
+	python -m spindlex.tools.keygen -t rsa -b 2048 -f test_keys/test_rsa
 
 # Pre-commit hooks
 pre-commit:
@@ -132,24 +135,34 @@ ci-install:
 	pip install -e .[dev]
 
 ci-test:
-	pytest tests/ -v --cov=ssh_library --cov-report=xml
+	pytest tests/ -v --cov=spindlex --cov-report=xml
 
 ci-lint:
-	black --check ssh_library tests
-	isort --check-only ssh_library tests
-	flake8 ssh_library tests
-	mypy ssh_library
-	bandit -r ssh_library
+	black --check spindlex tests
+	isort --check-only spindlex tests
+	flake8 spindlex tests
+	mypy spindlex
+	bandit -r spindlex
 
-# Version management
-version-patch:
-	python scripts/release.py patch
+# CI/CD Setup
+setup-ci:
+	python scripts/setup-ci-variables.py
 
-version-minor:
-	python scripts/release.py minor
+# Release management
+release-patch:
+	@echo "Creating patch release..."
+	@read -p "Enter patch version (e.g., 0.2.1): " version; \
+	python scripts/release.py --version $$version --type patch
 
-version-major:
-	python scripts/release.py major
+release-minor:
+	@echo "Creating minor release..."
+	@read -p "Enter minor version (e.g., 0.3.0): " version; \
+	python scripts/release.py --version $$version --type minor
+
+release-major:
+	@echo "Creating major release..."
+	@read -p "Enter major version (e.g., 1.0.0): " version; \
+	python scripts/release.py --version $$version --type major
 
 # Database/cache cleanup
 clean-cache:
