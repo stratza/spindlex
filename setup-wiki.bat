@@ -8,6 +8,18 @@ REM Check if wiki repository exists
 if not exist "spindlex.wiki" (
     echo 📥 Cloning wiki repository...
     git clone https://gitlab.com/daveops.world/development/python/spindlex.wiki.git
+    if errorlevel 1 (
+        echo ❌ Failed to clone wiki repository!
+        echo 🔧 Please create the first wiki page in GitLab web interface first:
+        echo    1. Go to https://gitlab.com/daveops.world/development/python/spindlex
+        echo    2. Click Wiki in sidebar
+        echo    3. Click "Create your first page"
+        echo    4. Set title to "home" and add any content
+        echo    5. Click "Create page"
+        echo    6. Then run this script again
+        pause
+        exit /b 1
+    )
 )
 
 cd spindlex.wiki
@@ -44,7 +56,8 @@ echo 💾 Committing changes...
 git commit -m "📚 Initial SpindleX wiki setup - Added comprehensive documentation"
 
 echo 🚀 Pushing to GitLab...
-git push origin master
+git branch -M main
+git push origin main
 
 echo ✅ Wiki setup complete!
 echo 🌐 Visit your wiki at: https://gitlab.com/daveops.world/development/python/spindlex/-/wikis/home
