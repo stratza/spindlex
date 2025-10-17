@@ -78,7 +78,7 @@ class TestVersionParsing:
     def test_create_version_string(self):
         """Test creating version strings."""
         version = create_version_string()
-        assert version == "SSH-2.0-spindlex_0.1.0"
+        assert version == "SSH-2.0-spindlex_0.2.0"
 
         version = create_version_string("MySSH", "2.1")
         assert version == "SSH-2.0-MySSH_2.1"

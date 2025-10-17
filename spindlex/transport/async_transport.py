@@ -34,6 +34,8 @@ class AsyncTransport(Transport):
         self._loop = asyncio.get_event_loop()
         self._reader: Optional[asyncio.StreamReader] = None
         self._writer: Optional[asyncio.StreamWriter] = None
+        # Override sync lock with async lock
+        self._lock = asyncio.Lock()
     
     async def start_client(self, timeout: Optional[float] = None) -> None:
         """
