@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Basic Spindle Usage Examples
+Basic SpindleX Usage Examples
 
-This module demonstrates fundamental SSH operations using Spindle.
+This module demonstrates fundamental SSH operations using SpindleX.
 """
 
 import sys
@@ -251,7 +251,7 @@ def connection_info_example():
 
 def main():
     """Run all examples."""
-    print("Spindle Basic Usage Examples")
+    print("SpindleX Basic Usage Examples")
     print("=" * 40)
     
     examples = [
