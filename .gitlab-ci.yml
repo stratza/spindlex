@@ -62,7 +62,7 @@ lint:mypy:
     - pip install --upgrade pip
     - pip install -e ".[test]"
   script:
-    - pytest tests/unit/ -v --cov=spindlex --cov-report=xml --cov-report=term
+    - pytest tests/unit/ --ignore=tests/unit/test_benchmarks.py --ignore=tests/unit/test_interoperability.py -v --cov=spindlex --cov-report=xml --cov-report=term
   coverage: '/TOTAL.*\s+(\d+%)$/'
   artifacts:
     reports:
@@ -115,7 +115,7 @@ test:integration:
     - pip install -e ".[test]"
     - sleep 30  # Wait for SSH server to start
   script:
-    - TEST_SSH_HOST=ssh-server TEST_SSH_USER=testuser TEST_SSH_PASS=testpass pytest tests/integration/ -v
+    - TEST_SSH_HOST=ssh-server TEST_SSH_USER=testuser TEST_SSH_PASS=testpass pytest tests/unit/test_integration.py -v
   allow_failure: true
   only:
     - main

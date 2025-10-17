@@ -159,7 +159,26 @@ class TestAsyncSSHClient:
         self.client._connected = True
         mock_transport = AsyncMock()
         mock_channel = AsyncMock()
-        mock_channel.makefile = Mock(side_effect=lambda mode, bufsize: Mock())
+        
+        # Create proper mock file objects
+        mock_stdin = Mock()
+        mock_stdout = Mock()
+        mock_stderr = Mock()
+        
+        # Setup makefile methods to return the mock file objects
+        def makefile_side_effect(mode, bufsize=None):
+            if mode == 'wb':
+                return mock_stdin
+            elif mode == 'rb':
+                return mock_stdout
+            return Mock()
+        
+        def makefile_stderr_side_effect(mode, bufsize=None):
+            return mock_stderr
+        
+        mock_channel.makefile = Mock(side_effect=makefile_side_effect)
+        mock_channel.makefile_stderr = Mock(side_effect=makefile_stderr_side_effect)
+        mock_channel.exec_command = AsyncMock()  # Make exec_command async
         mock_transport.open_channel = AsyncMock(return_value=mock_channel)
         self.client._transport = mock_transport
 
@@ -171,9 +190,9 @@ class TestAsyncSSHClient:
         mock_channel.exec_command.assert_called_once_with("ls -la")
 
         # Verify return values
-        assert stdin is not None
-        assert stdout is not None
-        assert stderr is not None
+        assert stdin == mock_stdin
+        assert stdout == mock_stdout
+        assert stderr == mock_stderr
 
     @pytest.mark.asyncio
     async def test_invoke_shell_success(self):

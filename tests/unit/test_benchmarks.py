@@ -18,16 +18,16 @@ from spindlex import AutoAddPolicy, SSHClient
 
 # Skip all tests in this module if full implementation is not available
 pytest.importorskip(
-    "spindle.crypto.pkey", reason="Full Spindle implementation not available"
+    "spindlex.crypto.pkey", reason="Full Spindle implementation not available"
 )
 pytest.importorskip(
-    "spindle.crypto.backend", reason="Full Spindle implementation not available"
+    "spindlex.crypto.backend", reason="Full Spindle implementation not available"
 )
 pytest.importorskip(
-    "spindle.logging", reason="Full Spindle implementation not available"
+    "spindlex.logging", reason="Full Spindle implementation not available"
 )
 
-from spindlex.crypto.backend import get_crypto_backend
+from spindlex.crypto.backend import default_crypto_backend
 from spindlex.crypto.pkey import ECDSAKey, Ed25519Key, RSAKey
 from spindlex.logging import get_performance_monitor
 

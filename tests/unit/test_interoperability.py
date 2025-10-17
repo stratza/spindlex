@@ -15,7 +15,7 @@ import pytest
 
 # Skip tests that require full implementation
 pytest.importorskip(
-    "spindle.crypto.backend", reason="Full Spindle implementation not available"
+    "spindlex.crypto.backend", reason="Full Spindle implementation not available"
 )
 
 
