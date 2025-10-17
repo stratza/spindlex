@@ -40,6 +40,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Protocol Message Tests**: Fixed SFTP message format issues with proper IgnoreMessage imports
 - **Comprehensive Benchmarks**: Fixed syntax errors and memory usage assertions
 
+### Added
+- **Python 3.13 and 3.14 Support**: Added support for the latest Python versions
+
 ### Changed
 - **Dropped Python 3.8 Support**: Minimum Python version is now 3.9
 
