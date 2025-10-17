@@ -5,13 +5,13 @@ REM This script copies wiki content to your GitLab wiki repository
 echo 🚀 Setting up SpindleX GitLab Wiki...
 
 REM Check if wiki repository exists
-if not exist "spindlex.wiki" (
+if not exist "spindle.wiki" (
     echo 📥 Cloning wiki repository...
-    git clone https://gitlab.com/daveops.world/development/python/spindlex.wiki.git
+    git clone https://gitlab.com/daveops.world/development/python/spindle.wiki.git
     if errorlevel 1 (
         echo ❌ Failed to clone wiki repository!
         echo 🔧 Please create the first wiki page in GitLab web interface first:
-        echo    1. Go to https://gitlab.com/daveops.world/development/python/spindlex
+        echo    1. Go to https://gitlab.com/daveops.world/development/python/spindle
         echo    2. Click Wiki in sidebar
         echo    3. Click "Create your first page"
         echo    4. Set title to "home" and add any content
@@ -22,7 +22,7 @@ if not exist "spindlex.wiki" (
     )
 )
 
-cd spindlex.wiki
+cd spindle.wiki
 
 echo 📝 Copying wiki content...
 
@@ -60,6 +60,6 @@ git branch -M main
 git push origin main
 
 echo ✅ Wiki setup complete!
-echo 🌐 Visit your wiki at: https://gitlab.com/daveops.world/development/python/spindlex/-/wikis/home
+echo 🌐 Visit your wiki at: https://gitlab.com/daveops.world/development/python/spindle/-/wikis/home
 
 pause
