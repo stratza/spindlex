@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Future changes will be documented here
+
+## [0.2.0] - 2025-10-17
+
+### Added
 - Complete SSH key exchange implementation with Curve25519, DH Group 14/16/18
 - Modern SSH protocol extensions (ext-info, strict-kex) for OpenSSH compatibility
 - Comprehensive cryptographic backend with SSH-specific key derivation
