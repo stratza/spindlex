@@ -217,6 +217,7 @@ class TestOptimizations:
     def test_buffer_reuse_optimization(self):
         """Test that buffers are reused efficiently."""
         from spindlex.transport.channel import Channel
+        from collections import deque
 
         mock_transport = Mock()
         channel = Channel(mock_transport, 1)
@@ -224,15 +225,20 @@ class TestOptimizations:
         # Test that buffer operations don't create excessive objects
         initial_buffer = channel._recv_buffer
 
-        # Add data
-        channel._recv_buffer += b"test data"
+        # Add data to deque buffer
+        channel._recv_buffer.append(b"test data")
 
-        # Read data
-        data = channel._recv_buffer[:4]
-        channel._recv_buffer = channel._recv_buffer[4:]
+        # Read data from deque
+        if channel._recv_buffer:
+            data_chunk = channel._recv_buffer.popleft()
+            # Simulate reading first 4 bytes
+            data = data_chunk[:4]
+            remainder = data_chunk[4:]
+            if remainder:
+                channel._recv_buffer.appendleft(remainder)
 
         # Buffer should still be the same type
-        assert isinstance(channel._recv_buffer, bytes)
+        assert isinstance(channel._recv_buffer, deque)
         assert data == b"test"
 
     def test_message_caching_optimization(self):

@@ -53,7 +53,7 @@ class PerformanceMonitor:
         self.connection_metrics: Dict[str, ConnectionMetrics] = {}
         self.operation_stats: Dict[str, List[float]] = defaultdict(list)
         self._lock = threading.RLock()
-        self.logger = get_logger('ssh_library.monitoring')
+        self.logger = get_logger('spindlex.monitoring')
     
     def record_metric(self, 
                      operation: str, 
@@ -250,7 +250,7 @@ class CryptoTimer:
             monitor: Performance monitor instance (uses global if None)
         """
         self.monitor = monitor or get_performance_monitor()
-        self.logger = get_logger('ssh_library.crypto.timing')
+        self.logger = get_logger('spindlex.crypto.timing')
     
     @contextmanager
     def time_crypto_operation(self, 
@@ -315,7 +315,7 @@ class ProtocolAnalyzer:
             monitor: Performance monitor instance (uses global if None)
         """
         self.monitor = monitor or get_performance_monitor()
-        self.logger = get_logger('ssh_library.protocol.analyzer')
+        self.logger = get_logger('spindlex.protocol.analyzer')
         self.message_counts: Dict[str, int] = defaultdict(int)
         self.message_sizes: Dict[str, List[int]] = defaultdict(list)
         self._lock = threading.RLock()
