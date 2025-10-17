@@ -76,15 +76,26 @@ class KeyExchange:
         """
         Start key exchange process.
         
+        Note: KEXINIT exchange should already be completed by transport layer.
+        
         Raises:
             CryptoException: If key exchange fails
         """
         try:
-            # Send KEXINIT message
-            self._send_kexinit()
+            # Get KEXINIT messages from transport (should already be exchanged)
+            if not hasattr(self._transport, '_peer_kexinit') or self._transport._peer_kexinit is None:
+                raise CryptoException("KEXINIT not exchanged - transport should handle this first")
             
-            # Receive server KEXINIT
-            self._receive_kexinit()
+            # Set up server algorithms from the already received KEXINIT
+            peer_kexinit = self._transport._peer_kexinit
+            self._server_kex_algorithms = peer_kexinit.kex_algorithms
+            self._server_host_key_algorithms = peer_kexinit.server_host_key_algorithms
+            self._server_encryption_c2s = peer_kexinit.encryption_algorithms_client_to_server
+            self._server_encryption_s2c = peer_kexinit.encryption_algorithms_server_to_client
+            self._server_mac_c2s = peer_kexinit.mac_algorithms_client_to_server
+            self._server_mac_s2c = peer_kexinit.mac_algorithms_server_to_client
+            self._server_compression_c2s = peer_kexinit.compression_algorithms_client_to_server
+            self._server_compression_s2c = peer_kexinit.compression_algorithms_server_to_client
             
             # Negotiate algorithms
             self._negotiate_algorithms()
@@ -97,9 +108,9 @@ class KeyExchange:
             elif self._kex_algorithm == KEX_DH_GROUP14_SHA256:
                 self._perform_dh_group14_sha256()
             else:
-                # Default to Curve25519 for maximum compatibility
-                self._kex_algorithm = "curve25519-sha256"
-                self._perform_curve25519_sha256()
+                # Default to DH Group 14 SHA256 for compatibility
+                self._kex_algorithm = KEX_DH_GROUP14_SHA256
+                self._perform_dh_group14_sha256()
             
             # Generate session keys
             self._generate_session_keys()
@@ -257,7 +268,10 @@ class KeyExchange:
             
             # Store public key value
             self._dh_public_key = public_numbers.y
-            self._dh_public_key_mpint = write_mpint(public_numbers.y)
+            
+            # Ensure the public key is positive (SSH requirement)
+            if self._dh_public_key <= 0:
+                raise CryptoException("Invalid DH public key: must be positive")
             
             # Send KEXDH_INIT message
             kexdh_init = Message(MSG_KEXDH_INIT)
@@ -273,11 +287,15 @@ class KeyExchange:
             # Parse KEXDH_REPLY
             offset = 0
             server_host_key_blob, offset = read_string(reply_msg._data, offset)
-            server_dh_public, offset = read_string(reply_msg._data, offset)
+            server_dh_public_blob, offset = read_string(reply_msg._data, offset)
             signature_blob, offset = read_string(reply_msg._data, offset)
             
             # Extract server's DH public key
-            server_public_int, _ = read_mpint(server_dh_public, 0)
+            server_public_int, _ = read_mpint(server_dh_public_blob, 0)
+            
+            # Validate server's public key
+            if server_public_int <= 1 or server_public_int >= self.DH_GROUP14_P - 1:
+                raise CryptoException("Invalid server DH public key")
             
             # Compute shared secret
             server_public_numbers = dh.DHPublicNumbers(server_public_int, parameters.parameter_numbers())
