@@ -1,10 +1,10 @@
 # Contributors
 
-We thank all the contributors who have helped make Spindle better!
+We thank all the contributors who have helped make SpindleX better!
 
 ## Core Team
 
-- **Spindle Team** - Initial development and maintenance
+- **SpindleX Team** - Initial development and maintenance
 
 ## Contributors
 
@@ -61,8 +61,8 @@ Contributors are recognized in several ways:
 To get started contributing:
 
 1. Read our [Contributing Guide](docs/contributing.rst)
-2. Check out the [good first issue](https://gitlab.com/daveops.world/development/python/spindle/-/issues?label_name%5B%5D=good%20first%20issue) label
+2. Check out the [good first issue](https://gitlab.com/daveops.world/development/python/spindlex/-/issues?label_name%5B%5D=good%20first%20issue) label
 3. Join our community discussions
 4. Fork the repository and start coding!
 
-Thank you to everyone who contributes to making Spindle better! 🎉
+Thank you to everyone who contributes to making SpindleX better! 🎉

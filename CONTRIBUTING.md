@@ -1,6 +1,6 @@
-# Contributing to Spindle
+# Contributing to SpindleX
 
-Thank you for your interest in contributing to Spindle! This document provides guidelines and information for contributors.
+Thank you for your interest in contributing to SpindleX! This document provides guidelines and information for contributors.
 
 ## Code of Conduct
 
@@ -12,8 +12,8 @@ By participating in this project, you agree to abide by our Code of Conduct. Ple
 
 1. **Fork and Clone**
    ```bash
-   git clone https://github.com/your-username/spindle.git
-   cd spindle
+   git clone https://github.com/your-username/spindlex.git
+   cd spindlex
    ```
 
 2. **Create Virtual Environment**
@@ -86,7 +86,7 @@ When reporting issues, please include:
 Use our issue templates:
 - Bug Report
 - Feature Request
-- Security Issue (use security@spindle.dev for sensitive issues)
+- Security Issue (use security@spindlex.dev for sensitive issues)
 
 ### Submitting Changes
 
@@ -165,7 +165,7 @@ We follow PEP 8 with some modifications:
 import standard_library
 import third_party_library
 
-from spindle import local_imports
+from spindlex import local_imports
 
 
 class ExampleClass:
@@ -221,7 +221,7 @@ class ExampleClass:
 import pytest
 from unittest.mock import Mock, patch
 
-from spindle.client.ssh_client import SSHClient
+from spindlex.client.ssh_client import SSHClient
 
 
 class TestSSHClient:
@@ -246,7 +246,7 @@ class TestSSHClient:
         # Test implementation
         pass
     
-    @patch('spindle.transport.transport.socket')
+    @patch('spindlex.transport.transport.socket')
     def test_connection_failure(self, mock_socket, client):
         """Test connection failure handling."""
         mock_socket.side_effect = ConnectionError("Connection failed")
@@ -332,7 +332,7 @@ def connect(
 
 ```python
 import time
-from spindle.crypto.pkey import Ed25519Key
+from spindlex.crypto.pkey import Ed25519Key
 
 def benchmark_key_generation():
     """Benchmark key generation performance."""
@@ -423,7 +423,7 @@ Contributors are recognized in:
 
 ### Contributor License Agreement
 
-By contributing to Spindle, you agree that:
+By contributing to SpindleX, you agree that:
 
 1. Your contributions are your original work
 2. You have the right to submit the contributions
@@ -438,6 +438,6 @@ By contributing to Spindle, you agree that:
 
 ## Thank You
 
-Thank you for contributing to Spindle! Your contributions help make secure SSH communication accessible to Python developers worldwide.
+Thank you for contributing to SpindleX! Your contributions help make secure SSH communication accessible to Python developers worldwide.
 
 For questions about contributing, please open a GitHub Discussion or contact the maintainers.

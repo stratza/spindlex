@@ -1,7 +1,7 @@
 Contributing Guide
 =================
 
-We welcome contributions to Spindle! This guide will help you get started with contributing code, documentation, bug reports, and feature requests.
+We welcome contributions to SpindleX! This guide will help you get started with contributing code, documentation, bug reports, and feature requests.
 
 Getting Started
 ---------------
@@ -11,8 +11,8 @@ Development Environment Setup
 
 1. **Fork and Clone the Repository**::
 
-    git clone https://gitlab.com/yourusername/spindle.git
-    cd spindle
+    git clone https://gitlab.com/yourusername/spindlex.git
+    cd spindlex
 
 2. **Set Up Development Environment**::
 
@@ -32,7 +32,7 @@ Development Environment Setup
     pytest
     
     # Check code style
-    flake8 spindle/
+    flake8 spindlex/
     
     # Build documentation
     cd docs
@@ -102,13 +102,13 @@ Example code style::
     from typing import Dict, List, Optional, Union
     import logging
     
-    from spindle.exceptions import SSHException
+    from spindlex.exceptions import SSHException
     
     
     class ExampleClass:
         """Example class demonstrating code style.
         
-        This class shows the preferred code style for Spindle.
+        This class shows the preferred code style for SpindleX.
         
         Args:
             hostname: The hostname to connect to.
@@ -157,19 +157,19 @@ We use automated tools for code formatting:
 
 **Black** for code formatting::
 
-    black spindle/ tests/
+    black spindlex/ tests/
 
 **isort** for import sorting::
 
-    isort spindle/ tests/
+    isort spindlex/ tests/
 
 **flake8** for linting::
 
-    flake8 spindle/ tests/
+    flake8 spindlex/ tests/
 
 **mypy** for type checking::
 
-    mypy spindle/
+    mypy spindlex/
 
 Pre-commit Configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -227,8 +227,8 @@ Example unit test::
     import pytest
     from unittest.mock import Mock, patch
     
-    from spindle.client.ssh_client import SSHClient
-    from spindle.exceptions import AuthenticationException
+    from spindlex.client.ssh_client import SSHClient
+    from spindlex.exceptions import AuthenticationException
     
     
     class TestSSHClient:
