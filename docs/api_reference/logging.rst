@@ -4,31 +4,31 @@ Logging API
 Logging Configuration
 ---------------------
 
-.. automodule:: ssh_library.logging
+.. automodule:: spindlex.logging
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autofunction:: ssh_library.logging.configure_logging
+.. autofunction:: spindlex.logging.configure_logging
 
-.. autofunction:: ssh_library.logging.get_logger
+.. autofunction:: spindlex.logging.get_logger
 
-.. autofunction:: ssh_library.logging.set_log_level
+.. autofunction:: spindlex.logging.set_log_level
 
 Logger Classes
 --------------
 
-.. autoclass:: ssh_library.logging.SSHLogger
+.. autoclass:: spindlex.logging.SSHLogger
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.logging.SecureFormatter
+.. autoclass:: spindlex.logging.SecureFormatter
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.logging.PerformanceLogger
+.. autoclass:: spindlex.logging.PerformanceLogger
    :members:
    :undoc-members:
    :show-inheritance:
@@ -36,17 +36,17 @@ Logger Classes
 Monitoring and Metrics
 ----------------------
 
-.. automodule:: ssh_library.logging.monitoring
+.. automodule:: spindlex.logging.monitoring
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.logging.monitoring.PerformanceMonitor
+.. autoclass:: spindlex.logging.monitoring.PerformanceMonitor
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.logging.monitoring.ConnectionMetrics
+.. autoclass:: spindlex.logging.monitoring.ConnectionMetrics
    :members:
    :undoc-members:
    :show-inheritance:
@@ -56,13 +56,13 @@ Example Usage
 
 Basic Logging Setup::
 
-    from ssh_library.logging import configure_logging, get_logger
+    from spindlex.logging import configure_logging, get_logger
     
     # Configure logging
     configure_logging(
         level='INFO',
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        log_file='/var/log/ssh_library.log'
+        log_file='/var/log/spindlex.log'
     )
     
     # Get logger
@@ -76,7 +76,7 @@ Basic Logging Setup::
 
 Secure Logging::
 
-    from ssh_library.logging import configure_logging
+    from spindlex.logging import configure_logging
     
     # Configure with security features
     configure_logging(
@@ -98,7 +98,7 @@ Secure Logging::
 
 Performance Monitoring::
 
-    from ssh_library.logging.monitoring import PerformanceMonitor
+    from spindlex.logging.monitoring import PerformanceMonitor
     import time
     
     monitor = PerformanceMonitor()
@@ -117,7 +117,7 @@ Performance Monitoring::
 
 Custom Logger::
 
-    from ssh_library.logging import SSHLogger
+    from spindlex.logging import SSHLogger
     import logging
     
     class CustomSSHLogger(SSHLogger):
@@ -152,7 +152,7 @@ Custom Logger::
 
 Structured Logging::
 
-    from ssh_library.logging import get_logger
+    from spindlex.logging import get_logger
     import json
     
     logger = get_logger(__name__)
@@ -182,9 +182,9 @@ Structured Logging::
 
 Log Analysis::
 
-    from ssh_library.logging.monitoring import LogAnalyzer
+    from spindlex.logging.monitoring import LogAnalyzer
     
-    analyzer = LogAnalyzer('/var/log/ssh_library.log')
+    analyzer = LogAnalyzer('/var/log/spindlex.log')
     
     # Analyze connection patterns
     connections = analyzer.get_connection_stats()
@@ -203,7 +203,7 @@ Log Analysis::
 Integration with External Systems::
 
     import logging
-    from ssh_library.logging import configure_logging
+    from spindlex.logging import configure_logging
     
     # Syslog integration
     configure_logging(
@@ -224,7 +224,7 @@ Integration with External Systems::
         handlers=[
             {
                 'type': 'file',
-                'filename': '/var/log/ssh_library.json',
+                'filename': '/var/log/spindlex.json',
                 'formatter': 'json'
             }
         ]

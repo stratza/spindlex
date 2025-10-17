@@ -22,8 +22,8 @@ Built-in Performance Monitoring
 
 SSH Library includes built-in performance monitoring::
 
-    from ssh_library.logging.monitoring import PerformanceMonitor
-    from ssh_library import SSHClient
+    from spindlex.logging.monitoring import PerformanceMonitor
+    from spindlex import SSHClient
     import time
     
     # Enable performance monitoring
@@ -63,8 +63,8 @@ Create custom benchmarks for your use case::
 
     import time
     import statistics
-    from ssh_library import SSHClient
-    from ssh_library.crypto.pkey import Ed25519Key
+    from spindlex import SSHClient
+    from spindlex.crypto.pkey import Ed25519Key
     
     class SSHBenchmark:
         def __init__(self, hostname, username, private_key_path):
@@ -217,8 +217,8 @@ Implement connection pooling for better performance::
     import threading
     import queue
     import time
-    from ssh_library import SSHClient
-    from ssh_library.crypto.pkey import Ed25519Key
+    from spindlex import SSHClient
+    from spindlex.crypto.pkey import Ed25519Key
     
     class SSHConnectionPool:
         def __init__(self, hostname, username, private_key_path, 
@@ -441,8 +441,8 @@ Algorithm Selection
 
 Choose optimal cryptographic algorithms::
 
-    from ssh_library import SSHClient
-    from ssh_library.crypto.backend import get_crypto_backend
+    from spindlex import SSHClient
+    from spindlex.crypto.backend import get_crypto_backend
     
     # Get available algorithms
     backend = get_crypto_backend()
@@ -482,7 +482,7 @@ Hardware Acceleration
 
 Leverage hardware acceleration when available::
 
-    from ssh_library.crypto.backend import CryptographyBackend
+    from spindlex.crypto.backend import CryptographyBackend
     
     # Check for hardware acceleration support
     backend = CryptographyBackend()
@@ -550,7 +550,7 @@ Compression
 
 Use compression for text files and slow connections::
 
-    from ssh_library import SSHClient
+    from spindlex import SSHClient
     
     client = SSHClient()
     
@@ -718,7 +718,7 @@ TCP Tuning
 Optimize TCP settings for better performance::
 
     import socket
-    from ssh_library import SSHClient
+    from spindlex import SSHClient
     
     def create_optimized_socket(hostname, port=22):
         """Create socket with optimized TCP settings."""

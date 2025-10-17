@@ -4,17 +4,17 @@ Cryptography API
 Crypto Backend
 --------------
 
-.. automodule:: ssh_library.crypto.backend
+.. automodule:: spindlex.crypto.backend
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.crypto.backend.CryptoBackend
+.. autoclass:: spindlex.crypto.backend.CryptoBackend
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.crypto.backend.CryptographyBackend
+.. autoclass:: spindlex.crypto.backend.CryptographyBackend
    :members:
    :undoc-members:
    :show-inheritance:
@@ -22,27 +22,27 @@ Crypto Backend
 Public Key Cryptography
 -----------------------
 
-.. automodule:: ssh_library.crypto.pkey
+.. automodule:: spindlex.crypto.pkey
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.crypto.pkey.PKey
+.. autoclass:: spindlex.crypto.pkey.PKey
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.crypto.pkey.Ed25519Key
+.. autoclass:: spindlex.crypto.pkey.Ed25519Key
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.crypto.pkey.ECDSAKey
+.. autoclass:: spindlex.crypto.pkey.ECDSAKey
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.crypto.pkey.RSAKey
+.. autoclass:: spindlex.crypto.pkey.RSAKey
    :members:
    :undoc-members:
    :show-inheritance:
@@ -50,27 +50,27 @@ Public Key Cryptography
 Ciphers and Encryption
 ----------------------
 
-.. automodule:: ssh_library.crypto.ciphers
+.. automodule:: spindlex.crypto.ciphers
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.crypto.ciphers.Cipher
+.. autoclass:: spindlex.crypto.ciphers.Cipher
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.crypto.ciphers.ChaCha20Poly1305
+.. autoclass:: spindlex.crypto.ciphers.ChaCha20Poly1305
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.crypto.ciphers.AESGCMCipher
+.. autoclass:: spindlex.crypto.ciphers.AESGCMCipher
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.crypto.ciphers.AESCTRCipher
+.. autoclass:: spindlex.crypto.ciphers.AESCTRCipher
    :members:
    :undoc-members:
    :show-inheritance:
@@ -80,7 +80,7 @@ Example Usage
 
 Key Generation::
 
-    from ssh_library.crypto.pkey import Ed25519Key, RSAKey, ECDSAKey
+    from spindlex.crypto.pkey import Ed25519Key, RSAKey, ECDSAKey
     
     # Generate Ed25519 key (recommended)
     ed25519_key = Ed25519Key.generate()
@@ -111,7 +111,7 @@ Key Loading::
 
 Crypto Backend Usage::
 
-    from ssh_library.crypto.backend import get_crypto_backend
+    from spindlex.crypto.backend import get_crypto_backend
     
     backend = get_crypto_backend()
     
@@ -129,7 +129,7 @@ Crypto Backend Usage::
 
 Digital Signatures::
 
-    from ssh_library.crypto.pkey import Ed25519Key
+    from spindlex.crypto.pkey import Ed25519Key
     
     key = Ed25519Key.generate()
     

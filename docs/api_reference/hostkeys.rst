@@ -4,27 +4,27 @@ Host Keys API
 Host Key Policies
 -----------------
 
-.. automodule:: ssh_library.hostkeys.policy
+.. automodule:: spindlex.hostkeys.policy
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.hostkeys.policy.MissingHostKeyPolicy
+.. autoclass:: spindlex.hostkeys.policy.MissingHostKeyPolicy
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.hostkeys.policy.AutoAddPolicy
+.. autoclass:: spindlex.hostkeys.policy.AutoAddPolicy
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.hostkeys.policy.RejectPolicy
+.. autoclass:: spindlex.hostkeys.policy.RejectPolicy
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.hostkeys.policy.WarningPolicy
+.. autoclass:: spindlex.hostkeys.policy.WarningPolicy
    :members:
    :undoc-members:
    :show-inheritance:
@@ -32,17 +32,17 @@ Host Key Policies
 Host Key Storage
 ----------------
 
-.. automodule:: ssh_library.hostkeys.storage
+.. automodule:: spindlex.hostkeys.storage
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.hostkeys.storage.HostKeys
+.. autoclass:: spindlex.hostkeys.storage.HostKeys
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.hostkeys.storage.HostKeyEntry
+.. autoclass:: spindlex.hostkeys.storage.HostKeyEntry
    :members:
    :undoc-members:
    :show-inheritance:
@@ -52,8 +52,8 @@ Example Usage
 
 Basic Host Key Policy::
 
-    from ssh_library import SSHClient
-    from ssh_library.hostkeys.policy import AutoAddPolicy, RejectPolicy
+    from spindlex import SSHClient
+    from spindlex.hostkeys.policy import AutoAddPolicy, RejectPolicy
     
     client = SSHClient()
     
@@ -65,8 +65,8 @@ Basic Host Key Policy::
 
 Custom Host Key Policy::
 
-    from ssh_library.hostkeys.policy import MissingHostKeyPolicy
-    from ssh_library.exceptions import SSHException
+    from spindlex.hostkeys.policy import MissingHostKeyPolicy
+    from spindlex.exceptions import SSHException
     import logging
     
     class CustomHostKeyPolicy(MissingHostKeyPolicy):
@@ -86,7 +86,7 @@ Custom Host Key Policy::
 
 Host Key Management::
 
-    from ssh_library.hostkeys.storage import HostKeys
+    from spindlex.hostkeys.storage import HostKeys
     
     # Load host keys from file
     host_keys = HostKeys()
@@ -104,8 +104,8 @@ Host Key Management::
 
 Host Key Verification::
 
-    from ssh_library import SSHClient, BadHostKeyException
-    from ssh_library.hostkeys.policy import RejectPolicy
+    from spindlex import SSHClient, BadHostKeyException
+    from spindlex.hostkeys.policy import RejectPolicy
     
     client = SSHClient()
     client.set_missing_host_key_policy(RejectPolicy())
@@ -127,7 +127,7 @@ Host Key Verification::
 
 Fingerprint Verification::
 
-    from ssh_library.crypto.pkey import Ed25519Key
+    from spindlex.crypto.pkey import Ed25519Key
     
     # Load host key
     key = Ed25519Key.from_public_key_file('/etc/ssh/ssh_host_ed25519_key.pub')

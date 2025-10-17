@@ -13,8 +13,8 @@ Basic Server Management Script::
     Server management automation script.
     """
     
-    from ssh_library import SSHClient
-    from ssh_library.exceptions import SSHException
+    from spindlex import SSHClient
+    from spindlex.exceptions import SSHException
     import logging
     import sys
     from typing import List, Dict, Any
@@ -188,8 +188,8 @@ Configuration Deployment Script::
     
     import os
     import yaml
-    from ssh_library import SSHClient
-    from ssh_library.exceptions import SSHException
+    from spindlex import SSHClient
+    from spindlex.exceptions import SSHException
     from typing import Dict, List, Any
     import tempfile
     import hashlib
@@ -356,7 +356,7 @@ Log Collection Script::
     import re
     import gzip
     from datetime import datetime, timedelta
-    from ssh_library import SSHClient
+    from spindlex import SSHClient
     from typing import Dict, List, Any
     import concurrent.futures
     
@@ -619,8 +619,8 @@ Database Backup Script::
     
     import os
     import datetime
-    from ssh_library import SSHClient
-    from ssh_library.exceptions import SSHException
+    from spindlex import SSHClient
+    from spindlex.exceptions import SSHException
     from typing import Dict, List, Any
     import subprocess
     

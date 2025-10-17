@@ -92,7 +92,7 @@ def directory_operations_example():
             print(f"  {filename}")
         
         # Create a directory
-        test_dir = '/tmp/ssh_library_test'
+        test_dir = '/tmp/spindlex_test'
         try:
             sftp.mkdir(test_dir)
             print(f"Created directory: {test_dir}")
