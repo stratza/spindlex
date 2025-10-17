@@ -1044,7 +1044,7 @@ class MockAsyncSSHClient:
 
 try:
     # Try to use real async client if available
-    from ssh_library.client.async_ssh_client import AsyncSSHClient
+    from spindlex.client.async_ssh_client import AsyncSSHClient
 except ImportError:
     # Use mock if not available
     AsyncSSHClient = MockAsyncSSHClient

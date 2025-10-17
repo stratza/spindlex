@@ -33,8 +33,8 @@ def skip_if_not_implemented(module_path):
 def full_implementation_available():
     """Check if full Spindle implementation is available."""
     try:
-        from spindle.crypto.backend import get_crypto_backend
-        from spindle.crypto.pkey import Ed25519Key
+        from spindlex.crypto.backend import get_crypto_backend
+        from spindlex.crypto.pkey import Ed25519Key
 
         # If we can import these without error, assume full implementation
         return True

@@ -12,16 +12,16 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
-from ssh_library.client.ssh_client import SSHClient
-from ssh_library.exceptions import SSHException, TransportException
-from ssh_library.transport.channel import Channel
-from ssh_library.transport.forwarding import (
+from spindlex.client.ssh_client import SSHClient
+from spindlex.exceptions import SSHException, TransportException
+from spindlex.transport.channel import Channel
+from spindlex.transport.forwarding import (
     ForwardingTunnel,
     LocalPortForwarder,
     PortForwardingManager,
     RemotePortForwarder,
 )
-from ssh_library.transport.transport import Transport
+from spindlex.transport.transport import Transport
 
 
 class TestForwardingTunnel:

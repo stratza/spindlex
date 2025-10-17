@@ -8,8 +8,8 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
-from ssh_library.exceptions import ChannelException
-from ssh_library.transport.channel import Channel
+from spindlex.exceptions import ChannelException
+from spindlex.transport.channel import Channel
 
 
 class TestChannelBasic:

@@ -9,15 +9,15 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
-from ssh_library.exceptions import (
+from spindlex.exceptions import (
     AuthenticationException,
     ProtocolException,
     TransportException,
 )
-from ssh_library.protocol.constants import *
-from ssh_library.protocol.messages import *
-from ssh_library.transport.channel import Channel
-from ssh_library.transport.transport import Transport
+from spindlex.protocol.constants import *
+from spindlex.protocol.messages import *
+from spindlex.transport.channel import Channel
+from spindlex.transport.transport import Transport
 
 
 class MockSocket:

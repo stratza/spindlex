@@ -4,8 +4,8 @@ Tests for SSH protocol message classes.
 
 import pytest
 
-from ssh_library.exceptions import ProtocolException
-from ssh_library.protocol.constants import (
+from spindlex.exceptions import ProtocolException
+from spindlex.protocol.constants import (
     KEX_COOKIE_SIZE,
     MSG_CHANNEL_CLOSE,
     MSG_CHANNEL_DATA,
@@ -23,7 +23,7 @@ from ssh_library.protocol.constants import (
     SSH_DISCONNECT_PROTOCOL_ERROR,
     SSH_OPEN_CONNECT_FAILED,
 )
-from ssh_library.protocol.messages import (
+from spindlex.protocol.messages import (
     ChannelCloseMessage,
     ChannelDataMessage,
     ChannelOpenConfirmationMessage,

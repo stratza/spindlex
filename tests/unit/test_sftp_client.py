@@ -9,9 +9,9 @@ from unittest.mock import MagicMock, Mock, mock_open, patch
 
 import pytest
 
-from ssh_library.client.sftp_client import SFTPClient
-from ssh_library.exceptions import ChannelException, SFTPError
-from ssh_library.protocol.sftp_constants import (
+from spindlex.client.sftp_client import SFTPClient
+from spindlex.exceptions import ChannelException, SFTPError
+from spindlex.protocol.sftp_constants import (
     SFTP_VERSION,
     SSH_FILEXFER_ATTR_PERMISSIONS,
     SSH_FILEXFER_ATTR_SIZE,
@@ -22,7 +22,7 @@ from ssh_library.protocol.sftp_constants import (
     SSH_FXF_READ,
     SSH_FXF_WRITE,
 )
-from ssh_library.protocol.sftp_messages import (
+from spindlex.protocol.sftp_messages import (
     SFTPAttributes,
     SFTPAttrsMessage,
     SFTPCloseMessage,
@@ -44,8 +44,8 @@ from ssh_library.protocol.sftp_messages import (
     SFTPVersionMessage,
     SFTPWriteMessage,
 )
-from ssh_library.transport.channel import Channel
-from ssh_library.transport.transport import Transport
+from spindlex.transport.channel import Channel
+from spindlex.transport.transport import Transport
 
 
 class TestSFTPClient:
