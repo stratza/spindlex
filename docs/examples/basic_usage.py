@@ -8,9 +8,9 @@ This module demonstrates fundamental SSH operations using Spindle.
 import sys
 from pathlib import Path
 
-from spindle import SSHClient, AutoAddPolicy, RejectPolicy
-from spindle.crypto.pkey import Ed25519Key
-from spindle.exceptions import AuthenticationException, SSHException
+from spindlex import SSHClient, AutoAddPolicy, RejectPolicy
+from spindlex.crypto.pkey import Ed25519Key
+from spindlex.exceptions import AuthenticationException, SSHException
 
 
 def basic_connection_example():

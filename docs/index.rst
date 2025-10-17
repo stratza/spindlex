@@ -1,7 +1,7 @@
-Spindle Documentation
-====================
+SpindleX Documentation
+=====================
 
-Welcome to Spindle's documentation! Spindle is a pure-Python SSHv2 client/server library that provides secure, high-performance SSH and SFTP operations without GPL/LGPL dependencies.
+Welcome to SpindleX's documentation! SpindleX is a pure-Python SSHv2 client/server library that provides secure, high-performance SSH and SFTP operations without GPL/LGPL dependencies.
 
 .. toctree::
    :maxdepth: 2
@@ -31,17 +31,17 @@ Features
 Quick Start
 -----------
 
-Install Spindle:
+Install SpindleX:
 
 .. code-block:: bash
 
-   pip install spindle
+   pip install spindlex
 
 Basic SSH client usage:
 
 .. code-block:: python
 
-   from spindle import SSHClient
+   from spindlex import SSHClient
 
    # Create client and connect
    client = SSHClient()

@@ -11,7 +11,7 @@ Opening SFTP Connection
 
 ::
 
-    from ssh_library import SSHClient
+    from spindlex import SSHClient
     
     # Establish SSH connection
     client = SSHClient()
@@ -34,7 +34,7 @@ Context Manager Usage
 
 Use context managers for automatic cleanup::
 
-    from ssh_library import SSHClient
+    from spindlex import SSHClient
     
     with SSHClient() as client:
         client.connect('server.example.com', username='user', password='password')
@@ -70,7 +70,7 @@ Upload single files::
 
 Upload with file attributes::
 
-    from ssh_library.sftp import SFTPAttributes
+    from spindlex.protocol.sftp_messages import SFTPAttributes
     import stat
     
     with client.open_sftp() as sftp:
@@ -575,7 +575,7 @@ Common SFTP Errors
 
 Handle SFTP-specific errors::
 
-    from ssh_library.exceptions import (
+    from spindlex.exceptions import (
         SFTPError,
         SFTPFileNotFoundError,
         SFTPPermissionError,
@@ -778,7 +778,8 @@ Basic SFTP Server
 
 Implement custom SFTP server::
 
-    from ssh_library.server import SFTPServer, SFTPHandle, SFTPAttributes
+    from spindlex.server import SFTPServer, SFTPHandle
+    from spindlex.protocol.sftp_messages import SFTPAttributes
     import os
     import stat
     import errno

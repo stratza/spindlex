@@ -1,12 +1,12 @@
 Security Guidelines
 ===================
 
-Spindle is designed with security as a primary concern. This document outlines security best practices and guidelines for using the library safely.
+SpindleX is designed with security as a primary concern. This document outlines security best practices and guidelines for using the library safely.
 
 Secure Defaults
 ---------------
 
-Spindle uses secure defaults to protect against common security issues:
+SpindleX uses secure defaults to protect against common security issues:
 
 * **Modern Cryptography**: Defaults to Ed25519 keys and ChaCha20-Poly1305 encryption
 * **Strong Key Exchange**: Uses Curve25519 and ECDH key exchange algorithms
@@ -23,8 +23,8 @@ Always prefer key-based authentication over passwords:
 
 .. code-block:: python
 
-   from spindle import SSHClient
-   from spindle.crypto.pkey import Ed25519Key
+   from spindlex import SSHClient
+   from spindlex.crypto.pkey import Ed25519Key
 
    # Generate a strong key
    private_key = Ed25519Key.generate()
@@ -44,7 +44,7 @@ If you must use password authentication:
 .. code-block:: python
 
    import getpass
-   from spindle import SSHClient
+   from spindlex import SSHClient
 
    # Never hardcode passwords
    password = getpass.getpass("Enter SSH password: ")
@@ -65,8 +65,8 @@ Always verify host keys in production:
 
 .. code-block:: python
 
-   from spindle import SSHClient
-   from spindle.hostkeys.policy import RejectPolicy
+   from spindlex import SSHClient
+   from spindlex.hostkeys.policy import RejectPolicy
 
    client = SSHClient()
    
@@ -86,8 +86,8 @@ Implement custom verification logic:
 
 .. code-block:: python
 
-   from spindle.hostkeys.policy import MissingHostKeyPolicy
-   from spindle.exceptions import SSHException
+   from spindlex.hostkeys.policy import MissingHostKeyPolicy
+   from spindlex.exceptions import SSHException
 
    class SecureHostKeyPolicy(MissingHostKeyPolicy):
        def __init__(self, trusted_keys_db):
@@ -115,7 +115,7 @@ Use secure connection practices:
 
 .. code-block:: python
 
-   from spindle import SSHClient
+   from spindlex import SSHClient
    import socket
 
    client = SSHClient()
@@ -154,7 +154,7 @@ Generate strong keys:
 
 .. code-block:: python
 
-   from spindle.crypto.pkey import Ed25519Key, RSAKey
+   from spindlex.crypto.pkey import Ed25519Key, RSAKey
 
    # Preferred: Ed25519 (fast and secure)
    ed25519_key = Ed25519Key.generate()
@@ -172,9 +172,9 @@ Configure strong algorithms:
 
 .. code-block:: python
 
-   from spindle.crypto.backend import get_crypto_backend
+   from spindlex.crypto.backend import default_crypto_backend
 
-   backend = get_crypto_backend()
+   backend = default_crypto_backend
    
    # Verify strong algorithms are available
    supported_ciphers = backend.get_supported_ciphers()
@@ -199,7 +199,7 @@ Protect sensitive data in memory:
 .. code-block:: python
 
    import os
-   from spindle import SSHClient
+   from spindlex import SSHClient
 
    def secure_connect(hostname, username, password):
        client = SSHClient()
@@ -223,7 +223,7 @@ Sanitize logs to prevent information leakage:
 
 .. code-block:: python
 
-   from spindle.logging import configure_logging, SSHLogger
+   from spindlex.logging import configure_logging, SSHLogger
 
    # Configure secure logging
    configure_logging(
@@ -253,8 +253,8 @@ When implementing SSH servers:
 
 .. code-block:: python
 
-   from spindle import SSHServer
-   from spindle.crypto.pkey import Ed25519Key
+   from spindlex import SSHServer
+   from spindlex.crypto.pkey import Ed25519Key
 
    class SecureSSHServer(SSHServer):
        def __init__(self):
@@ -289,8 +289,8 @@ Implement comprehensive monitoring:
 
 .. code-block:: python
 
-   from spindle.logging import get_performance_monitor
-   from spindle.exceptions import AuthenticationException
+   from spindlex.logging import get_performance_monitor
+   from spindlex.exceptions import AuthenticationException
 
    monitor = get_performance_monitor()
 
@@ -322,7 +322,7 @@ Implement comprehensive monitoring:
 Security Checklist
 -------------------
 
-Before deploying Spindle in production:
+Before deploying SpindleX in production:
 
 **Authentication**
 - [ ] Use key-based authentication

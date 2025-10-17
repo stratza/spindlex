@@ -9,8 +9,8 @@ import os
 import tempfile
 from pathlib import Path
 
-from spindle import SSHClient, AutoAddPolicy
-from spindle.exceptions import SFTPError, SSHException
+from spindlex import SSHClient, AutoAddPolicy
+from spindlex.exceptions import SFTPError, SSHException
 
 
 def basic_file_transfer_example():
