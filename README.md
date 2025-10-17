@@ -250,7 +250,7 @@ graph TB
 ## 🔧 Requirements & Compatibility
 
 ### System Requirements
-- **Python**: 3.8+ 
+- **Python**: 3.9+ 
 - **Dependencies**: `cryptography >= 3.0`
 - **Platforms**: Linux, macOS, Windows
 
