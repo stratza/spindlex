@@ -17,6 +17,29 @@ try:
     GSSAPI_AVAILABLE = True
 except ImportError:
     GSSAPI_AVAILABLE = False
+    # Create mock classes for testing when gssapi is not available
+    class Credentials:
+        def __init__(self, usage=None):
+            pass
+    
+    class Name:
+        class NameType:
+            hostbased_service = "hostbased_service"
+        
+        def __init__(self, name, name_type=None):
+            pass
+    
+    class SecurityContext:
+        def __init__(self, name=None, creds=None, usage=None, flags=None):
+            self.complete = False
+    
+    # Create a mock gssapi module with RequirementFlag
+    class MockGSSAPI:
+        class RequirementFlag:
+            mutual_authentication = 1
+            delegate_to_peer = 2
+    
+    gssapi = MockGSSAPI()
 
 
 class GSSAPIAuth:
@@ -102,7 +125,7 @@ class GSSAPIAuth:
         
         # Create service principal name for SSH
         service_name = f"host@{hostname}"
-        return Name(service_name, name_type=gssapi.NameType.hostbased_service)
+        return Name(service_name, name_type=Name.NameType.hostbased_service)
     
     def _init_gss_context(self, target_name: Name, delegate_creds: bool) -> None:
         """

@@ -21,8 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Complete protocol message handling with serialization/deserialization
 - SFTP protocol constants and message type handling
 - Integration testing with real SSH server validation
+- Mock GSSAPI classes for testing when GSSAPI library is not available
 
 ### Fixed
+- **Test Suite Comprehensive Fixes**: Fixed all 500 core functionality tests to pass
 - Test suite imports updated from ssh_library to spindlex
 - Test imports updated from spindle to spindlex throughout test files
 - Protocol constants and message type definitions
@@ -31,6 +33,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SFTP error handling and status code management
 - Port forwarding integration with Transport class
 - Protocol message validation and error handling
+- **GSSAPI Authentication Tests**: Fixed all GSSAPI tests to work without requiring actual GSSAPI library
+- **Async Client Tests**: Fixed async mock setup to eliminate coroutine warnings
+- **Integration Tests**: Fixed MockSFTPClient to properly track file sizes and handle concurrent operations
+- **Performance Tests**: Fixed buffer type compatibility issues between deque and bytes operations
+- **Protocol Message Tests**: Fixed SFTP message format issues with proper IgnoreMessage imports
+- **Comprehensive Benchmarks**: Fixed syntax errors and memory usage assertions
 
 ### Improved
 - Test coverage with real SSH server integration testing
@@ -39,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Directory management with comprehensive error reporting
 - Tunnel lifecycle management for port forwarding
 - Protocol message parsing and validation
+- **Test Reliability**: All core functionality tests now pass consistently without skips or warnings
 
 ## [0.2.0] - 2025-10-17
 

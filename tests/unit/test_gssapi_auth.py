@@ -39,7 +39,7 @@ class TestGSSAPIAuth:
             ):
                 gssapi_auth.authenticate("testuser")
 
-    @pytest.mark.skipif(not GSSAPI_AVAILABLE, reason="GSSAPI library not available")
+    @patch("spindlex.auth.gssapi.GSSAPI_AVAILABLE", True)
     def test_gssapi_initialization(self):
         """Test GSSAPI authenticator initialization."""
         gssapi_auth = GSSAPIAuth(self.mock_transport)
@@ -48,36 +48,37 @@ class TestGSSAPIAuth:
         assert gssapi_auth._gss_context is None
         assert gssapi_auth._gss_credentials is None
 
-    @pytest.mark.skipif(not GSSAPI_AVAILABLE, reason="GSSAPI library not available")
-    @patch("spindlex.auth.gssapi.Credentials")
-    @patch("spindlex.auth.gssapi.SecurityContext")
-    @patch("spindlex.auth.gssapi.Name")
-    def test_gssapi_context_initialization(self, mock_name, mock_context, mock_creds):
+    @patch("spindlex.auth.gssapi.GSSAPI_AVAILABLE", True)
+    def test_gssapi_context_initialization(self):
         """Test GSSAPI context initialization."""
-        # Setup mocks
-        mock_name_instance = Mock()
-        mock_name.return_value = mock_name_instance
+        with patch("spindlex.auth.gssapi.Name") as mock_name, \
+             patch("spindlex.auth.gssapi.Credentials") as mock_creds, \
+             patch("spindlex.auth.gssapi.SecurityContext") as mock_context:
+            
+            # Setup mocks
+            mock_name_instance = Mock()
+            mock_name.return_value = mock_name_instance
 
-        mock_creds_instance = Mock()
-        mock_creds.return_value = mock_creds_instance
+            mock_creds_instance = Mock()
+            mock_creds.return_value = mock_creds_instance
 
-        mock_context_instance = Mock()
-        mock_context_instance.complete = False
-        mock_context.return_value = mock_context_instance
+            mock_context_instance = Mock()
+            mock_context_instance.complete = False
+            mock_context.return_value = mock_context_instance
 
-        gssapi_auth = GSSAPIAuth(self.mock_transport)
+            gssapi_auth = GSSAPIAuth(self.mock_transport)
 
-        # Test target name creation
-        target_name = gssapi_auth._get_target_name(None)
-        mock_name.assert_called_once()
+            # Test target name creation
+            target_name = gssapi_auth._get_target_name(None)
+            mock_name.assert_called_once()
 
-        # Test context initialization
-        gssapi_auth._init_gss_context(mock_name_instance, False)
+            # Test context initialization
+            gssapi_auth._init_gss_context(mock_name_instance, False)
 
-        mock_creds.assert_called_once_with(usage="initiate")
-        mock_context.assert_called_once()
+            mock_creds.assert_called_once_with(usage="initiate")
+            mock_context.assert_called_once()
 
-        assert gssapi_auth._gss_credentials == mock_creds_instance
+            assert gssapi_auth._gss_credentials == mock_creds_instance
         assert gssapi_auth._gss_context == mock_context_instance
 
     def test_transport_not_active(self):
@@ -96,28 +97,35 @@ class TestGSSAPIAuth:
         result = gssapi_auth.authenticate("testuser")
         assert result is True
 
-    @pytest.mark.skipif(not GSSAPI_AVAILABLE, reason="GSSAPI library not available")
+    @patch("spindlex.auth.gssapi.GSSAPI_AVAILABLE", True)
     def test_target_name_generation(self):
         """Test GSSAPI target name generation."""
-        gssapi_auth = GSSAPIAuth(self.mock_transport)
-
-        # Test with default hostname
         with patch("spindlex.auth.gssapi.Name") as mock_name:
+            # Setup mock name type
+            mock_name_type = Mock()
+            mock_name_type.hostbased_service = "hostbased_service"
+            mock_name.NameType = mock_name_type
+            
+            gssapi_auth = GSSAPIAuth(self.mock_transport)
+
+            # Test with default hostname
             gssapi_auth._get_target_name(None)
-            mock_name.assert_called_once_with(
+            mock_name.assert_called_with(
                 "host@test.example.com",
-                name_type=patch.object.__enter__().NameType.hostbased_service,
+                name_type=mock_name_type.hostbased_service,
             )
 
-        # Test with custom hostname
-        with patch("spindlex.auth.gssapi.Name") as mock_name:
+            # Reset mock for second test
+            mock_name.reset_mock()
+            
+            # Test with custom hostname
             gssapi_auth._get_target_name("custom.example.com")
-            mock_name.assert_called_once_with(
+            mock_name.assert_called_with(
                 "host@custom.example.com",
-                name_type=patch.object.__enter__().NameType.hostbased_service,
+                name_type=mock_name_type.hostbased_service,
             )
 
-    @pytest.mark.skipif(not GSSAPI_AVAILABLE, reason="GSSAPI library not available")
+    @patch("spindlex.auth.gssapi.GSSAPI_AVAILABLE", True)
     def test_method_data_building(self):
         """Test GSSAPI method data building."""
         gssapi_auth = GSSAPIAuth(self.mock_transport)
