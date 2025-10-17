@@ -3,16 +3,16 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "spindle"
+name = "spindlex"
 version = "0.1.0"
 description = "A pure-Python SSHv2 client/server library"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
-    {name = "Spindle Team", email = "team@spindle.org"}
+    {name = "SpindleX Team", email = "team@spindlex.org"}
 ]
 maintainers = [
-    {name = "Spindle Team", email = "team@spindle.org"}
+    {name = "SpindleX Team", email = "team@spindlex.org"}
 ]
 keywords = ["ssh", "sftp", "client", "server", "cryptography", "security"]
 classifiers = [
@@ -71,19 +71,19 @@ test = [
 ]
 
 [project.urls]
-Homepage = "https://gitlab.com/daveops.world/development/python/spindle"
-Documentation = "https://spindle.readthedocs.io/"
-Repository = "https://gitlab.com/daveops.world/development/python/spindle.git"
-Issues = "https://gitlab.com/daveops.world/development/python/spindle/-/issues"
-Changelog = "https://gitlab.com/daveops.world/development/python/spindle/-/blob/main/CHANGELOG.md"
+Homepage = "https://gitlab.com/daveops.world/development/python/spindlex"
+Documentation = "https://spindlex.readthedocs.io/"
+Repository = "https://gitlab.com/daveops.world/development/python/spindlex.git"
+Issues = "https://gitlab.com/daveops.world/development/python/spindlex/-/issues"
+Changelog = "https://gitlab.com/daveops.world/development/python/spindlex/-/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["spindle*"]
+include = ["spindlex*"]
 exclude = ["tests*", "docs*"]
 
 [tool.setuptools.package-data]
-spindle = ["py.typed"]
+spindlex = ["py.typed"]
 
 [tool.black]
 line-length = 88
@@ -107,7 +107,7 @@ extend-exclude = '''
 profile = "black"
 multi_line_output = 3
 line_length = 88
-known_first_party = ["spindle"]
+known_first_party = ["spindlex"]
 
 [tool.mypy]
 python_version = "3.8"
@@ -147,7 +147,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["spindle"]
+source = ["spindlex"]
 omit = [
     "*/tests/*",
     "*/test_*",

@@ -1,10 +1,10 @@
-# Makefile for Spindle development tasks
+# Makefile for SpindleX development tasks
 
 .PHONY: help install install-dev test test-all lint format type-check security clean build docs serve-docs release
 
 # Default target
 help:
-	@echo "Spindle Development Commands"
+	@echo "SpindleX Development Commands"
 	@echo "================================"
 	@echo ""
 	@echo "Setup:"
@@ -121,10 +121,10 @@ pre-commit:
 
 # Docker support (if needed)
 docker-build:
-	docker build -t spindle .
+	docker build -t spindlex .
 
 docker-test:
-	docker run --rm spindle pytest
+	docker run --rm spindlex pytest
 
 # CI/CD helpers
 ci-install:

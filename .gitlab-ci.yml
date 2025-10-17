@@ -1,4 +1,4 @@
-# GitLab CI/CD configuration for Spindle
+# GitLab CI/CD configuration for SpindleX
 
 stages:
   - lint
@@ -22,7 +22,7 @@ lint:black:
   before_script:
     - pip install black
   script:
-    - black --check --diff spindle/ tests/ || echo "Black formatting issues found but allowing to continue"
+    - black --check --diff spindlex/ tests/ || echo "Black formatting issues found but allowing to continue"
   allow_failure: true
 
 lint:isort:
@@ -31,7 +31,7 @@ lint:isort:
   before_script:
     - pip install isort
   script:
-    - isort --check-only --diff spindle/ tests/ || echo "Import sorting issues found but allowing to continue"
+    - isort --check-only --diff spindlex/ tests/ || echo "Import sorting issues found but allowing to continue"
   allow_failure: true
 
 lint:flake8:
@@ -40,7 +40,7 @@ lint:flake8:
   before_script:
     - pip install flake8
   script:
-    - flake8 spindle/ tests/ || echo "Flake8 issues found but allowing to continue"
+    - flake8 spindlex/ tests/ || echo "Flake8 issues found but allowing to continue"
   allow_failure: true
 
 lint:mypy:
@@ -50,7 +50,7 @@ lint:mypy:
     - pip install mypy types-all
     - pip install -e .
   script:
-    - mypy spindle/
+    - mypy spindlex/
   allow_failure: true
 
 # Test stage
@@ -62,7 +62,7 @@ lint:mypy:
     - pip install --upgrade pip
     - pip install -e ".[test]"
   script:
-    - pytest tests/unit/ -v --cov=spindle --cov-report=xml --cov-report=term
+    - pytest tests/unit/ -v --cov=spindlex --cov-report=xml --cov-report=term
   coverage: '/TOTAL.*\s+(\d+%)$/'
   artifacts:
     reports:
@@ -128,7 +128,7 @@ security:bandit:
   before_script:
     - pip install bandit[toml]
   script:
-    - bandit -r spindle/ -f json -o bandit-report.json || echo "Bandit scan completed with issues"
+    - bandit -r spindlex/ -f json -o bandit-report.json || echo "Bandit scan completed with issues"
   artifacts:
     reports:
       sast: bandit-report.json
@@ -208,7 +208,7 @@ deploy:pypi:
   when: manual
   environment:
     name: pypi
-    url: https://pypi.org/project/spindle/
+    url: https://pypi.org/project/spindlex/
 
 # Release job
 release:
@@ -222,6 +222,6 @@ release:
     assets:
       links:
         - name: 'Package'
-          url: 'https://pypi.org/project/spindle/$CI_COMMIT_TAG/'
+          url: 'https://pypi.org/project/spindlex/$CI_COMMIT_TAG/'
   only:
     - tags

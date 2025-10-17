@@ -1,13 +1,13 @@
 """
-Spindle - A pure-Python SSHv2 client/server library.
+SpindleX - A pure-Python SSHv2 client/server library.
 
-Spindle provides secure, high-performance SSH and SFTP operations without
+SpindleX provides secure, high-performance SSH and SFTP operations without
 GPL/LGPL dependencies.
 """
 
 __version__ = "0.1.0"
-__author__ = "Spindle Team"
-__email__ = "team@spindle.org"
+__author__ = "SpindleX Team"
+__email__ = "team@spindlex.org"
 __license__ = "MIT"
 
 
