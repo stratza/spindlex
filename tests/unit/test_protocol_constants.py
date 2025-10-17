@@ -4,7 +4,7 @@ Tests for SSH protocol constants and utility functions.
 
 import pytest
 
-from ssh_library.protocol.constants import (
+from spindlex.protocol.constants import (
     CIPHER_CHACHA20_POLY1305,
     HOSTKEY_ED25519,
     KEX_CURVE25519_SHA256,
@@ -78,7 +78,7 @@ class TestVersionParsing:
     def test_create_version_string(self):
         """Test creating version strings."""
         version = create_version_string()
-        assert version == "SSH-2.0-ssh_library_1.0"
+        assert version == "SSH-2.0-spindlex_0.1.0"
 
         version = create_version_string("MySSH", "2.1")
         assert version == "SSH-2.0-MySSH_2.1"

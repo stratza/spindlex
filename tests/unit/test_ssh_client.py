@@ -9,19 +9,19 @@ from unittest.mock import MagicMock, Mock, mock_open, patch
 
 import pytest
 
-from ssh_library.client.ssh_client import ChannelFile, SSHClient
-from ssh_library.crypto.pkey import PKey
-from ssh_library.exceptions import (
+from spindlex.client.ssh_client import ChannelFile, SSHClient
+from spindlex.crypto.pkey import PKey
+from spindlex.exceptions import (
     AuthenticationException,
     BadHostKeyException,
     ChannelException,
     SSHException,
     TransportException,
 )
-from ssh_library.hostkeys.policy import AutoAddPolicy, RejectPolicy, WarningPolicy
-from ssh_library.hostkeys.storage import HostKeyStorage
-from ssh_library.transport.channel import Channel
-from ssh_library.transport.transport import Transport
+from spindlex.hostkeys.policy import AutoAddPolicy, RejectPolicy, WarningPolicy
+from spindlex.hostkeys.storage import HostKeyStorage
+from spindlex.transport.channel import Channel
+from spindlex.transport.transport import Transport
 
 
 class MockPKey(PKey):
@@ -144,8 +144,8 @@ class TestSSHClient:
         self.client.set_host_key_storage(storage)
         assert self.client._host_key_storage is storage
 
-    @patch("ssh_library.client.ssh_client.socket.socket")
-    @patch("ssh_library.client.ssh_client.Transport")
+    @patch("spindlex.client.ssh_client.socket.socket")
+    @patch("spindlex.client.ssh_client.Transport")
     def test_connect_success_password_auth(
         self, mock_transport_class, mock_socket_class
     ):
@@ -167,8 +167,8 @@ class TestSSHClient:
         assert self.mock_transport.active
         assert self.mock_transport.authenticated
 
-    @patch("ssh_library.client.ssh_client.socket.socket")
-    @patch("ssh_library.client.ssh_client.Transport")
+    @patch("spindlex.client.ssh_client.socket.socket")
+    @patch("spindlex.client.ssh_client.Transport")
     def test_connect_success_publickey_auth(
         self, mock_transport_class, mock_socket_class
     ):
@@ -192,7 +192,7 @@ class TestSSHClient:
         assert self.mock_transport.active
         assert self.mock_transport.authenticated
 
-    @patch("ssh_library.client.ssh_client.socket.socket")
+    @patch("spindlex.client.ssh_client.socket.socket")
     def test_connect_socket_error(self, mock_socket_class):
         """Test connection failure due to socket error."""
         mock_socket = Mock()
@@ -202,8 +202,8 @@ class TestSSHClient:
         with pytest.raises(SSHException, match="Connection failed"):
             self.client.connect("testhost", 22, "testuser", "testpass")
 
-    @patch("ssh_library.client.ssh_client.socket.socket")
-    @patch("ssh_library.client.ssh_client.Transport")
+    @patch("spindlex.client.ssh_client.socket.socket")
+    @patch("spindlex.client.ssh_client.Transport")
     def test_connect_auth_failure(self, mock_transport_class, mock_socket_class):
         """Test connection failure due to authentication error."""
         # Setup mocks
