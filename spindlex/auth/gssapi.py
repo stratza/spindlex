@@ -58,14 +58,14 @@ class GSSAPIAuth:
         Raises:
             AuthenticationException: If authentication fails
         """
-        if not GSSAPI_AVAILABLE:
-            raise AuthenticationException("GSSAPI library not available")
-        
         if not self._transport.active:
             raise AuthenticationException("Transport not active")
         
         if self._transport.authenticated:
             return True
+        
+        if not GSSAPI_AVAILABLE:
+            raise AuthenticationException("GSSAPI library not available")
         
         try:
             # Request ssh-userauth service if not already done

@@ -172,7 +172,7 @@ def configure_logging(
         level = getattr(logging, level.upper())
     
     # Configure root SSH logger
-    root_logger = logging.getLogger('ssh_library')
+    root_logger = logging.getLogger('spindlex')
     root_logger.setLevel(level)
     
     # Clear existing handlers
@@ -200,7 +200,7 @@ def configure_logging(
     
     # Configure security logger
     if security_file or not output_file:
-        security_logger = logging.getLogger('ssh_library.security')
+        security_logger = logging.getLogger('spindlex.security')
         security_logger.setLevel(logging.INFO)
         security_handler = SecurityHandler(security_file)
         security_logger.addHandler(security_handler)
@@ -208,11 +208,11 @@ def configure_logging(
     
     # Configure performance logger
     if performance_file or not output_file:
-        perf_logger = logging.getLogger('ssh_library.performance')
+        perf_logger = logging.getLogger('spindlex.performance')
         perf_logger.setLevel(logging.INFO)
         perf_handler = PerformanceHandler(performance_file, json_format=True)
         perf_logger.addHandler(perf_handler)
         perf_logger.propagate = False  # Don't propagate to root logger
     
     # Set library-wide logging level
-    logging.getLogger('ssh_library').setLevel(level)
+    logging.getLogger('spindlex').setLevel(level)

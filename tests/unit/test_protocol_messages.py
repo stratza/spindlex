@@ -30,6 +30,7 @@ from spindlex.protocol.messages import (
     ChannelOpenFailureMessage,
     ChannelOpenMessage,
     DisconnectMessage,
+    IgnoreMessage,
     KexInitMessage,
     Message,
     ServiceAcceptMessage,
@@ -65,14 +66,15 @@ class TestBaseMessage:
 
     def test_message_unpack_generic(self):
         """Test unpacking a generic message."""
-        # Use a message type that doesn't have a specific class
-        data = bytes(
-            [MSG_IGNORE, 0x42, 0x43]
-        )  # MSG_IGNORE doesn't have a specific class
+        # Create a proper MSG_IGNORE message with string format
+        from spindlex.protocol.utils import write_string
+        payload = write_string(b"\x42\x43")
+        data = bytes([MSG_IGNORE]) + payload
         msg = Message.unpack(data)
 
         assert msg.msg_type == MSG_IGNORE
-        assert bytes(msg._data) == b"\x42\x43"
+        assert isinstance(msg, IgnoreMessage)
+        assert msg.data == b"\x42\x43"
 
     def test_message_unpack_empty(self):
         """Test unpacking empty message data."""
