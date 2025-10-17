@@ -309,8 +309,8 @@ notify_release:
     - echo "🎉 SpindleX $CI_COMMIT_TAG has been released!"
     - echo "📦 PyPI: https://pypi.org/project/spindlex/"
     - echo "📖 Docs: https://spindlex.readthedocs.io/"
-    # Add webhook notifications here if needed
-    # - curl -X POST -H 'Content-type: application/json' --data '{"text":"SpindleX '$CI_COMMIT_TAG' released!"}' $SLACK_WEBHOOK_URL
+    # Uncomment the line below to add Slack webhook notifications
+    # - curl -X POST -H 'Content-type: application/json' --data "{\"text\":\"SpindleX $CI_COMMIT_TAG released!\"}" $SLACK_WEBHOOK_URL
   only:
     - tags
   when: manual
