@@ -245,7 +245,7 @@ Example unit test::
         
         def test_connect_success(self):
             """Test successful connection."""
-            with patch('spindle.transport.Transport') as mock_transport:
+            with patch('spindlex.transport.Transport') as mock_transport:
                 mock_transport.return_value.is_active.return_value = True
                 
                 result = self.client.connect(
@@ -259,7 +259,7 @@ Example unit test::
         
         def test_connect_authentication_failure(self):
             """Test authentication failure."""
-            with patch('spindle.transport.Transport') as mock_transport:
+            with patch('spindlex.transport.Transport') as mock_transport:
                 mock_transport.return_value.auth_password.side_effect = AuthenticationException("Auth failed")
                 
                 with pytest.raises(AuthenticationException):
@@ -285,8 +285,8 @@ Integration Test Example::
     import tempfile
     import os
     
-    from spindle import SSHClient
-    from spindle.crypto.pkey import Ed25519Key
+    from spindlex import SSHClient
+    from spindlex.crypto.pkey import Ed25519Key
     
     
     @pytest.mark.integration
@@ -418,7 +418,7 @@ Run different test categories::
     pytest -m "not slow"
     
     # Run with coverage
-    pytest --cov=spindle --cov-report=html
+    pytest --cov=spindlex --cov-report=html
     
     # Parallel execution
     pytest -n auto
@@ -483,7 +483,7 @@ Writing Documentation
             
             Public key authentication::
             
-                from spindle.crypto.pkey import Ed25519Key
+                from spindlex.crypto.pkey import Ed25519Key
                 
                 private_key = Ed25519Key.from_private_key_file('/path/to/key')
                 client = SSHClient()
@@ -510,7 +510,7 @@ Writing Documentation
     
     Connect to an SSH server::
     
-        from spindle import SSHClient
+        from spindlex import SSHClient
         
         client = SSHClient()
         client.connect('server.example.com', username='user', password='pass')
@@ -599,7 +599,7 @@ Vulnerability Reporting
 If you discover a security vulnerability:
 
 1. **Do NOT** create a public issue
-2. **Email** security@spindle.org with details
+2. **Email** security@spindlex.org with details
 3. **Include** steps to reproduce the vulnerability
 4. **Wait** for acknowledgment before public disclosure
 
@@ -612,7 +612,7 @@ Bug Report Template
 When reporting bugs, please include:
 
 **Environment Information**:
-- Spindle version
+- SpindleX version
 - Python version
 - Operating system
 - SSH server type and version
@@ -626,7 +626,7 @@ When reporting bugs, please include:
 **Code Example**::
 
     # Minimal code example that reproduces the bug
-    from spindle import SSHClient
+    from spindlex import SSHClient
     
     client = SSHClient()
     # ... code that demonstrates the issue
@@ -697,10 +697,10 @@ Before releasing a new version:
     python -m build
     
     # Test installation
-    pip install dist/spindle-*.whl
+    pip install dist/spindlex-*.whl
     
     # Test basic functionality
-    python -c "import spindle; print(spindle.__version__)"
+    python -c "import spindlex; print(spindlex.__version__)"
 
 5. **Create Release**
    - Tag release: `git tag v1.0.0`
@@ -727,7 +727,7 @@ Communication Channels
 
 - **GitLab Issues**: Bug reports and feature requests
 - **GitLab Discussions**: General questions and discussions
-- **Email**: security@spindle.org for security issues
+- **Email**: security@spindlex.org for security issues
 - **Documentation**: Comprehensive guides and API reference
 
 Getting Help
@@ -750,4 +750,4 @@ Contributors are recognized in:
 - GitLab contributors page
 - Special recognition for significant contributions
 
-Thank you for contributing to Spindle! Your contributions help make secure SSH operations accessible to Python developers worldwide.
+Thank you for contributing to SpindleX! Your contributions help make secure SSH operations accessible to Python developers worldwide.

@@ -21,7 +21,7 @@ Key Generation
 
 Generate SSH keys using SSH Library::
 
-    from ssh_library.crypto.pkey import Ed25519Key, RSAKey, ECDSAKey
+    from spindlex.crypto.pkey import Ed25519Key, RSAKey, ECDSAKey
     
     # Generate Ed25519 key (recommended)
     private_key = Ed25519Key.generate()
@@ -48,7 +48,7 @@ Loading Existing Keys
 
 Load private keys from files::
 
-    from ssh_library.crypto.pkey import Ed25519Key
+    from spindlex.crypto.pkey import Ed25519Key
     
     # Load key with passphrase
     private_key = Ed25519Key.from_private_key_file(
@@ -67,8 +67,8 @@ Using Keys for Authentication
 
 Authenticate using private keys::
 
-    from ssh_library import SSHClient
-    from ssh_library.crypto.pkey import Ed25519Key
+    from spindlex import SSHClient
+    from spindlex.crypto.pkey import Ed25519Key
     
     # Load private key
     private_key = Ed25519Key.from_private_key_file('/path/to/key')
@@ -86,8 +86,8 @@ Multiple Key Authentication
 
 Try multiple keys automatically::
 
-    from ssh_library import SSHClient
-    from ssh_library.crypto.pkey import Ed25519Key, RSAKey
+    from spindlex import SSHClient
+    from spindlex.crypto.pkey import Ed25519Key, RSAKey
     
     # Load multiple keys
     keys = [
@@ -122,7 +122,7 @@ Basic Password Authentication
 
 ::
 
-    from ssh_library import SSHClient
+    from spindlex import SSHClient
     import getpass
     
     # Get password securely
@@ -145,8 +145,8 @@ Best practices for password authentication::
 
     import os
     import getpass
-    from ssh_library import SSHClient
-    from ssh_library.exceptions import AuthenticationException
+    from spindlex import SSHClient
+    from spindlex.exceptions import AuthenticationException
     
     def secure_password_auth(hostname, username, max_attempts=3):
         """Secure password authentication with retry logic."""
@@ -191,7 +191,7 @@ Environment Variable Passwords
 Using environment variables (not recommended for production)::
 
     import os
-    from ssh_library import SSHClient
+    from spindlex import SSHClient
     
     # Set password in environment (use secure methods in production)
     # export SSH_PASSWORD="your_password"
@@ -217,8 +217,8 @@ Basic Keyboard-Interactive
 
 ::
 
-    from ssh_library import SSHClient
-    from ssh_library.auth.keyboard_interactive import KeyboardInteractiveAuth
+    from spindlex import SSHClient
+    from spindlex.auth.keyboard_interactive import KeyboardInteractiveAuth
     
     def auth_handler(title, instructions, prompts):
         """Handle authentication prompts."""
@@ -252,7 +252,7 @@ Multi-Factor Authentication
 Handle MFA prompts::
 
     import getpass
-    from ssh_library import SSHClient
+    from spindlex import SSHClient
     
     def mfa_auth_handler(title, instructions, prompts):
         """Handle MFA authentication."""
@@ -300,8 +300,8 @@ Basic GSSAPI Authentication
 
 ::
 
-    from ssh_library import SSHClient
-    from ssh_library.auth.gssapi import GSSAPIAuth
+    from spindlex import SSHClient
+    from spindlex.auth.gssapi import GSSAPIAuth
     
     # Ensure Kerberos ticket is available
     # Run: kinit username@REALM.COM
@@ -323,8 +323,8 @@ Advanced GSSAPI Configuration
 
 ::
 
-    from ssh_library import SSHClient
-    from ssh_library.auth.gssapi import GSSAPIAuth
+    from spindlex import SSHClient
+    from spindlex.auth.gssapi import GSSAPIAuth
     
     # Configure GSSAPI authentication
     gssapi_auth = GSSAPIAuth(
@@ -348,9 +348,9 @@ Try Multiple Methods
 
 Attempt different authentication methods in order::
 
-    from ssh_library import SSHClient
-    from ssh_library.crypto.pkey import Ed25519Key
-    from ssh_library.exceptions import AuthenticationException
+    from spindlex import SSHClient
+    from spindlex.crypto.pkey import Ed25519Key
+    from spindlex.exceptions import AuthenticationException
     import getpass
     
     def multi_method_auth(hostname, username):
@@ -398,9 +398,9 @@ Partial Authentication
 
 Handle partial authentication scenarios::
 
-    from ssh_library import SSHClient
-    from ssh_library.exceptions import PartialAuthentication
-    from ssh_library.crypto.pkey import Ed25519Key
+    from spindlex import SSHClient
+    from spindlex.exceptions import PartialAuthentication
+    from spindlex.crypto.pkey import Ed25519Key
     import getpass
     
     def handle_partial_auth(hostname, username):
@@ -443,8 +443,8 @@ SSH Client Configuration
 
 Configure authentication preferences::
 
-    from ssh_library import SSHClient
-    from ssh_library.hostkeys.policy import RejectPolicy
+    from spindlex import SSHClient
+    from spindlex.hostkeys.policy import RejectPolicy
     
     client = SSHClient()
     
@@ -470,8 +470,8 @@ Agent Authentication
 
 Use SSH agent for key management::
 
-    from ssh_library import SSHClient
-    from ssh_library.auth.agent import SSHAgent
+    from spindlex import SSHClient
+    from spindlex.auth.agent import SSHAgent
     
     # Connect to SSH agent
     agent = SSHAgent()
@@ -526,9 +526,9 @@ Authentication Monitoring
 
 Monitor authentication events::
 
-    from ssh_library.logging import get_logger
-    from ssh_library import SSHClient
-    from ssh_library.exceptions import AuthenticationException
+    from spindlex.logging import get_logger
+    from spindlex import SSHClient
+    from spindlex.exceptions import AuthenticationException
     
     logger = get_logger(__name__)
     
@@ -586,8 +586,8 @@ Debug Authentication
 
 Enable debug logging::
 
-    from ssh_library.logging import configure_logging
-    from ssh_library import SSHClient
+    from spindlex.logging import configure_logging
+    from spindlex import SSHClient
     
     # Enable debug logging
     configure_logging(level='DEBUG')
@@ -606,7 +606,7 @@ Test Authentication Methods
 
 Test which methods are available::
 
-    from ssh_library import SSHClient
+    from spindlex import SSHClient
     
     client = SSHClient()
     
@@ -628,7 +628,7 @@ Key Fingerprint Verification
 
 Verify key fingerprints::
 
-    from ssh_library.crypto.pkey import Ed25519Key
+    from spindlex.crypto.pkey import Ed25519Key
     
     # Load server's public key
     server_key = Ed25519Key.from_public_key_file('/path/to/server_key.pub')
