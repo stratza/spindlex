@@ -1230,7 +1230,13 @@ class Transport:
             self._kex_in_progress = True
             
             try:
-                # Perform key exchange using KeyExchange class
+                # Send KEXINIT message with our supported algorithms
+                self._send_kexinit()
+                
+                # Receive server's KEXINIT message
+                self._recv_kexinit()
+                
+                # Now perform key exchange using KeyExchange class
                 self._kex.start_kex()
                 
                 # Mark KEX as complete
