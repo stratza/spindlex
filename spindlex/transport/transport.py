@@ -13,6 +13,7 @@ from typing import Optional, Tuple, Any, Dict, List
 import socket
 from ..exceptions import TransportException, AuthenticationException, ProtocolException
 from ..protocol.constants import *
+from ..protocol.constants import create_version_string
 from ..protocol.messages import *
 from ..protocol.utils import *
 from ..crypto.backend import default_crypto_backend
@@ -1229,19 +1230,17 @@ class Transport:
             self._kex_in_progress = True
             
             try:
-                # Send KEXINIT message
-                self._send_kexinit()
+                # Perform key exchange using KeyExchange class
+                self._kex.start_kex()
                 
-                # Receive KEXINIT message
-                self._recv_kexinit()
-                
-                # For now, just mark KEX as complete
-                # Full KEX implementation will be in later tasks
+                # Mark KEX as complete
                 self._kex_in_progress = False
                 
             except Exception as e:
                 self._kex_in_progress = False
-                raise
+                if isinstance(e, (TransportException, ProtocolException)):
+                    raise
+                raise TransportException(f"Key exchange failed: {e}")
     
     def _send_kexinit(self) -> None:
         """Send KEXINIT message with supported algorithms."""
