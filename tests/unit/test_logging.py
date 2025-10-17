@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from ssh_library.logging import (
+from spindlex.logging import (
     DebugFormatter,
     JSONFormatter,
     LogSanitizer,

@@ -11,18 +11,18 @@ import time
 import unittest
 from unittest.mock import MagicMock, Mock, patch
 
-from ssh_library.crypto.pkey import Ed25519Key
-from ssh_library.exceptions import AuthenticationException, TransportException
-from ssh_library.protocol.constants import (
+from spindlex.crypto.pkey import Ed25519Key
+from spindlex.exceptions import AuthenticationException, TransportException
+from spindlex.protocol.constants import (
     AUTH_FAILED,
     AUTH_PARTIAL,
     AUTH_SUCCESSFUL,
     CHANNEL_SESSION,
     SSH_OPEN_UNKNOWN_CHANNEL_TYPE,
 )
-from ssh_library.server.ssh_server import SSHServer, SSHServerManager
-from ssh_library.transport.channel import Channel
-from ssh_library.transport.transport import Transport
+from spindlex.server.ssh_server import SSHServer, SSHServerManager
+from spindlex.transport.channel import Channel
+from spindlex.transport.transport import Transport
 
 
 class TestSSHServer(unittest.TestCase):

@@ -6,8 +6,8 @@ import struct
 
 import pytest
 
-from ssh_library.exceptions import ProtocolException
-from ssh_library.protocol.utils import (
+from spindlex.exceptions import ProtocolException
+from spindlex.protocol.utils import (
     extract_message_from_packet,
     read_boolean,
     read_byte,

@@ -12,8 +12,8 @@ import tempfile
 import unittest
 from unittest.mock import MagicMock, Mock, patch
 
-from ssh_library.exceptions import SFTPError
-from ssh_library.protocol.sftp_constants import (
+from spindlex.exceptions import SFTPError
+from spindlex.protocol.sftp_constants import (
     SFTP_VERSION,
     SSH_FILEXFER_ATTR_ACMODTIME,
     SSH_FILEXFER_ATTR_PERMISSIONS,
@@ -29,7 +29,7 @@ from ssh_library.protocol.sftp_constants import (
     SSH_FXF_TRUNC,
     SSH_FXF_WRITE,
 )
-from ssh_library.protocol.sftp_messages import (
+from spindlex.protocol.sftp_messages import (
     SFTPAttributes,
     SFTPAttrsMessage,
     SFTPCloseMessage,
@@ -54,8 +54,8 @@ from ssh_library.protocol.sftp_messages import (
     SFTPVersionMessage,
     SFTPWriteMessage,
 )
-from ssh_library.server.sftp_server import SFTPHandle, SFTPServer
-from ssh_library.transport.channel import Channel
+from spindlex.server.sftp_server import SFTPHandle, SFTPServer
+from spindlex.transport.channel import Channel
 
 
 class TestSFTPHandle(unittest.TestCase):

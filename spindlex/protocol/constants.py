@@ -5,6 +5,8 @@ Defines SSH protocol constants, message types, and error codes
 according to RFC 4251-4254 specifications.
 """
 
+from .._version import __version__
+
 # SSH Protocol Version
 SSH_VERSION = "SSH-2.0"
 
@@ -23,6 +25,8 @@ MSG_NEWKEYS = 21
 # Key Exchange Method Specific Messages (30-41)
 MSG_KEXDH_INIT = 30
 MSG_KEXDH_REPLY = 31
+MSG_KEX_ECDH_INIT = 30
+MSG_KEX_ECDH_REPLY = 31
 
 # User Authentication Messages (RFC 4252)
 MSG_USERAUTH_REQUEST = 50
@@ -215,17 +219,19 @@ def is_supported_version(protocol_version: str) -> bool:
     return protocol_version in SUPPORTED_PROTOCOL_VERSIONS
 
 
-def create_version_string(software_name: str = "OpenSSH", software_version: str = "9.0") -> str:
+def create_version_string(software_name: str = "spindlex", software_version: str = None) -> str:
     """
     Create SSH version string for this implementation.
     
     Args:
         software_name: Name of SSH software
-        software_version: Version of SSH software
+        software_version: Version of SSH software (defaults to package version)
         
     Returns:
         Complete SSH version string
     """
+    if software_version is None:
+        software_version = __version__
     return f"SSH-{SSH_PROTOCOL_VERSION_2}-{software_name}_{software_version}"
 
 
@@ -274,6 +280,8 @@ def get_message_name(msg_type: int) -> str:
         MSG_NEWKEYS: "MSG_NEWKEYS",
         MSG_KEXDH_INIT: "MSG_KEXDH_INIT",
         MSG_KEXDH_REPLY: "MSG_KEXDH_REPLY",
+        MSG_KEX_ECDH_INIT: "MSG_KEX_ECDH_INIT",
+        MSG_KEX_ECDH_REPLY: "MSG_KEX_ECDH_REPLY",
         MSG_USERAUTH_REQUEST: "MSG_USERAUTH_REQUEST",
         MSG_USERAUTH_FAILURE: "MSG_USERAUTH_FAILURE",
         MSG_USERAUTH_SUCCESS: "MSG_USERAUTH_SUCCESS",

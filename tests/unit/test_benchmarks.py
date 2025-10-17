@@ -14,7 +14,7 @@ from typing import Any, Dict, List
 
 import pytest
 
-from spindle import AutoAddPolicy, SSHClient
+from spindlex import AutoAddPolicy, SSHClient
 
 # Skip all tests in this module if full implementation is not available
 pytest.importorskip(
@@ -27,9 +27,9 @@ pytest.importorskip(
     "spindle.logging", reason="Full Spindle implementation not available"
 )
 
-from spindle.crypto.backend import get_crypto_backend
-from spindle.crypto.pkey import ECDSAKey, Ed25519Key, RSAKey
-from spindle.logging import get_performance_monitor
+from spindlex.crypto.backend import get_crypto_backend
+from spindlex.crypto.pkey import ECDSAKey, Ed25519Key, RSAKey
+from spindlex.logging import get_performance_monitor
 
 
 class BenchmarkResult:
@@ -435,7 +435,7 @@ class TestScalabilityBenchmarks:
         # This would require a connected client
         # For now, just test object creation
 
-        from spindle.transport.channel import Channel
+        from spindlex.transport.channel import Channel
 
         def create_channels():
             channels = []
@@ -453,7 +453,7 @@ class TestScalabilityBenchmarks:
 
     def test_message_processing_scalability(self):
         """Test message processing performance."""
-        from spindle.protocol.messages import Message
+        from spindlex.protocol.messages import Message
 
         def process_messages():
             messages = []
@@ -485,7 +485,7 @@ class TestScalabilityBenchmarks:
 
 # Async benchmarks (if available)
 try:
-    from spindle.client.async_ssh_client import AsyncSSHClient
+    from spindlex.client.async_ssh_client import AsyncSSHClient
 
     class TestAsyncBenchmarks:
         """Benchmark async operations."""

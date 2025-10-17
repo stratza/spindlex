@@ -9,8 +9,8 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from ssh_library.crypto.backend import default_crypto_backend
-from ssh_library.transport.transport import Transport
+from spindlex.crypto.backend import default_crypto_backend
+from spindlex.transport.transport import Transport
 
 
 class TestPerformance:
@@ -33,7 +33,7 @@ class TestPerformance:
 
     def test_message_packing_performance(self):
         """Test message packing/unpacking performance."""
-        from ssh_library.protocol.messages import KexInitMessage, Message
+        from spindlex.protocol.messages import KexInitMessage, Message
 
         # Create test message
         cookie = b"x" * 16
@@ -92,7 +92,7 @@ class TestPerformance:
 
     def test_channel_buffer_performance(self):
         """Test channel buffer operations performance."""
-        from ssh_library.transport.channel import Channel
+        from spindlex.transport.channel import Channel
 
         mock_transport = Mock()
         channel = Channel(mock_transport, 1)
@@ -172,7 +172,7 @@ class TestPerformance:
 
     def test_concurrent_channel_performance(self):
         """Test performance with multiple concurrent channels."""
-        from ssh_library.transport.channel import Channel
+        from spindlex.transport.channel import Channel
 
         mock_transport = Mock()
 
@@ -216,7 +216,7 @@ class TestOptimizations:
 
     def test_buffer_reuse_optimization(self):
         """Test that buffers are reused efficiently."""
-        from ssh_library.transport.channel import Channel
+        from spindlex.transport.channel import Channel
 
         mock_transport = Mock()
         channel = Channel(mock_transport, 1)
@@ -237,7 +237,7 @@ class TestOptimizations:
 
     def test_message_caching_optimization(self):
         """Test message object reuse where applicable."""
-        from ssh_library.protocol.messages import Message
+        from spindlex.protocol.messages import Message
 
         # Test that message creation is efficient
         msg_type = 1

@@ -424,7 +424,7 @@ class TestProtocolCompliance:
     def test_algorithm_negotiation(self):
         """Test cryptographic algorithm negotiation."""
         # Verify that we support required algorithms
-        from spindle.crypto.backend import get_crypto_backend
+        from spindlex.crypto.backend import get_crypto_backend
 
         backend = get_crypto_backend()
 
@@ -438,7 +438,7 @@ class TestProtocolCompliance:
 
     def test_message_format_compliance(self):
         """Test SSH message format compliance."""
-        from spindle.protocol.messages import Message
+        from spindlex.protocol.messages import Message
 
         # Test basic message serialization/deserialization
         msg = Message()
@@ -464,7 +464,7 @@ class TestSecurityCompliance:
         client = SSHClient()
 
         # Verify that weak algorithms are not supported by default
-        from spindle.crypto.backend import get_crypto_backend
+        from spindlex.crypto.backend import get_crypto_backend
 
         backend = get_crypto_backend()
 
@@ -484,7 +484,7 @@ class TestSecurityCompliance:
 
     def test_host_key_verification(self):
         """Test host key verification behavior."""
-        from spindle.hostkeys.policy import AutoAddPolicy, RejectPolicy
+        from spindlex.hostkeys.policy import AutoAddPolicy, RejectPolicy
 
         # Test that RejectPolicy actually rejects unknown keys
         policy = RejectPolicy()
@@ -577,13 +577,13 @@ class TestErrorHandling:
         """Test authentication error handling."""
         # This would require a test server
         # For now, verify that authentication exceptions exist
-        from spindle.exceptions import AuthenticationException
+        from spindlex.exceptions import AuthenticationException
 
         assert issubclass(AuthenticationException, Exception)
 
     def test_protocol_error_handling(self):
         """Test protocol error handling."""
-        from spindle.exceptions import ProtocolException
+        from spindlex.exceptions import ProtocolException
 
         assert issubclass(ProtocolException, Exception)
 
