@@ -5,7 +5,7 @@ Since the GitLab wiki repository doesn't exist yet, here's the fastest way to se
 ## 🎯 Method 1: Web Interface (Recommended)
 
 ### Step 1: Create First Page
-1. Go to: https://gitlab.com/daveops.world/development/python/spindlex
+1. Go to: https://gitlab.com/daveops.world/development/python/spindle
 2. Click **Wiki** in left sidebar
 3. Click **Create your first page**
 4. Title: `home`
@@ -35,7 +35,7 @@ Once you've created the first page through web interface:
 
 2. Or manually:
    ```cmd
-   git clone https://gitlab.com/daveops.world/development/python/spindlex.wiki.git
+   git clone https://gitlab.com/daveops.world/development/python/spindle.wiki.git
    cd spindlex.wiki
    copy ..\wiki\*.md .
    git add .
@@ -46,7 +46,7 @@ Once you've created the first page through web interface:
 ## 🌐 Result
 
 Your wiki will be available at:
-https://gitlab.com/daveops.world/development/python/spindlex/-/wikis/home
+https://gitlab.com/daveops.world/development/python/spindle/-/wikis/home
 
 ## 💡 Why This Happened
 
