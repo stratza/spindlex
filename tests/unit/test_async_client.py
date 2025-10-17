@@ -10,8 +10,8 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
-from ssh_library.client.async_ssh_client import AsyncSSHClient
-from ssh_library.exceptions import AuthenticationException, SSHException
+from spindlex.client.async_ssh_client import AsyncSSHClient
+from spindlex.exceptions import AuthenticationException, SSHException
 
 
 class TestAsyncSSHClient:
@@ -40,7 +40,7 @@ class TestAsyncSSHClient:
 
     @pytest.mark.asyncio
     @patch("asyncio.open_connection")
-    @patch("ssh_library.client.async_ssh_client.AsyncTransport")
+    @patch("spindlex.client.async_ssh_client.AsyncTransport")
     async def test_successful_connection(
         self, mock_transport_class, mock_open_connection
     ):
@@ -80,7 +80,7 @@ class TestAsyncSSHClient:
 
     @pytest.mark.asyncio
     @patch("asyncio.open_connection")
-    @patch("ssh_library.client.async_ssh_client.AsyncTransport")
+    @patch("spindlex.client.async_ssh_client.AsyncTransport")
     async def test_connection_with_public_key(
         self, mock_transport_class, mock_open_connection
     ):
@@ -112,7 +112,7 @@ class TestAsyncSSHClient:
 
     @pytest.mark.asyncio
     @patch("asyncio.open_connection")
-    @patch("ssh_library.client.async_ssh_client.AsyncTransport")
+    @patch("spindlex.client.async_ssh_client.AsyncTransport")
     async def test_connection_with_gssapi(
         self, mock_transport_class, mock_open_connection
     ):
@@ -195,7 +195,7 @@ class TestAsyncSSHClient:
         assert channel == mock_channel
 
     @pytest.mark.asyncio
-    @patch("ssh_library.client.async_ssh_client.AsyncSFTPClient")
+    @patch("spindlex.client.async_ssh_client.AsyncSFTPClient")
     async def test_open_sftp_success(self, mock_sftp_class):
         """Test successful SFTP client opening."""
         # Setup connected client
@@ -277,7 +277,7 @@ class TestAsyncSSHClient:
 
     def test_set_missing_host_key_policy(self):
         """Test setting host key policy."""
-        from ssh_library.hostkeys.policy import RejectPolicy
+        from spindlex.hostkeys.policy import RejectPolicy
 
         policy = RejectPolicy()
         self.client.set_missing_host_key_policy(policy)
@@ -295,7 +295,7 @@ class TestAsyncSFTPClient:
     @pytest.mark.asyncio
     async def test_sftp_initialization(self):
         """Test SFTP client initialization."""
-        from ssh_library.client.async_sftp_client import AsyncSFTPClient
+        from spindlex.client.async_sftp_client import AsyncSFTPClient
 
         sftp_client = AsyncSFTPClient(self.mock_channel)
 
@@ -306,13 +306,13 @@ class TestAsyncSFTPClient:
     @pytest.mark.asyncio
     async def test_sftp_file_operations(self):
         """Test basic SFTP file operations."""
-        from ssh_library.client.async_sftp_client import AsyncSFTPClient
+        from spindlex.client.async_sftp_client import AsyncSFTPClient
 
         sftp_client = AsyncSFTPClient(self.mock_channel)
         sftp_client._initialized = True
 
         # Mock the _recv_message method to avoid channel recv calls
-        from ssh_library.protocol.sftp_messages import SFTPHandleMessage
+        from spindlex.protocol.sftp_messages import SFTPHandleMessage
         mock_handle_response = SFTPHandleMessage(request_id=1, handle=b"test_handle")
         
         with patch.object(sftp_client, "_recv_message", new_callable=AsyncMock, return_value=mock_handle_response):
@@ -349,7 +349,7 @@ class TestAsyncTransport:
     @pytest.mark.asyncio
     async def test_async_transport_methods(self):
         """Test that async transport has required methods."""
-        from ssh_library.transport.async_transport import AsyncTransport
+        from spindlex.transport.async_transport import AsyncTransport
 
         # Check async methods exist
         assert hasattr(AsyncTransport, "start_client")
@@ -374,7 +374,7 @@ class TestAsyncChannel:
     @pytest.mark.asyncio
     async def test_async_channel_methods(self):
         """Test that async channel has required methods."""
-        from ssh_library.transport.async_channel import AsyncChannel
+        from spindlex.transport.async_channel import AsyncChannel
 
         # Check async methods exist
         assert hasattr(AsyncChannel, "send")

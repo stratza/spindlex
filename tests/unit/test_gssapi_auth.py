@@ -9,8 +9,8 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
-from ssh_library.auth.gssapi import GSSAPI_AVAILABLE, GSSAPIAuth
-from ssh_library.exceptions import AuthenticationException
+from spindlex.auth.gssapi import GSSAPI_AVAILABLE, GSSAPIAuth
+from spindlex.exceptions import AuthenticationException
 
 
 class TestGSSAPIAuth:
@@ -31,7 +31,7 @@ class TestGSSAPIAuth:
 
     def test_gssapi_not_available(self):
         """Test behavior when GSSAPI library is not available."""
-        with patch("ssh_library.auth.gssapi.GSSAPI_AVAILABLE", False):
+        with patch("spindlex.auth.gssapi.GSSAPI_AVAILABLE", False):
             gssapi_auth = GSSAPIAuth(self.mock_transport)
 
             with pytest.raises(
@@ -49,9 +49,9 @@ class TestGSSAPIAuth:
         assert gssapi_auth._gss_credentials is None
 
     @pytest.mark.skipif(not GSSAPI_AVAILABLE, reason="GSSAPI library not available")
-    @patch("ssh_library.auth.gssapi.Credentials")
-    @patch("ssh_library.auth.gssapi.SecurityContext")
-    @patch("ssh_library.auth.gssapi.Name")
+    @patch("spindlex.auth.gssapi.Credentials")
+    @patch("spindlex.auth.gssapi.SecurityContext")
+    @patch("spindlex.auth.gssapi.Name")
     def test_gssapi_context_initialization(self, mock_name, mock_context, mock_creds):
         """Test GSSAPI context initialization."""
         # Setup mocks
@@ -102,7 +102,7 @@ class TestGSSAPIAuth:
         gssapi_auth = GSSAPIAuth(self.mock_transport)
 
         # Test with default hostname
-        with patch("ssh_library.auth.gssapi.Name") as mock_name:
+        with patch("spindlex.auth.gssapi.Name") as mock_name:
             gssapi_auth._get_target_name(None)
             mock_name.assert_called_once_with(
                 "host@test.example.com",
@@ -110,7 +110,7 @@ class TestGSSAPIAuth:
             )
 
         # Test with custom hostname
-        with patch("ssh_library.auth.gssapi.Name") as mock_name:
+        with patch("spindlex.auth.gssapi.Name") as mock_name:
             gssapi_auth._get_target_name("custom.example.com")
             mock_name.assert_called_once_with(
                 "host@custom.example.com",
@@ -186,7 +186,7 @@ class TestGSSAPIIntegration:
     def test_transport_gssapi_auth_method(self):
         """Test transport GSSAPI authentication method."""
         # Test that transport has GSSAPI auth method
-        from ssh_library.transport.transport import Transport
+        from spindlex.transport.transport import Transport
 
         # Check method exists
         assert hasattr(Transport, "auth_gssapi")
@@ -200,10 +200,10 @@ class TestGSSAPIIntegration:
 
         assert actual_params == expected_params
 
-    @patch("ssh_library.auth.gssapi.GSSAPIAuth")
+    @patch("spindlex.auth.gssapi.GSSAPIAuth")
     def test_transport_gssapi_auth_call(self, mock_gssapi_class):
         """Test transport calls GSSAPI authenticator correctly."""
-        from ssh_library.transport.transport import Transport
+        from spindlex.transport.transport import Transport
 
         # Setup mock
         mock_gssapi_instance = Mock()

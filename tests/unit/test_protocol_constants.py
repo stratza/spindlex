@@ -51,9 +51,9 @@ class TestVersionParsing:
         assert protocol == "2.0"
         assert software == "OpenSSH_8.0"
 
-        protocol, software = parse_version_string("SSH-1.99-ssh_library_1.0")
+        protocol, software = parse_version_string("SSH-1.99-spindlex_1.0")
         assert protocol == "1.99"
-        assert software == "ssh_library_1.0"
+        assert software == "spindlex_1.0"
 
     def test_parse_version_string_no_software(self):
         """Test parsing version string without software version."""

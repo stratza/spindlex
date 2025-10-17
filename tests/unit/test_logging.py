@@ -420,7 +420,7 @@ class TestConfigureLogging:
         """Test basic logging configuration."""
         configure_logging(level="DEBUG", format_type="standard")
 
-        logger = logging.getLogger("ssh_library")
+        logger = logging.getLogger("spindlex")
         assert logger.level == logging.DEBUG
         assert len(logger.handlers) > 0
 
@@ -428,7 +428,7 @@ class TestConfigureLogging:
         """Test JSON logging configuration."""
         configure_logging(level="INFO", json_format=True)
 
-        logger = logging.getLogger("ssh_library")
+        logger = logging.getLogger("spindlex")
         assert logger.level == logging.INFO
 
     def test_configure_with_files(self):
@@ -443,8 +443,8 @@ class TestConfigureLogging:
                 )
 
                 # Test that loggers are configured
-                main_logger = logging.getLogger("ssh_library")
-                security_logger = logging.getLogger("ssh_library.security")
+                main_logger = logging.getLogger("spindlex")
+                security_logger = logging.getLogger("spindlex.security")
 
                 assert main_logger.level == logging.INFO
                 assert len(main_logger.handlers) > 0
@@ -452,9 +452,9 @@ class TestConfigureLogging:
             finally:
                 # Clean up handlers to avoid file locks
                 for logger_name in [
-                    "ssh_library",
-                    "ssh_library.security",
-                    "ssh_library.performance",
+                    "spindlex",
+                    "spindlex.security",
+                    "spindlex.performance",
                 ]:
                     logger = logging.getLogger(logger_name)
                     for handler in logger.handlers[:]:
