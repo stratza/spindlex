@@ -6,9 +6,9 @@ Tests cipher suite algorithm negotiation and cipher information.
 
 import pytest
 
-from ssh_library.crypto.backend import CryptographyBackend
-from ssh_library.crypto.ciphers import CipherSuite
-from ssh_library.exceptions import CryptoException
+from spindlex.crypto.backend import CryptographyBackend
+from spindlex.crypto.ciphers import CipherSuite
+from spindlex.exceptions import CryptoException
 
 
 class TestCipherSuite:

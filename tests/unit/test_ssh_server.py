@@ -54,7 +54,7 @@ class TestSSHServer(unittest.TestCase):
 
         self.assertIn("Server key must be set", str(cm.exception))
 
-    @patch("ssh_library.server.ssh_server.Transport")
+    @patch("spindlex.server.ssh_server.Transport")
     def test_start_server_with_key(self, mock_transport_class):
         """Test starting server with server key set."""
         mock_socket = Mock(spec=socket.socket)
