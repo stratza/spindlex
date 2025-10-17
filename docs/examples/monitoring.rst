@@ -16,8 +16,8 @@ Comprehensive System Monitor::
     import json
     import time
     from datetime import datetime
-    from ssh_library import SSHClient
-    from ssh_library.exceptions import SSHException
+    from spindlex import SSHClient
+    from spindlex.exceptions import SSHException
     from typing import Dict, List, Any, Optional
     import threading
     import queue
@@ -544,7 +544,7 @@ Web Application Monitor::
     import requests
     import time
     from datetime import datetime, timedelta
-    from ssh_library import SSHClient
+    from spindlex import SSHClient
     from typing import Dict, List, Any
     import json
     import re

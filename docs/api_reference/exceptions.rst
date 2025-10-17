@@ -4,7 +4,7 @@ Exceptions API
 Exception Hierarchy
 -------------------
 
-.. automodule:: ssh_library.exceptions
+.. automodule:: spindlex.exceptions
    :members:
    :undoc-members:
    :show-inheritance:
@@ -12,7 +12,7 @@ Exception Hierarchy
 Base Exceptions
 ---------------
 
-.. autoexception:: ssh_library.exceptions.SSHException
+.. autoexception:: spindlex.exceptions.SSHException
    :members:
    :undoc-members:
    :show-inheritance:
@@ -20,17 +20,17 @@ Base Exceptions
 Authentication Exceptions
 -------------------------
 
-.. autoexception:: ssh_library.exceptions.AuthenticationException
+.. autoexception:: spindlex.exceptions.AuthenticationException
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoexception:: ssh_library.exceptions.BadAuthenticationType
+.. autoexception:: spindlex.exceptions.BadAuthenticationType
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoexception:: ssh_library.exceptions.PartialAuthentication
+.. autoexception:: spindlex.exceptions.PartialAuthentication
    :members:
    :undoc-members:
    :show-inheritance:
@@ -38,17 +38,17 @@ Authentication Exceptions
 Connection Exceptions
 ---------------------
 
-.. autoexception:: ssh_library.exceptions.BadHostKeyException
+.. autoexception:: spindlex.exceptions.BadHostKeyException
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoexception:: ssh_library.exceptions.ChannelException
+.. autoexception:: spindlex.exceptions.ChannelException
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoexception:: ssh_library.exceptions.TransportException
+.. autoexception:: spindlex.exceptions.TransportException
    :members:
    :undoc-members:
    :show-inheritance:
@@ -56,12 +56,12 @@ Connection Exceptions
 Protocol Exceptions
 -------------------
 
-.. autoexception:: ssh_library.exceptions.ProtocolException
+.. autoexception:: spindlex.exceptions.ProtocolException
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoexception:: ssh_library.exceptions.ProxyCommandFailure
+.. autoexception:: spindlex.exceptions.ProxyCommandFailure
    :members:
    :undoc-members:
    :show-inheritance:
@@ -69,22 +69,22 @@ Protocol Exceptions
 SFTP Exceptions
 ---------------
 
-.. autoexception:: ssh_library.exceptions.SFTPError
+.. autoexception:: spindlex.exceptions.SFTPError
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoexception:: ssh_library.exceptions.SFTPIOError
+.. autoexception:: spindlex.exceptions.SFTPIOError
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoexception:: ssh_library.exceptions.SFTPPermissionError
+.. autoexception:: spindlex.exceptions.SFTPPermissionError
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoexception:: ssh_library.exceptions.SFTPFileNotFoundError
+.. autoexception:: spindlex.exceptions.SFTPFileNotFoundError
    :members:
    :undoc-members:
    :show-inheritance:
@@ -94,8 +94,8 @@ Example Usage
 
 Basic Exception Handling::
 
-    from ssh_library import SSHClient
-    from ssh_library.exceptions import (
+    from spindlex import SSHClient
+    from spindlex.exceptions import (
         SSHException,
         AuthenticationException,
         BadHostKeyException,
@@ -147,7 +147,7 @@ Basic Exception Handling::
 
 Specific SFTP Error Handling::
 
-    from ssh_library.exceptions import (
+    from spindlex.exceptions import (
         SFTPFileNotFoundError,
         SFTPPermissionError,
         SFTPIOError
@@ -167,7 +167,7 @@ Specific SFTP Error Handling::
 
 Authentication Error Details::
 
-    from ssh_library.exceptions import (
+    from spindlex.exceptions import (
         AuthenticationException,
         BadAuthenticationType,
         PartialAuthentication
@@ -190,7 +190,7 @@ Authentication Error Details::
 Custom Exception Handling::
 
     import logging
-    from ssh_library.exceptions import SSHException
+    from spindlex.exceptions import SSHException
     
     def safe_ssh_operation(func, *args, **kwargs):
         """Wrapper for safe SSH operations with logging."""
