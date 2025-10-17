@@ -4,13 +4,13 @@ include LICENSE
 include CHANGELOG.md
 
 # Include the typed marker
-include ssh_library/py.typed
+include spindlex/py.typed
 
 # Include version file
-include ssh_library/_version.py
+include spindlex/_version.py
 
 # Include all Python files
-recursive-include ssh_library *.py
+recursive-include spindlex *.py
 
 # Exclude test files from distribution
 recursive-exclude tests *
