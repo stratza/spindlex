@@ -201,6 +201,18 @@ class SFTPAttributes:
         self.mtime: Optional[int] = None
         self.extended: Dict[str, str] = {}
     
+    @property
+    def st_mode(self) -> Optional[int]:
+        """Get file mode (permissions)."""
+        return self.permissions
+    
+    @st_mode.setter
+    def st_mode(self, value: int) -> None:
+        """Set file mode (permissions)."""
+        self.permissions = value
+        if value is not None:
+            self.flags |= SSH_FILEXFER_ATTR_PERMISSIONS
+    
     def pack(self) -> bytes:
         """
         Serialize attributes to bytes.

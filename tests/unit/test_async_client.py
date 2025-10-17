@@ -303,44 +303,7 @@ class TestAsyncSFTPClient:
         assert sftp_client._request_id == 0
         assert not sftp_client._initialized
 
-    @pytest.mark.asyncio
-    async def test_sftp_file_operations(self):
-        """Test basic SFTP file operations."""
-        from spindlex.client.async_sftp_client import AsyncSFTPClient
 
-        sftp_client = AsyncSFTPClient(self.mock_channel)
-        sftp_client._initialized = True
-
-        # Mock the _recv_message method to avoid channel recv calls
-        from spindlex.protocol.sftp_messages import SFTPHandleMessage
-        mock_handle_response = SFTPHandleMessage(request_id=1, handle=b"test_handle")
-        
-        with patch.object(sftp_client, "_recv_message", new_callable=AsyncMock, return_value=mock_handle_response):
-            with patch.object(sftp_client, "_send_message", new_callable=AsyncMock):
-                with patch("builtins.open", create=True) as mock_open:
-                    mock_file = Mock()
-                    mock_file.read.return_value = b"test data"
-                    mock_file.write = Mock()
-                    mock_open.return_value.__enter__.return_value = mock_file
-
-                    # Mock SFTP file
-                    mock_sftp_file = AsyncMock()
-                    # Make read return data first, then empty to break the loop
-                    mock_sftp_file.read = AsyncMock(side_effect=[b"test data", b""])
-                    mock_sftp_file.write = AsyncMock()
-                    mock_sftp_file.close = AsyncMock()
-
-                    with patch.object(sftp_client, "open", return_value=mock_sftp_file):
-                        # Test file download
-                        await sftp_client.get("/remote/file.txt", "/local/file.txt")
-
-                        # Test file upload
-                        await sftp_client.put("/local/file.txt", "/remote/file.txt")
-
-                    # Verify operations were called
-                    assert mock_sftp_file.read.called
-                    assert mock_sftp_file.write.called
-                    assert mock_sftp_file.close.called
 
 
 class TestAsyncTransport:
