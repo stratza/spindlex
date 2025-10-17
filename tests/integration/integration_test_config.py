@@ -203,9 +203,9 @@ def validate_test_environment() -> Dict[str, Any]:
     # Check Python version
     import sys
 
-    if sys.version_info < (3, 8):
+    if sys.version_info < (3, 9):
         validation_results["errors"].append(
-            f"Python 3.8+ required, found {sys.version_info.major}.{sys.version_info.minor}"
+            f"Python 3.9+ required, found {sys.version_info.major}.{sys.version_info.minor}"
         )
         validation_results["valid"] = False
     else:
