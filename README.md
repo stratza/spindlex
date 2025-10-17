@@ -1,4 +1,4 @@
-# Spindle
+# SpindleX
 
 A pure-Python SSHv2 client/server library that provides secure, high-performance SSH and SFTP operations without GPL/LGPL dependencies.
 
@@ -18,13 +18,13 @@ A pure-Python SSHv2 client/server library that provides secure, high-performance
 ### Installation
 
 ```bash
-pip install spindle
+pip install spindlex
 ```
 
 ### Basic Usage
 
 ```python
-from spindle import SSHClient
+from spindlex import SSHClient
 
 # Create client and connect
 client = SSHClient()
@@ -46,8 +46,8 @@ client.close()
 ### Key-based Authentication
 
 ```python
-from spindle import SSHClient
-from spindle.crypto.pkey import Ed25519Key
+from spindlex import SSHClient
+from spindlex.crypto.pkey import Ed25519Key
 
 # Load private key
 private_key = Ed25519Key.from_private_key_file('/path/to/private_key')
@@ -62,11 +62,11 @@ client.connect(
 
 ## Documentation
 
-- [Quick Start Guide](https://spindle.readthedocs.io/en/latest/quickstart.html)
-- [User Guide](https://spindle.readthedocs.io/en/latest/user_guide/)
-- [API Reference](https://spindle.readthedocs.io/en/latest/api_reference/)
-- [Examples](https://spindle.readthedocs.io/en/latest/examples/)
-- [Security Guide](https://spindle.readthedocs.io/en/latest/security.html)
+- [Quick Start Guide](https://spindlex.readthedocs.io/en/latest/quickstart.html)
+- [User Guide](https://spindlex.readthedocs.io/en/latest/user_guide/)
+- [API Reference](https://spindlex.readthedocs.io/en/latest/api_reference/)
+- [Examples](https://spindlex.readthedocs.io/en/latest/examples/)
+- [Security Guide](https://spindlex.readthedocs.io/en/latest/security.html)
 
 ## Requirements
 
@@ -75,17 +75,17 @@ client.connect(
 
 ## Optional Dependencies
 
-- `asyncio` support: `pip install spindle[async]`
-- Development tools: `pip install spindle[dev]`
-- GSSAPI authentication: `pip install spindle[gssapi]` (Unix only)
+- `asyncio` support: `pip install spindlex[async]`
+- Development tools: `pip install spindlex[dev]`
+- GSSAPI authentication: `pip install spindlex[gssapi]` (Unix only)
 
 ## Contributing
 
-We welcome contributions! Please see our [Contributing Guide](https://spindle.readthedocs.io/en/latest/contributing.html) for details.
+We welcome contributions! Please see our [Contributing Guide](https://spindlex.readthedocs.io/en/latest/contributing.html) for details.
 
 ## Security
 
-For security issues, please email security@spindle.org instead of creating a public issue.
+For security issues, please email security@spindlex.org instead of creating a public issue.
 
 ## License
 

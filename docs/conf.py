@@ -16,13 +16,13 @@ sys.path.insert(0, str(project_root))
 
 # -- Project information -----------------------------------------------------
 
-project = 'Spindle'
-copyright = '2024, Spindle Team'
-author = 'Spindle Team'
+project = 'SpindleX'
+copyright = '2024, SpindleX Team'
+author = 'SpindleX Team'
 
 # The full version, including alpha/beta/rc tags
 try:
-    from spindle import __version__
+    from spindlex import __version__
     release = __version__
     version = '.'.join(__version__.split('.')[:2])  # Major.minor
 except ImportError:
