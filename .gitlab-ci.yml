@@ -299,18 +299,3 @@ release:
           url: 'https://gitlab.com/daveops.world/development/python/spindlex/-/blob/main/CHANGELOG.md'
   rules:
     - if: $CI_COMMIT_TAG
-
-# Notification job (optional)
-notify_release:
-  stage: deploy
-  image: alpine:latest
-  before_script:
-    - apk add --no-cache curl
-  script:
-    - echo "SpindleX $CI_COMMIT_TAG has been released!"
-    - echo "PyPI: https://pypi.org/project/spindlex/"
-    - echo "Docs: https://spindlex.readthedocs.io/"
-  only:
-    - tags
-  when: manual
-  allow_failure: true
