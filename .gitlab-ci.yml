@@ -90,6 +90,14 @@ test:python3.12:
   <<: *test_template
   image: python:3.12
 
+test:python3.13:
+  <<: *test_template
+  image: python:3.13
+
+test:python3.14:
+  <<: *test_template
+  image: python:3.14
+
 # Integration tests (only run if SSH server is available)
 test:integration:
   stage: test
