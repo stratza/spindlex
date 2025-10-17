@@ -198,7 +198,8 @@ pages:
   only:
     - main
 
-deploy:pypi:
+# Pre-deployment validation
+validate:release:
   stage: deploy
   image: python:3.11
   dependencies:
@@ -206,26 +207,112 @@ deploy:pypi:
   before_script:
     - pip install twine
   script:
+    - echo "🔍 Validating release artifacts..."
+    - twine check dist/*
+    - echo "📋 Package contents:"
+    - tar -tzf dist/*.tar.gz | head -20
+    - echo "✅ Release validation completed"
+  only:
+    - tags
+  artifacts:
+    reports:
+      junit: validation-report.xml
+    expire_in: 1 week
+  allow_failure: false
+
+# PyPI deployment jobs
+deploy:pypi:test:
+  stage: deploy
+  image: python:3.11
+  dependencies:
+    - build:package
+  before_script:
+    - pip install twine
+  script:
+    - echo "Uploading to Test PyPI..."
+    - twine upload --repository testpypi dist/*
+  variables:
+    TWINE_USERNAME: __token__
+    TWINE_PASSWORD: $PYPI_TEST_TOKEN
+    TWINE_REPOSITORY_URL: https://test.pypi.org/legacy/
+  only:
+    - tags
+  when: manual
+  environment:
+    name: pypi-test
+    url: https://test.pypi.org/project/spindlex/
+  allow_failure: true
+
+deploy:pypi:production:
+  stage: deploy
+  image: python:3.11
+  dependencies:
+    - build:package
+  before_script:
+    - pip install twine
+  script:
+    - echo "Uploading to Production PyPI..."
     - twine upload dist/*
+  variables:
+    TWINE_USERNAME: __token__
+    TWINE_PASSWORD: $PYPI_TOKEN
   only:
     - tags
   when: manual
   environment:
     name: pypi
     url: https://pypi.org/project/spindlex/
+  needs:
+    - deploy:pypi:test
 
 # Release job
 release:
   stage: deploy
   image: registry.gitlab.com/gitlab-org/release-cli:latest
   script:
-    - echo "Creating release for $CI_COMMIT_TAG"
+    - echo "Creating GitLab release for $CI_COMMIT_TAG"
   release:
     tag_name: '$CI_COMMIT_TAG'
-    description: 'Release $CI_COMMIT_TAG'
+    name: 'SpindleX $CI_COMMIT_TAG'
+    description: |
+      ## SpindleX $CI_COMMIT_TAG
+
+      ### 📦 Installation
+      ```bash
+      pip install spindlex==$CI_COMMIT_TAG
+      ```
+
+      ### 🔗 Links
+      - [PyPI Package](https://pypi.org/project/spindlex/$CI_COMMIT_TAG/)
+      - [Documentation](https://spindlex.readthedocs.io/)
+      - [Changelog](https://gitlab.com/daveops.world/development/python/spindlex/-/blob/main/CHANGELOG.md)
+
+      ### 🚀 What's New
+      See the [CHANGELOG.md](https://gitlab.com/daveops.world/development/python/spindlex/-/blob/main/CHANGELOG.md) for detailed changes.
     assets:
       links:
-        - name: 'Package'
-          url: 'https://pypi.org/project/spindlex/$CI_COMMIT_TAG/'
+        - name: 'PyPI Package'
+          url: 'https://pypi.org/project/spindlex/'
+        - name: 'Documentation'
+          url: 'https://spindlex.readthedocs.io/'
+        - name: 'Changelog'
+          url: 'https://gitlab.com/daveops.world/development/python/spindlex/-/blob/main/CHANGELOG.md'
   only:
     - tags
+
+# Notification job (optional)
+notify:release:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache curl
+  script:
+    - echo "🎉 SpindleX $CI_COMMIT_TAG has been released!"
+    - echo "📦 PyPI: https://pypi.org/project/spindlex/"
+    - echo "📖 Docs: https://spindlex.readthedocs.io/"
+    # Add webhook notifications here if needed
+    # - curl -X POST -H 'Content-type: application/json' --data '{"text":"SpindleX '$CI_COMMIT_TAG' released!"}' $SLACK_WEBHOOK_URL
+  only:
+    - tags
+  when: manual
+  allow_failure: true
