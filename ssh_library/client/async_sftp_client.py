@@ -9,7 +9,13 @@ import struct
 from typing import List, Optional, Union, BinaryIO, Any
 from ..exceptions import SFTPError
 from ..protocol.sftp_constants import *
-from ..protocol.sftp_messages import *
+from ..protocol.sftp_messages import (
+    SFTPMessage, SFTPInitMessage, SFTPVersionMessage, SFTPOpenMessage,
+    SFTPCloseMessage, SFTPReadMessage, SFTPWriteMessage, SFTPDataMessage,
+    SFTPStatusMessage, SFTPHandleMessage, SFTPAttributes, SFTPStatMessage,
+    SFTPAttrsMessage, SFTPMkdirMessage, SFTPRmdirMessage, SFTPOpenDirMessage,
+    SFTPReadDirMessage, SFTPNameMessage
+)
 
 
 class AsyncSFTPClient:
@@ -140,7 +146,7 @@ class AsyncSFTPClient:
                             filenames.append(entry.filename)
                             
                 except SFTPError as e:
-                    if e.code == SFTP_EOF:
+                    if e.status_code == SSH_FX_EOF:
                         break
                     raise
             
@@ -180,7 +186,7 @@ class AsyncSFTPClient:
             if isinstance(response, SFTPAttrsMessage):
                 return response.attrs
             elif isinstance(response, SFTPStatusMessage):
-                raise SFTPError(f"Stat failed: {response.message}", response.code)
+                raise SFTPError(f"Stat failed: {response.message}", response.status_code)
             else:
                 raise SFTPError("Unexpected response to stat request")
                 
@@ -215,8 +221,8 @@ class AsyncSFTPClient:
             response = await self._wait_for_response(request_id)
             
             if isinstance(response, SFTPStatusMessage):
-                if response.code != SFTP_OK:
-                    raise SFTPError(f"Mkdir failed: {response.message}", response.code)
+                if response.status_code != SSH_FX_OK:
+                    raise SFTPError(f"Mkdir failed: {response.message}", response.status_code)
             else:
                 raise SFTPError("Unexpected response to mkdir request")
                 
@@ -246,8 +252,8 @@ class AsyncSFTPClient:
             response = await self._wait_for_response(request_id)
             
             if isinstance(response, SFTPStatusMessage):
-                if response.code != SFTP_OK:
-                    raise SFTPError(f"Rmdir failed: {response.message}", response.code)
+                if response.status_code != SSH_FX_OK:
+                    raise SFTPError(f"Rmdir failed: {response.message}", response.status_code)
             else:
                 raise SFTPError("Unexpected response to rmdir request")
                 
@@ -291,7 +297,7 @@ class AsyncSFTPClient:
             if isinstance(response, SFTPHandleMessage):
                 return AsyncSFTPFile(self, response.handle, mode)
             elif isinstance(response, SFTPStatusMessage):
-                raise SFTPError(f"File open failed: {response.message}", response.code)
+                raise SFTPError(f"File open failed: {response.message}", response.status_code)
             else:
                 raise SFTPError("Unexpected response to open request")
                 
@@ -319,13 +325,13 @@ class AsyncSFTPClient:
         flags = 0
         
         if "r" in mode:
-            flags |= SFTP_FXF_READ
+            flags |= SSH_FXF_READ
         if "w" in mode:
-            flags |= SFTP_FXF_WRITE | SFTP_FXF_CREAT | SFTP_FXF_TRUNC
+            flags |= SSH_FXF_WRITE | SSH_FXF_CREAT | SSH_FXF_TRUNC
         if "a" in mode:
-            flags |= SFTP_FXF_WRITE | SFTP_FXF_CREAT | SFTP_FXF_APPEND
+            flags |= SSH_FXF_WRITE | SSH_FXF_CREAT | SSH_FXF_APPEND
         if "x" in mode:
-            flags |= SFTP_FXF_WRITE | SFTP_FXF_CREAT | SFTP_FXF_EXCL
+            flags |= SSH_FXF_WRITE | SSH_FXF_CREAT | SSH_FXF_EXCL
         
         return flags
     
@@ -356,6 +362,92 @@ class AsyncSFTPClient:
         # For now, just receive the next message
         # In a full implementation, this would handle multiple concurrent requests
         return await self._recv_message()
+    
+    async def _opendir(self, path: str) -> bytes:
+        """
+        Open directory and return handle.
+        
+        Args:
+            path: Directory path to open
+            
+        Returns:
+            Directory handle
+            
+        Raises:
+            SFTPError: If directory open fails
+        """
+        request_id = self._get_next_request_id()
+        
+        # Send opendir request
+        opendir_msg = SFTPOpenDirMessage(request_id=request_id, path=path)
+        await self._send_message(opendir_msg)
+        
+        # Wait for response
+        response = await self._wait_for_response(request_id)
+        
+        if isinstance(response, SFTPHandleMessage):
+            return response.handle
+        elif isinstance(response, SFTPStatusMessage):
+            raise SFTPError(f"Opendir failed: {response.message}", response.status_code)
+        else:
+            raise SFTPError("Unexpected response to opendir request")
+    
+    async def _readdir(self, handle: bytes) -> List[Any]:
+        """
+        Read directory entries.
+        
+        Args:
+            handle: Directory handle
+            
+        Returns:
+            List of directory entries
+            
+        Raises:
+            SFTPError: If readdir fails
+        """
+        request_id = self._get_next_request_id()
+        
+        # Send readdir request
+        readdir_msg = SFTPReadDirMessage(request_id=request_id, handle=handle)
+        await self._send_message(readdir_msg)
+        
+        # Wait for response
+        response = await self._wait_for_response(request_id)
+        
+        if isinstance(response, SFTPNameMessage):
+            return response.names
+        elif isinstance(response, SFTPStatusMessage):
+            if response.status_code == SSH_FX_EOF:
+                return []  # End of directory
+            else:
+                raise SFTPError(f"Readdir failed: {response.message}", response.status_code)
+        else:
+            raise SFTPError("Unexpected response to readdir request")
+    
+    async def _close(self, handle: bytes) -> None:
+        """
+        Close file or directory handle.
+        
+        Args:
+            handle: Handle to close
+            
+        Raises:
+            SFTPError: If close fails
+        """
+        request_id = self._get_next_request_id()
+        
+        # Send close request
+        close_msg = SFTPCloseMessage(request_id=request_id, handle=handle)
+        await self._send_message(close_msg)
+        
+        # Wait for response
+        response = await self._wait_for_response(request_id)
+        
+        if isinstance(response, SFTPStatusMessage):
+            if response.status_code != SSH_FX_OK:
+                raise SFTPError(f"Close failed: {response.message}", response.status_code)
+        else:
+            raise SFTPError("Unexpected response to close request")
 
 
 class AsyncSFTPFile:
@@ -411,9 +503,9 @@ class AsyncSFTPFile:
                 self._offset += len(response.data)
                 return response.data
             elif isinstance(response, SFTPStatusMessage):
-                if response.code == SFTP_EOF:
+                if response.status_code == SSH_FX_EOF:
                     return b""
-                raise SFTPError(f"Read failed: {response.message}", response.code)
+                raise SFTPError(f"Read failed: {response.message}", response.status_code)
             else:
                 raise SFTPError("Unexpected response to read request")
                 
@@ -451,10 +543,10 @@ class AsyncSFTPFile:
             response = await self._client._wait_for_response(request_id)
             
             if isinstance(response, SFTPStatusMessage):
-                if response.code == SFTP_OK:
+                if response.status_code == SSH_FX_OK:
                     self._offset += len(data)
                 else:
-                    raise SFTPError(f"Write failed: {response.message}", response.code)
+                    raise SFTPError(f"Write failed: {response.message}", response.status_code)
             else:
                 raise SFTPError("Unexpected response to write request")
                 
