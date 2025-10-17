@@ -215,7 +215,7 @@ def is_supported_version(protocol_version: str) -> bool:
     return protocol_version in SUPPORTED_PROTOCOL_VERSIONS
 
 
-def create_version_string(software_name: str = "ssh_library", software_version: str = "1.0") -> str:
+def create_version_string(software_name: str = "OpenSSH", software_version: str = "9.0") -> str:
     """
     Create SSH version string for this implementation.
     

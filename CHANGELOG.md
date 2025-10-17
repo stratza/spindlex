@@ -8,33 +8,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Comprehensive API documentation with Sphinx
-- Advanced usage examples and tutorials
-- Performance optimization guide
-- Security best practices documentation
-- Async SSH client implementation
-- Custom protocol subsystem support
-- High-performance file transfer optimizations
-- Connection pooling and management
-- Built-in performance monitoring
-- Extensive logging and debugging capabilities
+- Complete SSH key exchange implementation with Curve25519, DH Group 14/16/18
+- Modern SSH protocol extensions (ext-info, strict-kex) for OpenSSH compatibility
+- Comprehensive cryptographic backend with SSH-specific key derivation
+- Full SSH message serialization/deserialization system
+- Advanced algorithm negotiation supporting latest OpenSSH features
+- Professional PyPI package distribution infrastructure
+- Enhanced error handling with detailed SSH protocol exceptions
+- Extensive protocol utilities for SSH message construction
+- Support for modern encryption algorithms (ChaCha20-Poly1305, AES-GCM)
+- ETM (Encrypt-then-MAC) algorithm support for enhanced security
 
 ### Changed
-- Improved error handling and exception hierarchy
-- Enhanced SFTP client with advanced features
-- Optimized cryptographic operations
-- Better memory management for large transfers
+- Upgraded SSH version compatibility to OpenSSH 9.x standards
+- Enhanced KEXINIT message handling with full extension support
+- Improved transport layer with proper SSH packet framing
+- Optimized key exchange algorithms for better performance
+- Updated authentication framework to support modern SSH requirements
+- Enhanced host key policy system with auto-add functionality
 
 ### Fixed
-- Various bug fixes and stability improvements
-- Memory leaks in long-running connections
-- Race conditions in concurrent operations
+- SSH protocol implementation to work with modern OpenSSH servers
+- Key exchange message format for proper server compatibility
+- Transport layer packet construction and validation
+- Authentication method negotiation and execution
+- Message type handling and protocol state management
+- Import issues with create_version_string function
 
 ### Security
-- Enhanced host key verification
-- Improved authentication security
-- Secure random number generation
-- Constant-time cryptographic comparisons
+- Implemented SSH strict KEX extension for enhanced security
+- Added support for modern cryptographic algorithms
+- Enhanced random number generation for key exchange
+- Improved host key verification with multiple policy options
+- Secure session key derivation following SSH RFCs
 
 ## [0.1.0] - 2024-01-15
 
