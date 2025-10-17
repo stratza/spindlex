@@ -11,12 +11,13 @@ variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
 
 cache:
+  key: "${CI_JOB_NAME}"
   paths:
     - .cache/pip
     - venv/
 
 # Lint stage
-lint:black:
+lint_black:
   stage: lint
   image: python:3.11
   before_script:
@@ -25,7 +26,7 @@ lint:black:
     - black --check --diff spindlex/ tests/ || echo "Black formatting issues found but allowing to continue"
   allow_failure: true
 
-lint:isort:
+lint_isort:
   stage: lint
   image: python:3.11
   before_script:
@@ -34,7 +35,7 @@ lint:isort:
     - isort --check-only --diff spindlex/ tests/ || echo "Import sorting issues found but allowing to continue"
   allow_failure: true
 
-lint:flake8:
+lint_flake8:
   stage: lint
   image: python:3.11
   before_script:
@@ -43,7 +44,7 @@ lint:flake8:
     - flake8 spindlex/ tests/ || echo "Flake8 issues found but allowing to continue"
   allow_failure: true
 
-lint:mypy:
+lint_mypy:
   stage: lint
   image: python:3.11
   before_script:
@@ -74,32 +75,32 @@ lint:mypy:
       - htmlcov/
     expire_in: 1 week
 
-test:python3.9:
+test_python39:
   <<: *test_template
   image: python:3.9
 
-test:python3.10:
+test_python310:
   <<: *test_template
   image: python:3.10
 
-test:python3.11:
+test_python311:
   <<: *test_template
   image: python:3.11
 
-test:python3.12:
+test_python312:
   <<: *test_template
   image: python:3.12
 
-test:python3.13:
+test_python313:
   <<: *test_template
   image: python:3.13
 
-test:python3.14:
+test_python314:
   <<: *test_template
   image: python:3.14
 
 # Integration tests (only run if SSH server is available)
-test:integration:
+test_integration:
   stage: test
   image: python:3.11
   services:
@@ -121,12 +122,12 @@ test:integration:
   script:
     - TEST_SSH_HOST=ssh-server TEST_SSH_USER=testuser TEST_SSH_PASS=testpass pytest tests/unit/test_integration.py -v
   allow_failure: true
-  only:
-    - main
-    - merge_requests
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
 # Security stage
-security:bandit:
+security_bandit:
   stage: security
   image: python:3.11
   before_script:
@@ -141,7 +142,7 @@ security:bandit:
     expire_in: 1 week
   allow_failure: true
 
-security:safety:
+security_safety:
   stage: security
   image: python:3.11
   before_script:
@@ -156,7 +157,7 @@ security:safety:
   allow_failure: true
 
 # Build stage
-build:package:
+build_package:
   stage: build
   image: python:3.11
   before_script:
@@ -169,7 +170,7 @@ build:package:
       - dist/
     expire_in: 1 week
 
-build:docs:
+build_docs:
   stage: build
   image: python:3.11
   before_script:
@@ -194,12 +195,12 @@ pages:
     paths:
       - public
   needs:
-    - build:docs
-  only:
-    - main
+    - build_docs
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
 # Pre-deployment validation
-validate:release:
+validate_release:
   stage: deploy
   image: python:3.11
   before_script:
@@ -207,13 +208,13 @@ validate:release:
   script:
     - echo "🔍 Validating release artifacts..."
     - twine check dist/*
-    - echo "� VPackage contents:"
+    - echo "📋 Package contents:"
     - tar -tzf dist/*.tar.gz | head -20
     - echo "✅ Release validation completed"
   needs:
-    - build:package
-  only:
-    - tags
+    - build_package
+  rules:
+    - if: $CI_COMMIT_TAG
   artifacts:
     reports:
       junit: validation-report.xml
@@ -221,7 +222,7 @@ validate:release:
   allow_failure: false
 
 # PyPI deployment jobs
-deploy:pypi:test:
+deploy_pypi_test:
   stage: deploy
   image: python:3.11
   before_script:
@@ -234,16 +235,16 @@ deploy:pypi:test:
     TWINE_PASSWORD: $PYPI_TEST_TOKEN
     TWINE_REPOSITORY_URL: https://test.pypi.org/legacy/
   needs:
-    - build:package
-  only:
-    - tags
-  when: manual
+    - build_package
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: manual
   environment:
     name: pypi-test
     url: https://test.pypi.org/project/spindlex/
   allow_failure: true
 
-deploy:pypi:production:
+deploy_pypi_production:
   stage: deploy
   image: python:3.11
   before_script:
@@ -254,15 +255,15 @@ deploy:pypi:production:
   variables:
     TWINE_USERNAME: __token__
     TWINE_PASSWORD: $PYPI_TOKEN
-  only:
-    - tags
-  when: manual
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: manual
   environment:
     name: pypi
     url: https://pypi.org/project/spindlex/
   needs:
-    - build:package
-    - deploy:pypi:test
+    - build_package
+    - deploy_pypi_test
 
 # Release job
 release:
@@ -296,10 +297,11 @@ release:
           url: 'https://spindlex.readthedocs.io/'
         - name: 'Changelog'
           url: 'https://gitlab.com/daveops.world/development/python/spindlex/-/blob/main/CHANGELOG.md'
-  only:
-    - tags
+  rules:
+    - if: $CI_COMMIT_TAG
 
 # Notification job (optional)
+# To enable Slack notifications, add the curl command and set SLACK_WEBHOOK_URL variable
 notify_release:
   stage: deploy
   image: alpine:latest
@@ -309,9 +311,7 @@ notify_release:
     - echo "🎉 SpindleX $CI_COMMIT_TAG has been released!"
     - echo "📦 PyPI: https://pypi.org/project/spindlex/"
     - echo "📖 Docs: https://spindlex.readthedocs.io/"
-    # Uncomment the line below to add Slack webhook notifications
-    # - curl -X POST -H 'Content-type: application/json' --data "{\"text\":\"SpindleX $CI_COMMIT_TAG released!\"}" $SLACK_WEBHOOK_URL
-  only:
-    - tags
-  when: manual
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: manual
   allow_failure: true
