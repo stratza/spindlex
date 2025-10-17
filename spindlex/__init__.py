@@ -14,6 +14,14 @@ __license__ = "Apache-2.0"
 from .client.ssh_client import SSHClient
 from .client.sftp_client import SFTPClient
 
+# Async client imports (optional)
+try:
+    from .client.async_ssh_client import AsyncSSHClient
+    from .client.async_sftp_client import AsyncSFTPClient
+    ASYNC_AVAILABLE = True
+except ImportError:
+    ASYNC_AVAILABLE = False
+
 # SFTP imports
 from .protocol.sftp_messages import SFTPAttributes
 
@@ -110,3 +118,10 @@ __all__ = [
     "get_performance_monitor",
     "get_protocol_analyzer",
 ]
+
+# Add async classes if available
+if ASYNC_AVAILABLE:
+    __all__.extend([
+        "AsyncSSHClient",
+        "AsyncSFTPClient",
+    ])

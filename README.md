@@ -6,11 +6,15 @@
 
 [![PyPI version](https://badge.fury.io/py/spindlex.svg)](https://badge.fury.io/py/spindlex)
 [![Python Support](https://img.shields.io/pypi/pyversions/spindlex.svg)](https://pypi.org/project/spindlex/)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Downloads](https://pepy.tech/badge/spindlex)](https://pepy.tech/project/spindlex)
+[![GitLab CI](https://gitlab.com/daveops.world/development/python/spindlex/badges/main/pipeline.svg)](https://gitlab.com/daveops.world/development/python/spindlex/-/pipelines)
+[![Coverage](https://gitlab.com/daveops.world/development/python/spindlex/badges/main/coverage.svg)](https://gitlab.com/daveops.world/development/python/spindlex/-/commits/main)
+[![Code Quality](https://img.shields.io/badge/code%20quality-A-brightgreen.svg)](https://gitlab.com/daveops.world/development/python/spindlex)
 [![Code Style](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Type Hints](https://img.shields.io/badge/type%20hints-mypy-blue.svg)](http://mypy-lang.org/)
 
-*Secure, high-performance SSH and SFTP operations without GPL/LGPL dependencies*
+*Secure, high-performance SSH and SFTP operations with pure Python implementation*
 
 [🚀 Quick Start](#-quick-start) • [📖 Documentation](#-documentation) • [✨ Features](#-features) • [🛠️ Examples](#️-examples)
 
@@ -29,7 +33,7 @@ SpindleX is a **pure-Python SSH library** designed for the modern developer. Bui
 | 🔒 **Security** | Modern algorithms (Ed25519, ChaCha20-Poly1305) | Legacy support |
 | 🐍 **Pure Python** | No C extensions, easy deployment | Complex dependencies |
 | ⚡ **Performance** | Async support, optimized protocols | Blocking operations |
-| 🛡️ **License** | Apache 2.0 (business-friendly) | GPL/LGPL restrictions |
+| 🛡️ **License** | MIT (business-friendly) | GPL/LGPL restrictions |
 | 🔧 **Developer UX** | Full type hints, modern API | Legacy interfaces |
 
 ---
@@ -304,7 +308,7 @@ Security is our top priority. SpindleX implements:
 
 ### 🚨 Security Issues
 
-Found a security vulnerability? Please email **security@spindlex.org** instead of creating a public issue.
+Found a security vulnerability? Please report it through our [GitLab security issue tracker](https://gitlab.com/daveops.world/development/python/spindlex/-/issues) with the "security" label.
 
 ---
 
@@ -325,12 +329,12 @@ SpindleX is built for performance:
 
 ## 📜 License
 
-SpindleX is licensed under the **Apache License 2.0** - see the [LICENSE](LICENSE) file for details.
+SpindleX is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
 
-### Why Apache 2.0?
+### Why MIT?
 - ✅ **Business-friendly**: Use in commercial projects
 - ✅ **No copyleft**: No viral licensing requirements  
-- ✅ **Patent protection**: Includes patent grant
+- ✅ **Simple and permissive**: Minimal restrictions
 - ✅ **Widely adopted**: Used by major projects
 
 ---
