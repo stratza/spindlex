@@ -14,7 +14,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec, ed25519, rsa
 
-from ssh_library.crypto.pkey import (
+from spindlex.crypto.pkey import (
     ECDSAKey,
     Ed25519Key,
     PKey,
@@ -22,7 +22,7 @@ from ssh_library.crypto.pkey import (
     load_key_from_file,
     load_public_key_from_string,
 )
-from ssh_library.exceptions import CryptoException
+from spindlex.exceptions import CryptoException
 
 
 class TestEd25519Key:

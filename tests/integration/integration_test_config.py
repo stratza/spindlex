@@ -100,7 +100,7 @@ class IntegrationTestConfig:
     test_server_timeout: float = 30.0
 
     # Test data configuration
-    temp_dir_prefix: str = "ssh_library_test_"
+    temp_dir_prefix: str = "spindlex_test_"
     cleanup_temp_files: bool = True
 
     # Logging configuration

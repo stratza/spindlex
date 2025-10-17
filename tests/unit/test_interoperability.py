@@ -222,8 +222,8 @@ class TestOpenSSHInteroperability:
                 assert isinstance(files, list)
 
                 # Test file operations
-                test_file = "ssh_library_test.txt"
-                test_content = b"Test content from ssh-library"
+                test_file = "spindlex_test.txt"
+                test_content = b"Test content from spindlex"
 
                 # Create local file
                 local_file = temp_ssh_dir / "test_upload.txt"

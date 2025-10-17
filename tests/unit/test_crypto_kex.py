@@ -8,14 +8,14 @@ import os
 
 import pytest
 
-from ssh_library.crypto.kex import (
+from spindlex.crypto.kex import (
     Curve25519KeyExchange,
     DHGroup14KeyExchange,
     ECDHKeyExchange,
     KeyExchange,
     KeyExchangeManager,
 )
-from ssh_library.exceptions import CryptoException
+from spindlex.exceptions import CryptoException
 
 
 class TestCurve25519KeyExchange:

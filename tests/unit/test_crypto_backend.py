@@ -8,8 +8,8 @@ import os
 
 import pytest
 
-from ssh_library.crypto.backend import CryptographyBackend, default_crypto_backend
-from ssh_library.exceptions import CryptoException
+from spindlex.crypto.backend import CryptographyBackend, default_crypto_backend
+from spindlex.exceptions import CryptoException
 
 
 class TestCryptographyBackend:
