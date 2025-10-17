@@ -2,7 +2,7 @@
 """
 SFTP File Transfer Examples
 
-This module demonstrates file transfer operations using Spindle's SFTP client.
+This module demonstrates file transfer operations using SpindleX's SFTP client.
 """
 
 import os
@@ -377,7 +377,7 @@ def sftp_context_manager_example():
 
 def main():
     """Run all SFTP examples."""
-    print("Spindle SFTP Examples")
+    print("SpindleX SFTP Examples")
     print("=" * 30)
     
     examples = [

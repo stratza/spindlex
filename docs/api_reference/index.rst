@@ -1,7 +1,7 @@
 API Reference
 =============
 
-This section contains the complete API reference for Spindle.
+This section contains the complete API reference for SpindleX.
 
 .. toctree::
    :maxdepth: 2
