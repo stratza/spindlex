@@ -18,7 +18,7 @@ setup-wiki.bat
 ## 🔧 Manual Setup
 
 ### Step 1: Enable Wiki in GitLab
-1. Go to your project: `https://gitlab.com/daveops.world/development/python/spindlex`
+1. Go to your project: `https://gitlab.com/daveops.world/development/python/spindle`
 2. Navigate to **Settings** → **General** → **Visibility, project features, permissions**
 3. Ensure **Wiki** is enabled
 4. Click **Save changes**
@@ -30,8 +30,8 @@ setup-wiki.bat
 ### Step 3: Clone Wiki Repository
 ```bash
 # Clone the wiki repository (separate from main repo)
-git clone https://gitlab.com/daveops.world/development/python/spindlex.wiki.git
-cd spindlex.wiki
+git clone https://gitlab.com/daveops.world/development/python/spindle.wiki.git
+cd spindle.wiki
 ```
 
 ### Step 4: Copy Wiki Content
@@ -113,4 +113,4 @@ After setup, visit: `https://gitlab.com/daveops.world/development/python/spindle
 ---
 
 **Once set up, your wiki will be available at:**
-`https://gitlab.com/daveops.world/development/python/spindlex/-/wikis/home`
+`https://gitlab.com/daveops.world/development/python/spindle/-/wikis/home`

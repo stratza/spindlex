@@ -6,12 +6,12 @@
 echo "🚀 Setting up SpindleX GitLab Wiki..."
 
 # Check if wiki repository exists
-if [ ! -d "spindlex.wiki" ]; then
+if [ ! -d "spindle.wiki" ]; then
     echo "📥 Cloning wiki repository..."
-    git clone https://gitlab.com/daveops.world/development/python/spindlex.wiki.git
+    git clone https://gitlab.com/daveops.world/development/python/spindle.wiki.git
 fi
 
-cd spindlex.wiki
+cd spindle.wiki
 
 echo "📝 Copying wiki content..."
 
@@ -79,4 +79,4 @@ echo "🚀 Pushing to GitLab..."
 git push origin master
 
 echo "✅ Wiki setup complete!"
-echo "🌐 Visit your wiki at: https://gitlab.com/daveops.world/development/python/spindlex/-/wikis/home"
+echo "🌐 Visit your wiki at: https://gitlab.com/daveops.world/development/python/spindle/-/wikis/home"
