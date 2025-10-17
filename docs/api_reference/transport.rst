@@ -4,12 +4,12 @@ Transport API
 Transport Layer
 ---------------
 
-.. automodule:: ssh_library.transport.transport
+.. automodule:: spindlex.transport.transport
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.transport.transport.Transport
+.. autoclass:: spindlex.transport.transport.Transport
    :members:
    :undoc-members:
    :show-inheritance:
@@ -17,17 +17,17 @@ Transport Layer
 Channel Management
 ------------------
 
-.. automodule:: ssh_library.transport.channel
+.. automodule:: spindlex.transport.channel
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.transport.channel.Channel
+.. autoclass:: spindlex.transport.channel.Channel
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.transport.channel.ChannelFile
+.. autoclass:: spindlex.transport.channel.ChannelFile
    :members:
    :undoc-members:
    :show-inheritance:
@@ -35,27 +35,27 @@ Channel Management
 Key Exchange
 ------------
 
-.. automodule:: ssh_library.transport.kex
+.. automodule:: spindlex.transport.kex
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.transport.kex.KexAlgorithm
+.. autoclass:: spindlex.transport.kex.KexAlgorithm
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.transport.kex.Curve25519KEX
+.. autoclass:: spindlex.transport.kex.Curve25519KEX
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.transport.kex.ECDHKEX
+.. autoclass:: spindlex.transport.kex.ECDHKEX
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.transport.kex.DiffieHellmanKEX
+.. autoclass:: spindlex.transport.kex.DiffieHellmanKEX
    :members:
    :undoc-members:
    :show-inheritance:
@@ -66,7 +66,7 @@ Example Usage
 Basic Transport Usage::
 
     import socket
-    from ssh_library.transport import Transport
+    from spindlex.transport import Transport
     
     # Create socket connection
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

@@ -4,57 +4,57 @@ Protocol API
 Protocol Messages
 -----------------
 
-.. automodule:: ssh_library.protocol.messages
+.. automodule:: spindlex.protocol.messages
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.protocol.messages.Message
+.. autoclass:: spindlex.protocol.messages.Message
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.protocol.messages.DisconnectMessage
+.. autoclass:: spindlex.protocol.messages.DisconnectMessage
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.protocol.messages.ServiceRequestMessage
+.. autoclass:: spindlex.protocol.messages.ServiceRequestMessage
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.protocol.messages.ServiceAcceptMessage
+.. autoclass:: spindlex.protocol.messages.ServiceAcceptMessage
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.protocol.messages.UserauthRequestMessage
+.. autoclass:: spindlex.protocol.messages.UserauthRequestMessage
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.protocol.messages.UserauthSuccessMessage
+.. autoclass:: spindlex.protocol.messages.UserauthSuccessMessage
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.protocol.messages.UserauthFailureMessage
+.. autoclass:: spindlex.protocol.messages.UserauthFailureMessage
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.protocol.messages.ChannelOpenMessage
+.. autoclass:: spindlex.protocol.messages.ChannelOpenMessage
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.protocol.messages.ChannelOpenConfirmationMessage
+.. autoclass:: spindlex.protocol.messages.ChannelOpenConfirmationMessage
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.protocol.messages.ChannelDataMessage
+.. autoclass:: spindlex.protocol.messages.ChannelDataMessage
    :members:
    :undoc-members:
    :show-inheritance:
@@ -62,7 +62,7 @@ Protocol Messages
 Protocol Constants
 ------------------
 
-.. automodule:: ssh_library.protocol.constants
+.. automodule:: spindlex.protocol.constants
    :members:
    :undoc-members:
    :show-inheritance:
@@ -126,7 +126,7 @@ Example Usage
 
 Creating Protocol Messages::
 
-    from ssh_library.protocol.messages import (
+    from spindlex.protocol.messages import (
         ServiceRequestMessage, 
         UserauthRequestMessage,
         ChannelOpenMessage
@@ -154,8 +154,8 @@ Creating Protocol Messages::
 
 Parsing Protocol Messages::
 
-    from ssh_library.protocol.messages import Message
-    from ssh_library.protocol.constants import MSG_CHANNEL_DATA
+    from spindlex.protocol.messages import Message
+    from spindlex.protocol.constants import MSG_CHANNEL_DATA
     
     # Parse incoming message
     message_type, payload = Message.parse_message(raw_data)
@@ -166,7 +166,7 @@ Parsing Protocol Messages::
 
 Protocol Utilities::
 
-    from ssh_library.protocol.utils import (
+    from spindlex.protocol.utils import (
         pack_string,
         unpack_string,
         pack_uint32,

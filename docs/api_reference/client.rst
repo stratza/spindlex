@@ -4,7 +4,7 @@ Client API
 SSH Client
 ----------
 
-.. automodule:: ssh_library.client.ssh_client
+.. automodule:: spindlex.client.ssh_client
    :members:
    :undoc-members:
    :show-inheritance:
@@ -12,7 +12,7 @@ SSH Client
 SFTP Client
 -----------
 
-.. automodule:: ssh_library.client.sftp_client
+.. automodule:: spindlex.client.sftp_client
    :members:
    :undoc-members:
    :show-inheritance:
@@ -20,7 +20,7 @@ SFTP Client
 Async SSH Client
 ----------------
 
-.. automodule:: ssh_library.client.async_ssh_client
+.. automodule:: spindlex.client.async_ssh_client
    :members:
    :undoc-members:
    :show-inheritance:
@@ -28,7 +28,7 @@ Async SSH Client
 Async SFTP Client
 -----------------
 
-.. automodule:: ssh_library.client.async_sftp_client
+.. automodule:: spindlex.client.async_sftp_client
    :members:
    :undoc-members:
    :show-inheritance:

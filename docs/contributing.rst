@@ -62,7 +62,7 @@ Development Workflow
     pytest tests/integration/
     
     # Check code coverage
-    pytest --cov=ssh_library --cov-report=html
+    pytest --cov=spindlex --cov-report=html
 
 4. **Commit Your Changes**::
 
@@ -676,7 +676,7 @@ Release Checklist
 Before releasing a new version:
 
 1. **Update Version Numbers**
-   - `ssh_library/_version.py`
+   - `spindlex/_version.py`
    - `pyproject.toml`
    - `docs/conf.py`
 

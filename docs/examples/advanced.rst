@@ -15,8 +15,8 @@ Async SSH Client::
     
     import asyncio
     import aiofiles
-    from ssh_library.async_client import AsyncSSHClient
-    from ssh_library.exceptions import SSHException
+    from spindlex.async_client import AsyncSSHClient
+    from spindlex.exceptions import SSHException
     from typing import List, Dict, Any, Optional
     import time
     
@@ -333,9 +333,9 @@ Custom SSH Subsystem::
     
     import json
     import struct
-    from ssh_library.server import SSHServer, SFTPServer
-    from ssh_library.transport.channel import Channel
-    from ssh_library.exceptions import SSHException
+    from spindlex.server import SSHServer, SFTPServer
+    from spindlex.transport.channel import Channel
+    from spindlex.exceptions import SSHException
     from typing import Dict, Any, Optional, Callable
     import threading
     import queue
@@ -811,7 +811,7 @@ Custom SSH Subsystem::
     
     # Usage example
     async def custom_protocol_example():
-        from ssh_library.async_client import AsyncSSHClient
+        from spindlex.async_client import AsyncSSHClient
         
         client = AsyncSSHClient()
         await client.connect('server.example.com', username='user', pkey=private_key)
@@ -854,7 +854,7 @@ Optimized File Transfer::
     import hashlib
     import asyncio
     import aiofiles
-    from ssh_library.async_client import AsyncSSHClient
+    from spindlex.async_client import AsyncSSHClient
     from typing import Dict, Any, Optional, List
     import time
     import concurrent.futures

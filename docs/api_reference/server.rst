@@ -4,12 +4,12 @@ Server API
 SSH Server
 ----------
 
-.. automodule:: ssh_library.server.ssh_server
+.. automodule:: spindlex.server.ssh_server
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.server.ssh_server.SSHServer
+.. autoclass:: spindlex.server.ssh_server.SSHServer
    :members:
    :undoc-members:
    :show-inheritance:
@@ -17,22 +17,22 @@ SSH Server
 SFTP Server
 -----------
 
-.. automodule:: ssh_library.server.sftp_server
+.. automodule:: spindlex.server.sftp_server
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.server.sftp_server.SFTPServer
+.. autoclass:: spindlex.server.sftp_server.SFTPServer
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.server.sftp_server.SFTPHandle
+.. autoclass:: spindlex.server.sftp_server.SFTPHandle
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: ssh_library.server.sftp_server.SFTPAttributes
+.. autoclass:: spindlex.server.sftp_server.SFTPAttributes
    :members:
    :undoc-members:
    :show-inheritance:
@@ -40,7 +40,7 @@ SFTP Server
 Server Interface
 ----------------
 
-.. automodule:: ssh_library.server
+.. automodule:: spindlex.server
    :members:
    :undoc-members:
    :show-inheritance:
@@ -50,8 +50,8 @@ Example Usage
 
 Basic SSH Server::
 
-    from ssh_library import SSHServer
-    from ssh_library.crypto.pkey import Ed25519Key
+    from spindlex import SSHServer
+    from spindlex.crypto.pkey import Ed25519Key
     
     class MySSHServer(SSHServer):
         def check_auth_password(self, username, password):
@@ -70,7 +70,7 @@ Basic SSH Server::
 
 SFTP Server::
 
-    from ssh_library.server import SFTPServer
+    from spindlex.server import SFTPServer
     import os
     
     class MyFileServer(SFTPServer):

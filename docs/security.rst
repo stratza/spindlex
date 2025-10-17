@@ -229,7 +229,7 @@ Sanitize logs to prevent information leakage:
    configure_logging(
        level='INFO',
        sanitize_secrets=True,  # Remove sensitive data from logs
-       log_file='/var/log/ssh_library.log',
+       log_file='/var/log/spindlex.log',
        max_log_size=10*1024*1024,  # 10MB
        backup_count=5
    )
