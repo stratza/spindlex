@@ -199,3 +199,6 @@ secrets.yaml
 test_results/
 test_output/
 .coverage.*
+
+# Kiro IDE files
+.kiro/

@@ -10,42 +10,61 @@ __author__ = "Spindle Team"
 __email__ = "team@spindle.org"
 __license__ = "MIT"
 
+
 # For now, we'll create placeholder classes until the full implementation is ready
 class SSHClient:
     """Placeholder SSH client class."""
+
     pass
+
 
 class SSHException(Exception):
     """Base SSH exception."""
+
     pass
+
 
 class AuthenticationException(SSHException):
     """Authentication failed exception."""
+
     pass
+
 
 class BadHostKeyException(SSHException):
     """Bad host key exception."""
+
     pass
+
 
 class ChannelException(SSHException):
     """Channel operation exception."""
+
     pass
+
 
 class SFTPError(SSHException):
     """SFTP operation exception."""
+
     pass
+
 
 class AutoAddPolicy:
     """Automatically add unknown host keys."""
+
     pass
+
 
 class RejectPolicy:
     """Reject unknown host keys."""
+
     pass
+
 
 class WarningPolicy:
     """Warn about unknown host keys."""
+
     pass
+
 
 __all__ = [
     # Version info
@@ -53,19 +72,16 @@ __all__ = [
     "__author__",
     "__email__",
     "__license__",
-    
     # Core classes
     "SSHClient",
-    
     # Exceptions
     "SSHException",
-    "AuthenticationException", 
+    "AuthenticationException",
     "BadHostKeyException",
     "ChannelException",
     "SFTPError",
-    
     # Host key policies
     "AutoAddPolicy",
-    "RejectPolicy", 
+    "RejectPolicy",
     "WarningPolicy",
 ]
