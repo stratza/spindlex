@@ -1,0 +1,23 @@
+# GitLab CI for SpindleX Wiki
+
+stages:
+  - deploy
+
+deploy_wiki:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache git
+    - git config --global user.name "SpindleX Bot"
+    - git config --global user.email "bot@spindlex.org"
+  script:
+    - echo "Deploying wiki pages..."
+    - git clone https://gitlab.com/daveops.world/development/python/spindlex.wiki.git wiki-repo
+    - cp -r wiki/* wiki-repo/
+    - cd wiki-repo
+    - git add .
+    - git commit -m "Update wiki pages" || echo "No changes to commit"
+    - git push origin master
+  only:
+    - main
+  when: manual
