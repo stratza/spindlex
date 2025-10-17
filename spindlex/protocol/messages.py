@@ -83,17 +83,34 @@ class Message:
         # Create appropriate message class based on type
         message_classes = {
             MSG_DISCONNECT: DisconnectMessage,
+            MSG_IGNORE: IgnoreMessage,
+            MSG_UNIMPLEMENTED: UnimplementedMessage,
+            MSG_DEBUG: DebugMessage,
             MSG_SERVICE_REQUEST: ServiceRequestMessage,
             MSG_SERVICE_ACCEPT: ServiceAcceptMessage,
             MSG_KEXINIT: KexInitMessage,
+            MSG_NEWKEYS: NewKeysMessage,
+            MSG_KEXDH_INIT: KexDHInitMessage,
+            MSG_KEXDH_REPLY: KexDHReplyMessage,
             MSG_USERAUTH_REQUEST: UserAuthRequestMessage,
             MSG_USERAUTH_FAILURE: UserAuthFailureMessage,
             MSG_USERAUTH_SUCCESS: UserAuthSuccessMessage,
+            MSG_USERAUTH_BANNER: UserAuthBannerMessage,
+            MSG_USERAUTH_PK_OK: UserAuthPKOKMessage,
+            MSG_GLOBAL_REQUEST: GlobalRequestMessage,
+            MSG_REQUEST_SUCCESS: RequestSuccessMessage,
+            MSG_REQUEST_FAILURE: RequestFailureMessage,
             MSG_CHANNEL_OPEN: ChannelOpenMessage,
             MSG_CHANNEL_OPEN_CONFIRMATION: ChannelOpenConfirmationMessage,
             MSG_CHANNEL_OPEN_FAILURE: ChannelOpenFailureMessage,
+            MSG_CHANNEL_WINDOW_ADJUST: ChannelWindowAdjustMessage,
             MSG_CHANNEL_DATA: ChannelDataMessage,
+            MSG_CHANNEL_EXTENDED_DATA: ChannelExtendedDataMessage,
+            MSG_CHANNEL_EOF: ChannelEOFMessage,
             MSG_CHANNEL_CLOSE: ChannelCloseMessage,
+            MSG_CHANNEL_REQUEST: ChannelRequestMessage,
+            MSG_CHANNEL_SUCCESS: ChannelSuccessMessage,
+            MSG_CHANNEL_FAILURE: ChannelFailureMessage,
         }
         
         message_class = message_classes.get(msg_type, Message)
@@ -155,7 +172,14 @@ class Message:
             ProtocolException: If message is invalid
         """
         # Base validation - subclasses can override
-        return validate_message_type(self.msg_type)
+        if not validate_message_type(self.msg_type):
+            raise ProtocolException(f"Invalid message type: {self.msg_type}")
+        
+        # Validate message size
+        if len(self._data) > MAX_MESSAGE_SIZE:
+            raise ProtocolException(f"Message too large: {len(self._data)} bytes")
+        
+        return True
     
     def __str__(self) -> str:
         """String representation of message."""
@@ -363,6 +387,30 @@ class KexInitMessage(Message):
             languages_server_to_client=parse_list(lang_s2c_bytes),
             first_kex_packet_follows=first_kex_follows
         )
+    
+    def validate(self) -> bool:
+        """
+        Validate KEX init message content.
+        
+        Returns:
+            True if message is valid
+            
+        Raises:
+            ProtocolException: If message is invalid
+        """
+        super().validate()
+        
+        # Validate required algorithm lists are not empty
+        if not self.kex_algorithms:
+            raise ProtocolException("KEX algorithms list cannot be empty")
+        if not self.server_host_key_algorithms:
+            raise ProtocolException("Server host key algorithms list cannot be empty")
+        if not self.encryption_algorithms_client_to_server:
+            raise ProtocolException("Client-to-server encryption algorithms list cannot be empty")
+        if not self.encryption_algorithms_server_to_client:
+            raise ProtocolException("Server-to-client encryption algorithms list cannot be empty")
+        
+        return True
 
 
 class UserAuthRequestMessage(Message):
@@ -411,6 +459,37 @@ class UserAuthRequestMessage(Message):
         method_data = data[offset:] if offset < len(data) else b""
         
         return cls(username, service, method, method_data)
+    
+    def validate(self) -> bool:
+        """
+        Validate user auth request message content.
+        
+        Returns:
+            True if message is valid
+            
+        Raises:
+            ProtocolException: If message is invalid
+        """
+        super().validate()
+        
+        # Validate required fields
+        if not self.username:
+            raise ProtocolException("Username cannot be empty")
+        if not self.service:
+            raise ProtocolException("Service name cannot be empty")
+        if not self.method:
+            raise ProtocolException("Authentication method cannot be empty")
+        
+        # Validate service name
+        if self.service not in [SERVICE_USERAUTH, SERVICE_CONNECTION]:
+            raise ProtocolException(f"Invalid service name: {self.service}")
+        
+        # Validate authentication method
+        valid_methods = [AUTH_PASSWORD, AUTH_PUBLICKEY, AUTH_HOSTBASED, AUTH_KEYBOARD_INTERACTIVE]
+        if self.method not in valid_methods:
+            raise ProtocolException(f"Invalid authentication method: {self.method}")
+        
+        return True
 
 
 class UserAuthFailureMessage(Message):
@@ -509,6 +588,32 @@ class ChannelOpenMessage(Message):
         
         return cls(channel_type, sender_channel, initial_window_size, 
                   maximum_packet_size, type_specific_data)
+    
+    def validate(self) -> bool:
+        """
+        Validate channel open message content.
+        
+        Returns:
+            True if message is valid
+            
+        Raises:
+            ProtocolException: If message is invalid
+        """
+        super().validate()
+        
+        # Validate channel type
+        if not self.channel_type:
+            raise ProtocolException("Channel type cannot be empty")
+        
+        # Validate window and packet sizes
+        if self.initial_window_size <= 0:
+            raise ProtocolException("Initial window size must be positive")
+        if self.maximum_packet_size <= 0:
+            raise ProtocolException("Maximum packet size must be positive")
+        if self.maximum_packet_size > MAX_PACKET_SIZE:
+            raise ProtocolException(f"Maximum packet size too large: {self.maximum_packet_size}")
+        
+        return True
 
 
 class ChannelOpenConfirmationMessage(Message):
@@ -656,5 +761,463 @@ class ChannelCloseMessage(Message):
     @classmethod
     def _unpack_data(cls, data: bytes) -> "ChannelCloseMessage":
         """Unpack channel close message data."""
+        recipient_channel, _ = read_uint32(data, 0)
+        return cls(recipient_channel)
+
+
+class IgnoreMessage(Message):
+    """SSH ignore message (MSG_IGNORE)."""
+    
+    def __init__(self, data: bytes = b"") -> None:
+        """
+        Initialize ignore message.
+        
+        Args:
+            data: Arbitrary data to ignore
+        """
+        super().__init__(MSG_IGNORE)
+        self.data = data
+        
+        # Build message data
+        self.add_string(data)
+    
+    @classmethod
+    def _unpack_data(cls, data: bytes) -> "IgnoreMessage":
+        """Unpack ignore message data."""
+        ignore_data, _ = read_string(data, 0)
+        return cls(ignore_data)
+
+
+class UnimplementedMessage(Message):
+    """SSH unimplemented message (MSG_UNIMPLEMENTED)."""
+    
+    def __init__(self, sequence_number: int) -> None:
+        """
+        Initialize unimplemented message.
+        
+        Args:
+            sequence_number: Sequence number of unimplemented message
+        """
+        super().__init__(MSG_UNIMPLEMENTED)
+        self.sequence_number = sequence_number
+        
+        # Build message data
+        self.add_uint32(sequence_number)
+    
+    @classmethod
+    def _unpack_data(cls, data: bytes) -> "UnimplementedMessage":
+        """Unpack unimplemented message data."""
+        sequence_number, _ = read_uint32(data, 0)
+        return cls(sequence_number)
+
+
+class DebugMessage(Message):
+    """SSH debug message (MSG_DEBUG)."""
+    
+    def __init__(self, always_display: bool, message: str, language: str = "") -> None:
+        """
+        Initialize debug message.
+        
+        Args:
+            always_display: Whether message should always be displayed
+            message: Debug message text
+            language: Language tag (RFC 3066)
+        """
+        super().__init__(MSG_DEBUG)
+        self.always_display = always_display
+        self.message = message
+        self.language = language
+        
+        # Build message data
+        self.add_boolean(always_display)
+        self.add_string(message)
+        self.add_string(language)
+    
+    @classmethod
+    def _unpack_data(cls, data: bytes) -> "DebugMessage":
+        """Unpack debug message data."""
+        offset = 0
+        always_display, offset = read_boolean(data, offset)
+        message_bytes, offset = read_string(data, offset)
+        language_bytes, offset = read_string(data, offset)
+        
+        message = message_bytes.decode(SSH_STRING_ENCODING, errors='replace')
+        language = language_bytes.decode(SSH_STRING_ENCODING, errors='replace')
+        
+        return cls(always_display, message, language)
+
+
+class NewKeysMessage(Message):
+    """SSH new keys message (MSG_NEWKEYS)."""
+    
+    def __init__(self) -> None:
+        """Initialize new keys message."""
+        super().__init__(MSG_NEWKEYS)
+        # No additional data for new keys message
+    
+    @classmethod
+    def _unpack_data(cls, data: bytes) -> "NewKeysMessage":
+        """Unpack new keys message data."""
+        return cls()
+
+
+class KexDHInitMessage(Message):
+    """SSH Diffie-Hellman key exchange init message (MSG_KEXDH_INIT)."""
+    
+    def __init__(self, e: int) -> None:
+        """
+        Initialize DH init message.
+        
+        Args:
+            e: Client's DH public key
+        """
+        super().__init__(MSG_KEXDH_INIT)
+        self.e = e
+        
+        # Build message data
+        self.add_mpint(e)
+    
+    @classmethod
+    def _unpack_data(cls, data: bytes) -> "KexDHInitMessage":
+        """Unpack DH init message data."""
+        e, _ = read_mpint(data, 0)
+        return cls(e)
+
+
+class KexDHReplyMessage(Message):
+    """SSH Diffie-Hellman key exchange reply message (MSG_KEXDH_REPLY)."""
+    
+    def __init__(self, host_key: bytes, f: int, signature: bytes) -> None:
+        """
+        Initialize DH reply message.
+        
+        Args:
+            host_key: Server's host key
+            f: Server's DH public key
+            signature: Signature of exchange hash
+        """
+        super().__init__(MSG_KEXDH_REPLY)
+        self.host_key = host_key
+        self.f = f
+        self.signature = signature
+        
+        # Build message data
+        self.add_string(host_key)
+        self.add_mpint(f)
+        self.add_string(signature)
+    
+    @classmethod
+    def _unpack_data(cls, data: bytes) -> "KexDHReplyMessage":
+        """Unpack DH reply message data."""
+        offset = 0
+        host_key, offset = read_string(data, offset)
+        f, offset = read_mpint(data, offset)
+        signature, offset = read_string(data, offset)
+        
+        return cls(host_key, f, signature)
+
+
+class UserAuthBannerMessage(Message):
+    """SSH user authentication banner message (MSG_USERAUTH_BANNER)."""
+    
+    def __init__(self, message: str, language: str = "") -> None:
+        """
+        Initialize user auth banner message.
+        
+        Args:
+            message: Banner message text
+            language: Language tag (RFC 3066)
+        """
+        super().__init__(MSG_USERAUTH_BANNER)
+        self.message = message
+        self.language = language
+        
+        # Build message data
+        self.add_string(message)
+        self.add_string(language)
+    
+    @classmethod
+    def _unpack_data(cls, data: bytes) -> "UserAuthBannerMessage":
+        """Unpack user auth banner message data."""
+        offset = 0
+        message_bytes, offset = read_string(data, offset)
+        language_bytes, offset = read_string(data, offset)
+        
+        message = message_bytes.decode(SSH_STRING_ENCODING, errors='replace')
+        language = language_bytes.decode(SSH_STRING_ENCODING, errors='replace')
+        
+        return cls(message, language)
+
+
+class UserAuthPKOKMessage(Message):
+    """SSH user authentication public key OK message (MSG_USERAUTH_PK_OK)."""
+    
+    def __init__(self, algorithm: str, public_key: bytes) -> None:
+        """
+        Initialize user auth PK OK message.
+        
+        Args:
+            algorithm: Public key algorithm name
+            public_key: Public key blob
+        """
+        super().__init__(MSG_USERAUTH_PK_OK)
+        self.algorithm = algorithm
+        self.public_key = public_key
+        
+        # Build message data
+        self.add_string(algorithm)
+        self.add_string(public_key)
+    
+    @classmethod
+    def _unpack_data(cls, data: bytes) -> "UserAuthPKOKMessage":
+        """Unpack user auth PK OK message data."""
+        offset = 0
+        algorithm_bytes, offset = read_string(data, offset)
+        public_key, offset = read_string(data, offset)
+        
+        algorithm = algorithm_bytes.decode(SSH_STRING_ENCODING)
+        return cls(algorithm, public_key)
+
+
+class GlobalRequestMessage(Message):
+    """SSH global request message (MSG_GLOBAL_REQUEST)."""
+    
+    def __init__(self, request_name: str, want_reply: bool, request_data: bytes = b"") -> None:
+        """
+        Initialize global request message.
+        
+        Args:
+            request_name: Name of the request
+            want_reply: Whether a reply is wanted
+            request_data: Request-specific data
+        """
+        super().__init__(MSG_GLOBAL_REQUEST)
+        self.request_name = request_name
+        self.want_reply = want_reply
+        self.request_data = request_data
+        
+        # Build message data
+        self.add_string(request_name)
+        self.add_boolean(want_reply)
+        if request_data:
+            self._data.extend(request_data)
+    
+    @classmethod
+    def _unpack_data(cls, data: bytes) -> "GlobalRequestMessage":
+        """Unpack global request message data."""
+        offset = 0
+        request_name_bytes, offset = read_string(data, offset)
+        want_reply, offset = read_boolean(data, offset)
+        
+        request_name = request_name_bytes.decode(SSH_STRING_ENCODING)
+        request_data = data[offset:] if offset < len(data) else b""
+        
+        return cls(request_name, want_reply, request_data)
+
+
+class RequestSuccessMessage(Message):
+    """SSH request success message (MSG_REQUEST_SUCCESS)."""
+    
+    def __init__(self, response_data: bytes = b"") -> None:
+        """
+        Initialize request success message.
+        
+        Args:
+            response_data: Response-specific data
+        """
+        super().__init__(MSG_REQUEST_SUCCESS)
+        self.response_data = response_data
+        
+        # Build message data
+        if response_data:
+            self._data.extend(response_data)
+    
+    @classmethod
+    def _unpack_data(cls, data: bytes) -> "RequestSuccessMessage":
+        """Unpack request success message data."""
+        return cls(data)
+
+
+class RequestFailureMessage(Message):
+    """SSH request failure message (MSG_REQUEST_FAILURE)."""
+    
+    def __init__(self) -> None:
+        """Initialize request failure message."""
+        super().__init__(MSG_REQUEST_FAILURE)
+        # No additional data for request failure message
+    
+    @classmethod
+    def _unpack_data(cls, data: bytes) -> "RequestFailureMessage":
+        """Unpack request failure message data."""
+        return cls()
+
+
+class ChannelWindowAdjustMessage(Message):
+    """SSH channel window adjust message (MSG_CHANNEL_WINDOW_ADJUST)."""
+    
+    def __init__(self, recipient_channel: int, bytes_to_add: int) -> None:
+        """
+        Initialize channel window adjust message.
+        
+        Args:
+            recipient_channel: Recipient's channel number
+            bytes_to_add: Number of bytes to add to window
+        """
+        super().__init__(MSG_CHANNEL_WINDOW_ADJUST)
+        self.recipient_channel = recipient_channel
+        self.bytes_to_add = bytes_to_add
+        
+        # Build message data
+        self.add_uint32(recipient_channel)
+        self.add_uint32(bytes_to_add)
+    
+    @classmethod
+    def _unpack_data(cls, data: bytes) -> "ChannelWindowAdjustMessage":
+        """Unpack channel window adjust message data."""
+        offset = 0
+        recipient_channel, offset = read_uint32(data, offset)
+        bytes_to_add, offset = read_uint32(data, offset)
+        
+        return cls(recipient_channel, bytes_to_add)
+
+
+class ChannelExtendedDataMessage(Message):
+    """SSH channel extended data message (MSG_CHANNEL_EXTENDED_DATA)."""
+    
+    def __init__(self, recipient_channel: int, data_type: int, data: bytes) -> None:
+        """
+        Initialize channel extended data message.
+        
+        Args:
+            recipient_channel: Recipient's channel number
+            data_type: Extended data type code
+            data: Extended data
+        """
+        super().__init__(MSG_CHANNEL_EXTENDED_DATA)
+        self.recipient_channel = recipient_channel
+        self.data_type = data_type
+        self.data = data
+        
+        # Build message data
+        self.add_uint32(recipient_channel)
+        self.add_uint32(data_type)
+        self.add_string(data)
+    
+    @classmethod
+    def _unpack_data(cls, data: bytes) -> "ChannelExtendedDataMessage":
+        """Unpack channel extended data message data."""
+        offset = 0
+        recipient_channel, offset = read_uint32(data, offset)
+        data_type, offset = read_uint32(data, offset)
+        extended_data, offset = read_string(data, offset)
+        
+        return cls(recipient_channel, data_type, extended_data)
+
+
+class ChannelEOFMessage(Message):
+    """SSH channel EOF message (MSG_CHANNEL_EOF)."""
+    
+    def __init__(self, recipient_channel: int) -> None:
+        """
+        Initialize channel EOF message.
+        
+        Args:
+            recipient_channel: Recipient's channel number
+        """
+        super().__init__(MSG_CHANNEL_EOF)
+        self.recipient_channel = recipient_channel
+        
+        # Build message data
+        self.add_uint32(recipient_channel)
+    
+    @classmethod
+    def _unpack_data(cls, data: bytes) -> "ChannelEOFMessage":
+        """Unpack channel EOF message data."""
+        recipient_channel, _ = read_uint32(data, 0)
+        return cls(recipient_channel)
+
+
+class ChannelRequestMessage(Message):
+    """SSH channel request message (MSG_CHANNEL_REQUEST)."""
+    
+    def __init__(self, recipient_channel: int, request_type: str, want_reply: bool, request_data: bytes = b"") -> None:
+        """
+        Initialize channel request message.
+        
+        Args:
+            recipient_channel: Recipient's channel number
+            request_type: Type of request
+            want_reply: Whether a reply is wanted
+            request_data: Request-specific data
+        """
+        super().__init__(MSG_CHANNEL_REQUEST)
+        self.recipient_channel = recipient_channel
+        self.request_type = request_type
+        self.want_reply = want_reply
+        self.request_data = request_data
+        
+        # Build message data
+        self.add_uint32(recipient_channel)
+        self.add_string(request_type)
+        self.add_boolean(want_reply)
+        if request_data:
+            self._data.extend(request_data)
+    
+    @classmethod
+    def _unpack_data(cls, data: bytes) -> "ChannelRequestMessage":
+        """Unpack channel request message data."""
+        offset = 0
+        recipient_channel, offset = read_uint32(data, offset)
+        request_type_bytes, offset = read_string(data, offset)
+        want_reply, offset = read_boolean(data, offset)
+        
+        request_type = request_type_bytes.decode(SSH_STRING_ENCODING)
+        request_data = data[offset:] if offset < len(data) else b""
+        
+        return cls(recipient_channel, request_type, want_reply, request_data)
+
+
+class ChannelSuccessMessage(Message):
+    """SSH channel success message (MSG_CHANNEL_SUCCESS)."""
+    
+    def __init__(self, recipient_channel: int) -> None:
+        """
+        Initialize channel success message.
+        
+        Args:
+            recipient_channel: Recipient's channel number
+        """
+        super().__init__(MSG_CHANNEL_SUCCESS)
+        self.recipient_channel = recipient_channel
+        
+        # Build message data
+        self.add_uint32(recipient_channel)
+    
+    @classmethod
+    def _unpack_data(cls, data: bytes) -> "ChannelSuccessMessage":
+        """Unpack channel success message data."""
+        recipient_channel, _ = read_uint32(data, 0)
+        return cls(recipient_channel)
+
+
+class ChannelFailureMessage(Message):
+    """SSH channel failure message (MSG_CHANNEL_FAILURE)."""
+    
+    def __init__(self, recipient_channel: int) -> None:
+        """
+        Initialize channel failure message.
+        
+        Args:
+            recipient_channel: Recipient's channel number
+        """
+        super().__init__(MSG_CHANNEL_FAILURE)
+        self.recipient_channel = recipient_channel
+        
+        # Build message data
+        self.add_uint32(recipient_channel)
+    
+    @classmethod
+    def _unpack_data(cls, data: bytes) -> "ChannelFailureMessage":
+        """Unpack channel failure message data."""
         recipient_channel, _ = read_uint32(data, 0)
         return cls(recipient_channel)
