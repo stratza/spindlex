@@ -8,7 +8,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Future changes will be documented here
+- Complete Transport.start_client() method implementation with SSH protocol handshake
+- Authentication methods: auth_password and auth_publickey in Transport class
+- Channel management with open_channel method and lifecycle management
+- Command execution methods: exec_command, invoke_shell, request_pty in Channel class
+- Data transmission methods: send, recv, recv_stderr for channel communication
+- Complete CryptographyBackend class with cipher creation and key derivation
+- Diffie-Hellman key exchange implementation with session key derivation
+- SFTP file transfer methods: get and put for file operations
+- SFTP directory operations: listdir, mkdir, rmdir with proper error handling
+- Port forwarding functionality: local and remote port forwarding with PortForwardingManager
+- Complete protocol message handling with serialization/deserialization
+- SFTP protocol constants and message type handling
+- Integration testing with real SSH server validation
+
+### Fixed
+- Test suite imports updated from ssh_library to spindlex
+- Test imports updated from spindle to spindlex throughout test files
+- Protocol constants and message type definitions
+- Missing timeout constants and default values
+- Channel lifecycle management and proper cleanup
+- SFTP error handling and status code management
+- Port forwarding integration with Transport class
+- Protocol message validation and error handling
+
+### Improved
+- Test coverage with real SSH server integration testing
+- Authentication flow with proper error handling
+- File transfer operations with attribute handling
+- Directory management with comprehensive error reporting
+- Tunnel lifecycle management for port forwarding
+- Protocol message parsing and validation
 
 ## [0.2.0] - 2025-10-17
 
