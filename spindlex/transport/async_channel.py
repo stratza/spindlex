@@ -9,6 +9,7 @@ from typing import Optional, Any, BinaryIO
 from ..exceptions import ChannelException
 from ..protocol.constants import *
 from ..protocol.messages import *
+from ..protocol.utils import write_string
 from .channel import Channel
 
 
@@ -32,6 +33,10 @@ class AsyncChannel(Channel):
         self._send_queue = asyncio.Queue()
         self._recv_queue = asyncio.Queue()
         self._closed_event = asyncio.Event()
+        
+        # Override parent's deque buffers with bytes for async
+        self._recv_buffer = b""
+        self._stderr_buffer = b""
     
     async def send(self, data: bytes) -> int:
         """
