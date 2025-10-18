@@ -7,7 +7,7 @@
 [![PyPI version](https://badge.fury.io/py/spindlex.svg)](https://badge.fury.io/py/spindlex)
 [![Python Support](https://img.shields.io/pypi/pyversions/spindlex.svg)](https://pypi.org/project/spindlex/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Downloads](https://pepy.tech/badge/spindlex)](https://pepy.tech/project/spindlex)
+[![PyPI Downloads](https://static.pepy.tech/personalized-badge/spindlex?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/spindlex)
 [![GitLab CI](https://gitlab.com/daveops.world/development/python/spindlex/badges/main/pipeline.svg)](https://gitlab.com/daveops.world/development/python/spindlex/-/pipelines)
 [![Coverage](https://gitlab.com/daveops.world/development/python/spindlex/badges/main/coverage.svg)](https://gitlab.com/daveops.world/development/python/spindlex/-/commits/main)
 [![Code Quality](https://img.shields.io/badge/code%20quality-A-brightgreen.svg)](https://gitlab.com/daveops.world/development/python/spindlex)
