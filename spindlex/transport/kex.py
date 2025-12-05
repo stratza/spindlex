@@ -101,10 +101,10 @@ class KeyExchange:
             self._negotiate_algorithms()
             
             # Perform key exchange based on negotiated algorithm
-            if self._kex_algorithm == "curve25519-sha256":
+            if self._kex_algorithm == KEX_DH_GROUP1_SHA1:
+                self._perform_dh_group1_sha1()
+            elif self._kex_algorithm == "curve25519-sha256":
                 self._perform_curve25519_sha256()
-            elif self._kex_algorithm == "diffie-hellman-group14-sha1":
-                self._perform_dh_group14_sha1()
             elif self._kex_algorithm == KEX_DH_GROUP14_SHA256:
                 self._perform_dh_group14_sha256()
             else:
@@ -216,7 +216,12 @@ class KeyExchange:
     def _negotiate_algorithms(self) -> None:
         """Negotiate algorithms based on client and server preferences."""
         # Negotiate KEX algorithm
-        client_kex = ["diffie-hellman-group14-sha1", KEX_DH_GROUP14_SHA256]
+        client_kex = [
+            KEX_CURVE25519_SHA256,
+            KEX_ECDH_SHA2_NISTP256,
+            KEX_DH_GROUP14_SHA256,
+            KEX_DH_GROUP1_SHA1,
+        ]
         self._kex_algorithm = self._choose_algorithm(client_kex, self._server_kex_algorithms)
 
         
@@ -307,15 +312,73 @@ class KeyExchange:
             # Compute exchange hash
             self._compute_exchange_hash(server_host_key_blob, server_dh_public, signature_blob)
             
-            # Set session ID (first exchange hash)
-            if self._session_id is None:
-                self._session_id = self._exchange_hash
-                
-        except Exception as e:
-            raise
-    
-    def _perform_curve25519_sha256(self) -> None:
-        """Perform Curve25519 SHA256 key exchange (modern, preferred)."""
+                        # Set session ID (first exchange hash)
+                        if self._session_id is None:
+                            self._session_id = self._exchange_hash
+                            
+                    except Exception as e:
+                        raise
+            
+                def _perform_dh_group1_sha1(self) -> None:
+                    """Perform Diffie-Hellman Group 1 SHA1 key exchange."""
+                    try:
+                        # Generate DH parameters for Group 1 (1024-bit)
+                        # Using the existing DH_GROUP14_P and DH_GROUP14_G constants which seem to be for Group 1.
+                        parameters = dh.DHParameterNumbers(self.DH_GROUP14_P, self.DH_GROUP14_G).parameters(default_backend())
+                        
+                        # Generate private key
+                        self._dh_private_key = parameters.generate_private_key()
+                        
+                        # Get public key
+                        dh_public_key = self._dh_private_key.public_key()
+                        public_numbers = dh_public_key.public_numbers()
+                        
+                        # Store public key value
+                        self._dh_public_key = public_numbers.y
+                        self._dh_public_key_mpint = write_mpint(public_numbers.y) # Store mpint for hash calculation
+                        
+                        # Ensure the public key is positive (SSH requirement)
+                        if self._dh_public_key <= 0:
+                            raise CryptoException("Invalid DH public key: must be positive")
+                        
+                        # Send KEXDH_INIT message
+                        kexdh_init = Message(MSG_KEXDH_INIT)
+                        kexdh_init.add_mpint(self._dh_public_key)
+                        self._transport._send_message(kexdh_init)
+                        
+                        # Receive KEXDH_REPLY message
+                        reply_msg = self._transport._recv_message()
+                        
+                        if reply_msg.msg_type != MSG_KEXDH_REPLY:
+                            raise ProtocolException(f"Expected KEXDH_REPLY, got {reply_msg.msg_type}")
+                        
+                        # Parse KEXDH_REPLY
+                        offset = 0
+                        server_host_key_blob, offset = read_string(reply_msg._data, offset)
+                        server_dh_public, offset = read_string(reply_msg._data, offset)
+                        signature_blob, offset = read_string(reply_msg._data, offset)
+                        
+                        # Extract server's DH public key
+                        server_public_int, _ = read_mpint(server_dh_public, 0)
+                        
+                        # Compute shared secret
+                        server_public_numbers = dh.DHPublicNumbers(server_public_int, parameters.parameter_numbers())
+                        server_public_key = server_public_numbers.public_key(default_backend())
+                        
+                        shared_secret_int = self._dh_private_key.exchange(server_public_key)
+                        self._shared_secret = write_mpint(int.from_bytes(shared_secret_int, 'big'))
+                        
+                        # Compute exchange hash using SHA1
+                        self._compute_exchange_hash_sha1(server_host_key_blob, server_dh_public, signature_blob)
+                        
+                        # Set session ID (first exchange hash)
+                        if self._session_id is None:
+                            self._session_id = self._exchange_hash
+                            
+                    except Exception as e:
+                        raise
+            
+                def _perform_curve25519_sha256(self) -> None:        """Perform Curve25519 SHA256 key exchange (modern, preferred)."""
         try:
             from cryptography.hazmat.primitives.asymmetric import x25519
             from cryptography.hazmat.primitives import serialization

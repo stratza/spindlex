@@ -1252,32 +1252,39 @@ class Transport:
         """Send KEXINIT message with supported algorithms."""
         cookie = self._crypto_backend.generate_random(KEX_COOKIE_SIZE)
         
-        # Define supported algorithms (modern, secure algorithms only)
+        # Define supported algorithms (extremely simplified for compatibility testing)
         kex_algorithms = [
+            KEX_DH_GROUP1_SHA1,                  # Prioritize Group 1 SHA1
             KEX_CURVE25519_SHA256,
             KEX_ECDH_SHA2_NISTP256,
-            KEX_DH_GROUP14_SHA256
+            KEX_DH_GROUP14_SHA256,
+            "diffie-hellman-group-exchange-sha256",
+            "diffie-hellman-group16-sha512",
+            "diffie-hellman-group18-sha512",
         ]
-        
+
         host_key_algorithms = [
             HOSTKEY_ED25519,
             HOSTKEY_ECDSA_SHA2_NISTP256,
-            HOSTKEY_RSA_SHA2_256
+            HOSTKEY_RSA_SHA2_256,
+            "ssh-rsa", # Common for older servers
         ]
-        
+
         encryption_algorithms = [
             CIPHER_CHACHA20_POLY1305,
             CIPHER_AES256_GCM,
             CIPHER_AES128_GCM,
-            CIPHER_AES256_CTR
+            CIPHER_AES256_CTR,
+            "aes128-ctr", # Common for older servers
         ]
-        
+
         mac_algorithms = [
             MAC_HMAC_SHA2_256,
-            MAC_HMAC_SHA2_512
+            MAC_HMAC_SHA2_512,
+            "hmac-sha1", # Common for older servers
         ]
-        
-        compression_algorithms = [COMPRESS_NONE]
+
+        compression_algorithms = [COMPRESS_NONE, "zlib@openssh.com"]
         
         kexinit_msg = KexInitMessage(
             cookie=cookie,

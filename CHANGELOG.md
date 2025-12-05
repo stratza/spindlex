@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SFTP protocol constants and message type handling
 - Integration testing with real SSH server validation
 - Mock GSSAPI classes for testing when GSSAPI library is not available
+- **Python 3.13 and 3.14 Support**: Added support for the latest Python versions
 
 ### Fixed
 - **Test Suite Comprehensive Fixes**: Fixed all 500 core functionality tests to pass
@@ -39,9 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Performance Tests**: Fixed buffer type compatibility issues between deque and bytes operations
 - **Protocol Message Tests**: Fixed SFTP message format issues with proper IgnoreMessage imports
 - **Comprehensive Benchmarks**: Fixed syntax errors and memory usage assertions
-
-### Added
-- **Python 3.13 and 3.14 Support**: Added support for the latest Python versions
+- **Key Exchange Compatibility**: Added explicit support for `diffie-hellman-group1-sha1` KEX algorithm to improve compatibility with older SSH servers.
 
 ### Changed
 - **Dropped Python 3.8 Support**: Minimum Python version is now 3.9
@@ -54,6 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tunnel lifecycle management for port forwarding
 - Protocol message parsing and validation
 - **Test Reliability**: All core functionality tests now pass consistently without skips or warnings
+- **Debugging Capabilities**: Enhanced transport layer with verbose logging for key exchange and packet handling, aiding in connection diagnosis.
 
 ## [0.2.0] - 2025-10-17
 
