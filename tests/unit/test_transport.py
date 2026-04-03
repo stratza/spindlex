@@ -3,6 +3,7 @@ Tests for SSH transport layer functionality.
 """
 
 import socket
+import struct
 import threading
 import time
 from unittest.mock import MagicMock, Mock, patch
@@ -14,8 +15,23 @@ from spindlex.exceptions import (
     ProtocolException,
     TransportException,
 )
-from spindlex.protocol.constants import *
-from spindlex.protocol.messages import *
+from spindlex.protocol.constants import (
+    MSG_DISCONNECT, MSG_IGNORE, MSG_UNIMPLEMENTED, MSG_DEBUG,
+    MSG_SERVICE_REQUEST, MSG_SERVICE_ACCEPT, MSG_KEXINIT, MSG_NEWKEYS,
+    MSG_USERAUTH_REQUEST, MSG_USERAUTH_FAILURE, MSG_USERAUTH_SUCCESS,
+    MSG_GLOBAL_REQUEST, MSG_REQUEST_SUCCESS, MSG_REQUEST_FAILURE,
+    MSG_CHANNEL_OPEN, MSG_CHANNEL_OPEN_CONFIRMATION, MSG_CHANNEL_OPEN_FAILURE,
+    MSG_CHANNEL_WINDOW_ADJUST, MSG_CHANNEL_DATA, MSG_CHANNEL_EXTENDED_DATA,
+    MSG_CHANNEL_EOF, MSG_CHANNEL_CLOSE, MSG_CHANNEL_REQUEST,
+    MSG_CHANNEL_SUCCESS, MSG_CHANNEL_FAILURE, MSG_USERAUTH_INFO_RESPONSE,
+    MIN_PADDING_SIZE
+)
+from spindlex.protocol.messages import (
+    Message, DisconnectMessage, IgnoreMessage, DebugMessage,
+    ServiceRequestMessage, KexInitMessage, NewKeysMessage,
+    UserAuthRequestMessage, GlobalRequestMessage, ChannelOpenMessage,
+    ChannelDataMessage, ChannelCloseMessage
+)
 from spindlex.transport.channel import Channel
 from spindlex.transport.transport import Transport
 

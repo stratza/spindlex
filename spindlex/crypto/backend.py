@@ -322,3 +322,13 @@ class CryptographyBackend:
 
 # Default backend instance
 default_crypto_backend = CryptographyBackend()
+
+
+def get_crypto_backend() -> CryptoBackend:
+    """
+    Get the default cryptographic backend.
+
+    Returns:
+        Default CryptoBackend instance
+    """
+    return default_crypto_backend

@@ -6,18 +6,12 @@ and simulate real-world usage scenarios including client-server integration,
 SFTP operations, port forwarding, and performance benchmarks.
 """
 
-import asyncio
-import gc
-import os
-import socket
 import statistics
 import tempfile
-import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -104,7 +98,7 @@ class MockSFTPClient:
         try:
             file_size = Path(local_path).stat().st_size
             self.files[remote_path] = file_size
-        except:
+        except Exception:
             self.files[remote_path] = 0
 
     def get(self, remote_path, local_path):

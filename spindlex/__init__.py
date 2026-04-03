@@ -8,7 +8,7 @@ Provides modern cryptographic standards and comprehensive RFC 4251-4254 complian
 from ._version import __version__, __version_info__, get_version, get_version_info
 
 __author__ = "SpindleX Team"
-__license__ = "Apache-2.0"
+__license__ = "MIT"
 
 # Core client imports
 from .client.ssh_client import SSHClient
@@ -16,8 +16,8 @@ from .client.sftp_client import SFTPClient
 
 # Async client imports (optional)
 try:
-    from .client.async_ssh_client import AsyncSSHClient
-    from .client.async_sftp_client import AsyncSFTPClient
+    from .client.async_ssh_client import AsyncSSHClient  # noqa: F401
+    from .client.async_sftp_client import AsyncSFTPClient  # noqa: F401
     ASYNC_AVAILABLE = True
 except ImportError:
     ASYNC_AVAILABLE = False

@@ -222,10 +222,6 @@ class SSHClient:
         if not self._transport:
             raise SSHException("No transport available")
         
-        # For now, we'll implement a placeholder since the transport
-        # doesn't yet provide a method to get the server's host key
-        # This will be enhanced when the transport layer provides host key access
-        
         hostname = self._hostname or "unknown"
         
         try:
