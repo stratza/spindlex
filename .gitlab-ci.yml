@@ -16,6 +16,9 @@ cache:
     - .cache/pip
     - venv/
 
+default:
+  interruptible: true
+
 # Lint stage
 lint_black:
   stage: lint
@@ -63,7 +66,7 @@ lint_mypy:
     - pip install --upgrade pip
     - pip install -e ".[test]"
   script:
-    - pytest tests/unit/ --ignore=tests/unit/test_benchmarks.py --ignore=tests/unit/test_interoperability.py -v --cov=spindlex --cov-report=xml --cov-report=term
+    - pytest tests/unit/ --ignore=tests/unit/test_benchmarks.py --ignore=tests/unit/test_interoperability.py -v --cov=spindlex --cov-report=xml --cov-report=term --cov-report=html:htmlcov
   coverage: '/TOTAL.*\s+(\d+%)$/'
   artifacts:
     reports:
@@ -94,10 +97,6 @@ test_python312:
 test_python313:
   <<: *test_template
   image: python:3.13
-
-test_python314:
-  <<: *test_template
-  image: python:3.14
 
 # Integration tests (only run if SSH server is available)
 test_integration:
@@ -285,8 +284,7 @@ release:
       ### 🔗 Links
       - [PyPI Package](https://pypi.org/project/spindlex/$CI_COMMIT_TAG/)
       - [Documentation](https://spindlex.readthedocs.io/)
-      Changelog = "https://gitlab.com/daveops.world/development/python/spindle/-/blob/main/CHANGELOG.md"
-
+      - [Changelog](https://gitlab.com/daveops.world/development/python/spindlex/-/blob/main/CHANGELOG.md)
 
       ### 🚀 What's New
       See the [CHANGELOG.md](https://gitlab.com/daveops.world/development/python/spindlex/-/blob/main/CHANGELOG.md) for detailed changes.

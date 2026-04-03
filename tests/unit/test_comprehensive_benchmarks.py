@@ -5,17 +5,14 @@ This module provides detailed performance benchmarks and stress tests
 to ensure the library meets performance requirements under various conditions.
 """
 
-import asyncio
 import gc
 import json
-import os
 import statistics
 import tempfile
-import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict
 
 import pytest
 
@@ -682,13 +679,12 @@ class TestMemoryAndResourcePerformance:
         import gc
         
         # Mock memory measurement if psutil is not available
-        try:
-            import psutil
+        if HAS_PSUTIL:
             process = psutil.Process()
             gc.collect()
             baseline_memory = process.memory_info().rss
             has_psutil = True
-        except ImportError:
+        else:
             # Mock memory values
             baseline_memory = 100 * 1024 * 1024  # 100MB baseline
             has_psutil = False
@@ -806,8 +802,8 @@ class TestStressAndLimits:
                         clients.append(client)
                         successful_connections += 1
 
-                    except Exception as e:
-                        failed_connections += 1
+                    except Exception as exc:
+                        print(f"Command {i} failed: {exc}")
                         if failed_connections > max_connections * 0.1:  # More than 10% failures
                             break
 
@@ -815,10 +811,10 @@ class TestStressAndLimits:
                 for client in clients:
                     try:
                         client.close()
-                    except:
+                    except Exception:
                         pass
 
-            print(f"Stress test results:")
+            print("Stress test results:")
             print(f"  Successful connections: {successful_connections}")
             print(f"  Failed connections: {failed_connections}")
             print(f"  Success rate: {successful_connections / (successful_connections + failed_connections) * 100:.1f}%")

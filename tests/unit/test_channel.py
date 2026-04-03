@@ -462,7 +462,7 @@ class TestChannelSendRecv:
         assert self.channel._stderr_buffer[0] == b" message"
 
 
-class TestChannelRequests:
+class TestChannelStreams:
     """Test channel request operations."""
 
     def setup_method(self):

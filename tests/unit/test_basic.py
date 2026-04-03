@@ -7,7 +7,7 @@ def test_import_spindlex():
     """Test that we can import the spindlex package."""
     import spindlex
 
-    assert spindlex.__version__ == "0.2.0"
+    assert spindlex.__version__ == "0.3.0"
 
 
 def test_basic_functionality():

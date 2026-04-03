@@ -5,12 +5,10 @@ This module contains comprehensive performance tests and benchmarks
 to ensure the library meets performance requirements.
 """
 
-import asyncio
-import gc
 import statistics
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, Dict, List
+from typing import List
 
 import pytest
 
@@ -27,7 +25,7 @@ pytest.importorskip(
     "spindlex.logging", reason="Full Spindle implementation not available"
 )
 
-from spindlex.crypto.backend import default_crypto_backend
+from spindlex.crypto.backend import default_crypto_backend, get_crypto_backend
 from spindlex.crypto.pkey import ECDSAKey, Ed25519Key, RSAKey
 from spindlex.logging import get_performance_monitor
 
@@ -184,14 +182,16 @@ class TestCryptographicBenchmarks:
             test_data = b"x" * size
 
             # Test ChaCha20-Poly1305
-            key = backend.generate_random_bytes(32)
-            nonce = backend.generate_random_bytes(12)
+            key = backend.generate_random(32)
+            nonce = backend.generate_random(12)
 
             def encrypt_chacha20():
                 cipher = backend.create_cipher(
                     "chacha20-poly1305@openssh.com", key, nonce
                 )
-                return cipher.encrypt(test_data)
+                # ChaCha20Poly1305 in cryptography doesn't have .encrypt() on cipher object
+                # It is the cipher object itself for AEAD
+                return cipher.encrypt(nonce, test_data, None)
 
             result = benchmark_function(encrypt_chacha20, iterations=100)
             print(f"\nChaCha20-Poly1305 encrypt {size} bytes: {result}")
@@ -205,32 +205,36 @@ class TestCryptographicBenchmarks:
 
     def test_key_exchange_performance(self):
         """Benchmark key exchange operations."""
-        backend = get_crypto_backend()
+        from spindlex.crypto.kex import Curve25519KeyExchange, ECDHKeyExchange
 
         results = {}
 
         # Curve25519 key exchange
         def kex_curve25519():
-            private_key = backend.generate_curve25519_private_key()
-            public_key = private_key.public_key()
-            peer_private = backend.generate_curve25519_private_key()
-            peer_public = peer_private.public_key()
+            kex = Curve25519KeyExchange()
+            pub_key = kex.generate_keypair()
+            assert len(pub_key) == 32
+            
+            peer_kex = Curve25519KeyExchange()
+            peer_pub = peer_kex.generate_keypair()
 
             # Perform key exchange
-            shared_secret = private_key.exchange(peer_public)
+            shared_secret = kex.compute_shared_secret(peer_pub)
             return shared_secret
 
         results["curve25519_kex"] = benchmark_function(kex_curve25519, iterations=100)
 
         # ECDH key exchange
         def kex_ecdh():
-            private_key = backend.generate_ecdh_private_key()
-            public_key = private_key.public_key()
-            peer_private = backend.generate_ecdh_private_key()
-            peer_public = peer_private.public_key()
+            kex = ECDHKeyExchange()
+            pub_key = kex.generate_keypair()
+            assert len(pub_key) > 0
+            
+            peer_kex = ECDHKeyExchange()
+            peer_pub = peer_kex.generate_keypair()
 
             # Perform key exchange
-            shared_secret = private_key.exchange(peer_public)
+            shared_secret = kex.compute_shared_secret(peer_pub)
             return shared_secret
 
         results["ecdh_kex"] = benchmark_function(kex_ecdh, iterations=100)

@@ -7,9 +7,17 @@ Implements SSH GSSAPI authentication method for Kerberos integration.
 import struct
 from typing import Any, Optional, Tuple
 from ..exceptions import AuthenticationException
-from ..protocol.constants import *
-from ..protocol.messages import *
-from ..protocol.utils import *
+from ..protocol.constants import (
+    SERVICE_CONNECTION, AUTH_GSSAPI_WITH_MIC, MSG_USERAUTH_GSSAPI_RESPONSE,
+    MSG_USERAUTH_GSSAPI_TOKEN, MSG_USERAUTH_GSSAPI_ERROR, MSG_USERAUTH_GSSAPI_ERRTOK,
+    MSG_USERAUTH_GSSAPI_MIC
+)
+from ..protocol.messages import (
+    Message, UserAuthRequestMessage, UserAuthSuccessMessage, UserAuthFailureMessage
+)
+from ..protocol.utils import (
+    read_string, write_uint32, write_string
+)
 
 try:
     import gssapi
@@ -25,9 +33,12 @@ except ImportError:
     class Name:
         class NameType:
             hostbased_service = "hostbased_service"
+            user = "user"
+            anonymous = "anonymous"
         
         def __init__(self, name, name_type=None):
-            pass
+            self.name = name
+            self.name_type = name_type
     
     class SecurityContext:
         def __init__(self, name=None, creds=None, usage=None, flags=None):
@@ -348,7 +359,7 @@ class GSSAPIAuth:
             try:
                 # Context cleanup is handled automatically by gssapi library
                 pass
-            except:
+            except Exception:
                 pass
             finally:
                 self._gss_context = None
@@ -357,7 +368,7 @@ class GSSAPIAuth:
             try:
                 # Credentials cleanup is handled automatically by gssapi library
                 pass
-            except:
+            except Exception:
                 pass
             finally:
                 self._gss_credentials = None
