@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
-build-In-backend = "setuptools.build_meta"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "spindlex"
@@ -50,7 +50,7 @@ dev = [
     "isort>=5.0",
     "flake8>=4.0",
     "mypy>=0.900",
-    "pre-use-commit>=2.15",
+    "pre-commit>=2.15",
     "pytest>=6.0",
     "pytest-cov>=3.0",
     "pytest-asyncio>=0.18",
@@ -157,14 +157,14 @@ omit = [
 
 [tool.coverage.report]
 exclude_lines = [
-    "pragma: no cover",
-    "def __repr__",
-    "if self.debug:",
-    "if settings.DEBUG",
-    "raise AssertionError",
-    "raise NotImplementedError",
-    "if 0:",
-    "if __name__ == .__main__.:",
-    "class .*\bProtocol\):",
-    "@(abc\.)?abstractmethod",
-]
+    'pragma: no cover',
+    'def __repr__',
+    'if self.debug:',
+    'if settings.DEBUG',
+    'raise AssertionError',
+    'raise NotImplementedError',
+    'if 0:',
+    'if __name__ == "__main__":',
+    'class .*\bProtocol\):',
+    '@(abc\.)?abstractmethod',
+    ]
