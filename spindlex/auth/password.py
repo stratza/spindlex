@@ -28,16 +28,49 @@ class PasswordAuth:
     def authenticate(self, username: str, password: str) -> bool:
         """
         Perform password authentication.
-        
+
         Args:
             username: Username for authentication
             password: Password for authentication
-            
+
         Returns:
             True if authentication successful
-            
+
         Raises:
             AuthenticationException: If authentication fails
         """
-        # Implementation will be added in later tasks
-        raise NotImplementedError("PasswordAuth.authenticate will be implemented in task 4.2")
+        try:
+            from ..protocol.messages import UserAuthRequestMessage
+            from ..protocol.constants import SERVICE_CONNECTION
+
+            # Build password authentication request
+            # RFC 4252:
+            # byte      SSH_MSG_USERAUTH_REQUEST
+            # string    user name
+            # string    service name
+            # string    "password"
+            # boolean   FALSE
+            # string    password
+
+            auth_msg = UserAuthRequestMessage(
+                username=username,
+                service=SERVICE_CONNECTION,
+                method="password",
+                method_data=b"\x00" + self._write_string(password)
+            )
+
+            # Send authentication request
+            self._transport._send_message(auth_msg)
+
+            # Handle response
+            return self._transport._handle_auth_response()
+
+        except Exception as e:
+            if isinstance(e, AuthenticationException):
+                raise
+            raise AuthenticationException(f"Password authentication failed: {e}")
+
+    def _write_string(self, s: str) -> bytes:
+        """Helper to write SSH string."""
+        from ..protocol.utils import write_string
+        return write_string(s)

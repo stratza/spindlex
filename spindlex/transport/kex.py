@@ -16,6 +16,7 @@ from ..protocol.constants import *
 from ..protocol.messages import *
 from ..protocol.utils import *
 from ..crypto.backend import default_crypto_backend
+from ..crypto.ciphers import CipherSuite
 
 
 class KeyExchange:
@@ -55,11 +56,15 @@ class KeyExchange:
         self._exchange_hash: Optional[bytes] = None
         self._session_id: Optional[bytes] = None
         
+        # Cipher suite for negotiation and info
+        self._cipher_suite = CipherSuite(default_crypto_backend)
+        
         # Key exchange state
         self._client_kexinit: Optional[bytes] = None
         self._server_kexinit: Optional[bytes] = None
         self._dh_private_key: Optional[Any] = None
         self._dh_public_key: Optional[bytes] = None
+        self._dh_public_key_mpint: Optional[bytes] = None
         self._server_public_key: Optional[bytes] = None
         
         # Negotiated algorithms
@@ -82,20 +87,19 @@ class KeyExchange:
             CryptoException: If key exchange fails
         """
         try:
-            # Get KEXINIT messages from transport (should already be exchanged)
-            if not hasattr(self._transport, '_peer_kexinit') or self._transport._peer_kexinit is None:
-                raise CryptoException("KEXINIT not exchanged - transport should handle this first")
-            
-            # Set up server algorithms from the already received KEXINIT
-            peer_kexinit = self._transport._peer_kexinit
-            self._server_kex_algorithms = peer_kexinit.kex_algorithms
-            self._server_host_key_algorithms = peer_kexinit.server_host_key_algorithms
-            self._server_encryption_c2s = peer_kexinit.encryption_algorithms_client_to_server
-            self._server_encryption_s2c = peer_kexinit.encryption_algorithms_server_to_client
-            self._server_mac_c2s = peer_kexinit.mac_algorithms_client_to_server
-            self._server_mac_s2c = peer_kexinit.mac_algorithms_server_to_client
-            self._server_compression_c2s = peer_kexinit.compression_algorithms_client_to_server
-            self._server_compression_s2c = peer_kexinit.compression_algorithms_server_to_client
+            # Get peer KEXINIT from transport (should already be exchanged)
+            if not hasattr(self._transport, "_peer_kexinit") or self._transport._peer_kexinit is None:
+                # If not exchanged yet, do it now
+                self._send_kexinit()
+                self._receive_kexinit()
+            else:
+                # Already exchanged, store the blobs
+                self._server_kexinit = self._transport._peer_kexinit.pack()
+                # Use our KEXINIT already sent by transport if available
+                if hasattr(self._transport, "_client_kexinit_blob") and self._transport._client_kexinit_blob:
+                    self._client_kexinit = self._transport._client_kexinit_blob
+                elif self._client_kexinit is None:
+                    self._send_kexinit()
             
             # Negotiate algorithms
             self._negotiate_algorithms()
@@ -103,8 +107,10 @@ class KeyExchange:
             # Perform key exchange based on negotiated algorithm
             if self._kex_algorithm == KEX_DH_GROUP1_SHA1:
                 self._perform_dh_group1_sha1()
-            elif self._kex_algorithm == "curve25519-sha256":
+            elif self._kex_algorithm in [KEX_CURVE25519_SHA256, "curve25519-sha256@libssh.org"]:
                 self._perform_curve25519_sha256()
+            elif self._kex_algorithm == KEX_ECDH_SHA2_NISTP256:
+                self._perform_ecdh_sha2_nistp256()
             elif self._kex_algorithm == KEX_DH_GROUP14_SHA256:
                 self._perform_dh_group14_sha256()
             else:
@@ -130,60 +136,17 @@ class KeyExchange:
         """Send KEXINIT message with supported algorithms."""
         cookie = default_crypto_backend.generate_random(KEX_COOKIE_SIZE)
         
-        # Define supported algorithms with SSH extensions (compatible with OpenSSH 9.x)
-        kex_algorithms = [
-            "curve25519-sha256",
-            "curve25519-sha256@libssh.org", 
-            "ecdh-sha2-nistp256",
-            "ecdh-sha2-nistp384",
-            "ecdh-sha2-nistp521",
-            "diffie-hellman-group-exchange-sha256",
-            "diffie-hellman-group16-sha512",
-            "diffie-hellman-group18-sha512",
-            KEX_DH_GROUP14_SHA256,
-            "ext-info-c",
-            "kex-strict-c-v00@openssh.com"
-        ]
-        server_host_key_algorithms = [
-            "rsa-sha2-512",
-            "rsa-sha2-256", 
-            "ecdsa-sha2-nistp256",
-            "ssh-ed25519"
-        ]
-        encryption_algorithms = [
-            "chacha20-poly1305@openssh.com",
-            "aes128-ctr",
-            "aes192-ctr", 
-            "aes256-ctr",
-            "aes128-gcm@openssh.com",
-            "aes256-gcm@openssh.com"
-        ]
-        mac_algorithms = [
-            "umac-64-etm@openssh.com",
-            "umac-128-etm@openssh.com",
-            "hmac-sha2-256-etm@openssh.com",
-            "hmac-sha2-512-etm@openssh.com",
-            "hmac-sha1-etm@openssh.com",
-            "umac-64@openssh.com",
-            "umac-128@openssh.com",
-            "hmac-sha2-256",
-            "hmac-sha2-512",
-            "hmac-sha1"
-        ]
-        compression_algorithms = [COMPRESS_NONE, "zlib@openssh.com"]
-        
-
-        
+        # Use algorithms from CipherSuite
         kexinit_msg = KexInitMessage(
             cookie=cookie,
-            kex_algorithms=kex_algorithms,
-            server_host_key_algorithms=server_host_key_algorithms,
-            encryption_algorithms_client_to_server=encryption_algorithms,
-            encryption_algorithms_server_to_client=encryption_algorithms,
-            mac_algorithms_client_to_server=mac_algorithms,
-            mac_algorithms_server_to_client=mac_algorithms,
-            compression_algorithms_client_to_server=compression_algorithms,
-            compression_algorithms_server_to_client=compression_algorithms,
+            kex_algorithms=self._cipher_suite.KEX_ALGORITHMS,
+            server_host_key_algorithms=self._cipher_suite.HOST_KEY_ALGORITHMS,
+            encryption_algorithms_client_to_server=self._cipher_suite.ENCRYPTION_ALGORITHMS,
+            encryption_algorithms_server_to_client=self._cipher_suite.ENCRYPTION_ALGORITHMS,
+            mac_algorithms_client_to_server=self._cipher_suite.MAC_ALGORITHMS,
+            mac_algorithms_server_to_client=self._cipher_suite.MAC_ALGORITHMS,
+            compression_algorithms_client_to_server=[COMPRESS_NONE],
+            compression_algorithms_server_to_client=[COMPRESS_NONE],
             first_kex_packet_follows=False
         )
         
@@ -200,49 +163,51 @@ class KeyExchange:
         if not isinstance(msg, KexInitMessage):
             raise ProtocolException(f"Expected KEXINIT, got {type(msg).__name__}")
         
-        # Store server KEXINIT for hash calculation
-        self._server_kexinit = msg.pack()
+        # Store server peer info in transport if needed
+        self._transport._peer_kexinit = msg
         
-        # Store server's algorithm lists
-        self._server_kex_algorithms = msg.kex_algorithms
-        self._server_host_key_algorithms = msg.server_host_key_algorithms
-        self._server_encryption_c2s = msg.encryption_algorithms_client_to_server
-        self._server_encryption_s2c = msg.encryption_algorithms_server_to_client
-        self._server_mac_c2s = msg.mac_algorithms_client_to_server
-        self._server_mac_s2c = msg.mac_algorithms_server_to_client
-        self._server_compression_c2s = msg.compression_algorithms_client_to_server
-        self._server_compression_s2c = msg.compression_algorithms_server_to_client
+        # Store server KEXINIT blob for hash calculation
+        self._server_kexinit = msg.pack()
     
     def _negotiate_algorithms(self) -> None:
         """Negotiate algorithms based on client and server preferences."""
-        # Negotiate KEX algorithm
-        client_kex = [
-            KEX_CURVE25519_SHA256,
-            KEX_ECDH_SHA2_NISTP256,
-            KEX_DH_GROUP14_SHA256,
-            KEX_DH_GROUP1_SHA1,
-        ]
-        self._kex_algorithm = self._choose_algorithm(client_kex, self._server_kex_algorithms)
-
+        if not self._transport._peer_kexinit:
+            raise CryptoException("No peer KEXINIT for negotiation")
+            
+        # Build client algorithms dict
+        client_algs = {
+            'kex_algorithms': self._cipher_suite.KEX_ALGORITHMS,
+            'server_host_key_algorithms': self._cipher_suite.HOST_KEY_ALGORITHMS,
+            'encryption_algorithms_client_to_server': self._cipher_suite.ENCRYPTION_ALGORITHMS,
+            'encryption_algorithms_server_to_client': self._cipher_suite.ENCRYPTION_ALGORITHMS,
+            'mac_algorithms_client_to_server': self._cipher_suite.MAC_ALGORITHMS,
+            'mac_algorithms_server_to_client': self._cipher_suite.MAC_ALGORITHMS,
+        }
         
-        # Negotiate host key algorithm
-        client_hostkey = [HOSTKEY_RSA_SHA2_256, HOSTKEY_ED25519]
-        self._server_host_key_algorithm = self._choose_algorithm(client_hostkey, self._server_host_key_algorithms)
+        # Build server algorithms dict
+        peer = self._transport._peer_kexinit
+        server_algs = {
+            'kex_algorithms': peer.kex_algorithms,
+            'server_host_key_algorithms': peer.server_host_key_algorithms,
+            'encryption_algorithms_client_to_server': peer.encryption_algorithms_client_to_server,
+            'encryption_algorithms_server_to_client': peer.encryption_algorithms_server_to_client,
+            'mac_algorithms_client_to_server': peer.mac_algorithms_client_to_server,
+            'mac_algorithms_server_to_client': peer.mac_algorithms_server_to_client,
+        }
         
-        # Negotiate encryption algorithms
-        client_enc = [CIPHER_AES256_CTR, CIPHER_AES128_GCM]
-        self._encryption_algorithm_c2s = self._choose_algorithm(client_enc, self._server_encryption_c2s)
-        self._encryption_algorithm_s2c = self._choose_algorithm(client_enc, self._server_encryption_s2c)
+        # Use CipherSuite to negotiate
+        negotiated = self._cipher_suite.negotiate_algorithms(client_algs, server_algs)
         
-        # Negotiate MAC algorithms
-        client_mac = [MAC_HMAC_SHA2_256, MAC_HMAC_SHA2_512]
-        self._mac_algorithm_c2s = self._choose_algorithm(client_mac, self._server_mac_c2s)
-        self._mac_algorithm_s2c = self._choose_algorithm(client_mac, self._server_mac_s2c)
+        self._kex_algorithm = negotiated['kex']
+        self._server_host_key_algorithm = negotiated['server_host_key']
+        self._encryption_algorithm_c2s = negotiated['encryption_client_to_server']
+        self._encryption_algorithm_s2c = negotiated['encryption_server_to_client']
+        self._mac_algorithm_c2s = negotiated['mac_client_to_server']
+        self._mac_algorithm_s2c = negotiated['mac_server_to_client']
         
-        # Negotiate compression algorithms
-        client_comp = [COMPRESS_NONE]
-        self._compression_algorithm_c2s = self._choose_algorithm(client_comp, self._server_compression_c2s)
-        self._compression_algorithm_s2c = self._choose_algorithm(client_comp, self._server_compression_s2c)
+        # Default compression to none
+        self._compression_algorithm_c2s = COMPRESS_NONE
+        self._compression_algorithm_s2c = COMPRESS_NONE
     
     def _choose_algorithm(self, client_list: List[str], server_list: List[str]) -> str:
         """Choose first matching algorithm from client and server lists, excluding extensions."""
@@ -273,6 +238,7 @@ class KeyExchange:
             
             # Store public key value
             self._dh_public_key = public_numbers.y
+            self._dh_public_key_mpint = write_mpint(public_numbers.y)
             
             # Ensure the public key is positive (SSH requirement)
             if self._dh_public_key <= 0:
@@ -295,6 +261,9 @@ class KeyExchange:
             server_dh_public_blob, offset = read_string(reply_msg._data, offset)
             signature_blob, offset = read_string(reply_msg._data, offset)
             
+            # Store server host key for verification
+            self._transport._server_host_key_blob = server_host_key_blob
+            
             # Extract server's DH public key
             server_public_int, _ = read_mpint(server_dh_public_blob, 0)
             
@@ -310,75 +279,164 @@ class KeyExchange:
             self._shared_secret = write_mpint(int.from_bytes(shared_secret_int, 'big'))
             
             # Compute exchange hash
-            self._compute_exchange_hash(server_host_key_blob, server_dh_public, signature_blob)
+            self._compute_exchange_hash(server_host_key_blob, server_dh_public_blob, signature_blob)
             
-                        # Set session ID (first exchange hash)
-                        if self._session_id is None:
-                            self._session_id = self._exchange_hash
-                            
-                    except Exception as e:
-                        raise
+            # Set session ID (first exchange hash)
+            if self._session_id is None:
+                self._session_id = self._exchange_hash
+                
+        except Exception as e:
+            raise
+
+    def _perform_ecdh_sha2_nistp256(self) -> None:
+        """Perform ECDH NIST P-256 SHA256 key exchange."""
+        try:
+            from cryptography.hazmat.primitives.asymmetric import ec
             
-                def _perform_dh_group1_sha1(self) -> None:
-                    """Perform Diffie-Hellman Group 1 SHA1 key exchange."""
-                    try:
-                        # Generate DH parameters for Group 1 (1024-bit)
-                        # Using the existing DH_GROUP14_P and DH_GROUP14_G constants which seem to be for Group 1.
-                        parameters = dh.DHParameterNumbers(self.DH_GROUP14_P, self.DH_GROUP14_G).parameters(default_backend())
-                        
-                        # Generate private key
-                        self._dh_private_key = parameters.generate_private_key()
-                        
-                        # Get public key
-                        dh_public_key = self._dh_private_key.public_key()
-                        public_numbers = dh_public_key.public_numbers()
-                        
-                        # Store public key value
-                        self._dh_public_key = public_numbers.y
-                        self._dh_public_key_mpint = write_mpint(public_numbers.y) # Store mpint for hash calculation
-                        
-                        # Ensure the public key is positive (SSH requirement)
-                        if self._dh_public_key <= 0:
-                            raise CryptoException("Invalid DH public key: must be positive")
-                        
-                        # Send KEXDH_INIT message
-                        kexdh_init = Message(MSG_KEXDH_INIT)
-                        kexdh_init.add_mpint(self._dh_public_key)
-                        self._transport._send_message(kexdh_init)
-                        
-                        # Receive KEXDH_REPLY message
-                        reply_msg = self._transport._recv_message()
-                        
-                        if reply_msg.msg_type != MSG_KEXDH_REPLY:
-                            raise ProtocolException(f"Expected KEXDH_REPLY, got {reply_msg.msg_type}")
-                        
-                        # Parse KEXDH_REPLY
-                        offset = 0
-                        server_host_key_blob, offset = read_string(reply_msg._data, offset)
-                        server_dh_public, offset = read_string(reply_msg._data, offset)
-                        signature_blob, offset = read_string(reply_msg._data, offset)
-                        
-                        # Extract server's DH public key
-                        server_public_int, _ = read_mpint(server_dh_public, 0)
-                        
-                        # Compute shared secret
-                        server_public_numbers = dh.DHPublicNumbers(server_public_int, parameters.parameter_numbers())
-                        server_public_key = server_public_numbers.public_key(default_backend())
-                        
-                        shared_secret_int = self._dh_private_key.exchange(server_public_key)
-                        self._shared_secret = write_mpint(int.from_bytes(shared_secret_int, 'big'))
-                        
-                        # Compute exchange hash using SHA1
-                        self._compute_exchange_hash_sha1(server_host_key_blob, server_dh_public, signature_blob)
-                        
-                        # Set session ID (first exchange hash)
-                        if self._session_id is None:
-                            self._session_id = self._exchange_hash
-                            
-                    except Exception as e:
-                        raise
+            # Generate ECDH key pair
+            self._ecdh_private_key = ec.generate_private_key(ec.SECP256R1(), default_backend())
+            public_key = self._ecdh_private_key.public_key()
             
-                def _perform_curve25519_sha256(self) -> None:        """Perform Curve25519 SHA256 key exchange (modern, preferred)."""
+            # Get public key in uncompressed format (SSH requirement)
+            self._ecdh_public_key_bytes = public_key.public_bytes(
+                encoding=serialization.Encoding.X962,
+                format=serialization.PublicFormat.UncompressedPoint
+            )
+            
+            # Send KEX_ECDH_INIT message (message type 30)
+            kex_ecdh_init = Message(30)  # MSG_KEX_ECDH_INIT
+            kex_ecdh_init.add_string(self._ecdh_public_key_bytes)
+            self._transport._send_message(kex_ecdh_init)
+            
+            # Receive KEX_ECDH_REPLY message
+            reply_msg = self._transport._recv_message()
+            
+            if reply_msg.msg_type != 31:  # MSG_KEX_ECDH_REPLY
+                raise ProtocolException(f"Expected KEX_ECDH_REPLY, got {reply_msg.msg_type}")
+            
+            # Parse KEX_ECDH_REPLY
+            offset = 0
+            server_host_key_blob, offset = read_string(reply_msg._data, offset)
+            server_public_key_blob, offset = read_string(reply_msg._data, offset)
+            signature_blob, offset = read_string(reply_msg._data, offset)
+            
+            # Store server host key for verification
+            self._transport._server_host_key_blob = server_host_key_blob
+            
+            # Perform key exchange
+            server_public_key = ec.EllipticCurvePublicKey.from_encoded_point(
+                ec.SECP256R1(), server_public_key_blob
+            )
+            shared_secret_bytes = self._ecdh_private_key.exchange(ec.ECDH(), server_public_key)
+            self._shared_secret = write_mpint(int.from_bytes(shared_secret_bytes, 'big'))
+            
+            # Compute exchange hash using SHA256
+            self._compute_ecdh_exchange_hash(server_host_key_blob, server_public_key_blob, signature_blob)
+            
+            # Set session ID (first exchange hash)
+            if self._session_id is None:
+                self._session_id = self._exchange_hash
+                
+        except Exception as e:
+            raise
+
+    def _compute_ecdh_exchange_hash(self, server_host_key: bytes, server_public_key: bytes, signature: bytes) -> None:
+        """Compute the exchange hash H for ECDH."""
+        hash_data = bytearray()
+        
+        # Client version string
+        client_version = self._transport._client_version or "SSH-2.0-SpindleX_1.0"
+        hash_data.extend(write_string(client_version))
+        
+        # Server version string  
+        server_version = self._transport._server_version or "SSH-2.0-Unknown"
+        hash_data.extend(write_string(server_version))
+        
+        # Client KEXINIT
+        hash_data.extend(write_string(self._client_kexinit))
+        
+        # Server KEXINIT
+        hash_data.extend(write_string(self._server_kexinit))
+        
+        # Server host key
+        hash_data.extend(write_string(server_host_key))
+        
+        # Client public key
+        hash_data.extend(write_string(self._ecdh_public_key_bytes))
+        
+        # Server public key
+        hash_data.extend(write_string(server_public_key))
+        
+        # Shared secret
+        hash_data.extend(self._shared_secret)
+        
+        # Compute SHA256 hash
+        self._exchange_hash = default_crypto_backend.hash_data('sha256', bytes(hash_data))
+
+    def _perform_dh_group1_sha1(self) -> None:
+        """Perform Diffie-Hellman Group 1 SHA1 key exchange."""
+        try:
+            # Generate DH parameters for Group 1 (1024-bit)
+            # Using the existing DH_GROUP14_P and DH_GROUP14_G constants which seem to be for Group 1.
+            parameters = dh.DHParameterNumbers(self.DH_GROUP14_P, self.DH_GROUP14_G).parameters(default_backend())
+            
+            # Generate private key
+            self._dh_private_key = parameters.generate_private_key()
+            
+            # Get public key
+            dh_public_key = self._dh_private_key.public_key()
+            public_numbers = dh_public_key.public_numbers()
+            
+            # Store public key value
+            self._dh_public_key = public_numbers.y
+            self._dh_public_key_mpint = write_mpint(public_numbers.y) # Store mpint for hash calculation
+            
+            # Ensure the public key is positive (SSH requirement)
+            if self._dh_public_key <= 0:
+                raise CryptoException("Invalid DH public key: must be positive")
+            
+            # Send KEXDH_INIT message
+            kexdh_init = Message(MSG_KEXDH_INIT)
+            kexdh_init.add_mpint(self._dh_public_key)
+            self._transport._send_message(kexdh_init)
+            
+            # Receive KEXDH_REPLY message
+            reply_msg = self._transport._recv_message()
+            
+            if reply_msg.msg_type != MSG_KEXDH_REPLY:
+                raise ProtocolException(f"Expected KEXDH_REPLY, got {reply_msg.msg_type}")
+            
+            # Parse KEXDH_REPLY
+            offset = 0
+            server_host_key_blob, offset = read_string(reply_msg._data, offset)
+            server_dh_public, offset = read_string(reply_msg._data, offset)
+            signature_blob, offset = read_string(reply_msg._data, offset)
+            
+            # Store server host key for verification
+            self._transport._server_host_key_blob = server_host_key_blob
+            
+            # Extract server's DH public key
+            server_public_int, _ = read_mpint(server_dh_public, 0)
+            
+            # Compute shared secret
+            server_public_numbers = dh.DHPublicNumbers(server_public_int, parameters.parameter_numbers())
+            server_public_key = server_public_numbers.public_key(default_backend())
+            
+            shared_secret_int = self._dh_private_key.exchange(server_public_key)
+            self._shared_secret = write_mpint(int.from_bytes(shared_secret_int, 'big'))
+            
+            # Compute exchange hash using SHA1
+            self._compute_exchange_hash_sha1(server_host_key_blob, server_dh_public, signature_blob)
+            
+            # Set session ID (first exchange hash)
+            if self._session_id is None:
+                self._session_id = self._exchange_hash
+                
+        except Exception as e:
+            raise
+
+    def _perform_curve25519_sha256(self) -> None:
+        """Perform Curve25519 SHA256 key exchange (modern, preferred)."""
         try:
             from cryptography.hazmat.primitives.asymmetric import x25519
             from cryptography.hazmat.primitives import serialization
@@ -409,6 +467,9 @@ class KeyExchange:
             server_host_key_blob, offset = read_string(reply_msg._data, offset)
             server_public_key_blob, offset = read_string(reply_msg._data, offset)
             signature_blob, offset = read_string(reply_msg._data, offset)
+            
+            # Store server host key for verification
+            self._transport._server_host_key_blob = server_host_key_blob
             
             # Perform key exchange
             server_public_key = x25519.X25519PublicKey.from_public_bytes(server_public_key_blob)
@@ -491,6 +552,9 @@ class KeyExchange:
             server_host_key_blob, offset = read_string(reply_msg._data, offset)
             server_dh_public, offset = read_string(reply_msg._data, offset)
             signature_blob, offset = read_string(reply_msg._data, offset)
+            
+            # Store server host key for verification
+            self._transport._server_host_key_blob = server_host_key_blob
             
             # Extract server's DH public key
             server_public_int, _ = read_mpint(server_dh_public, 0)
@@ -583,55 +647,79 @@ class KeyExchange:
         if not self._shared_secret or not self._exchange_hash or not self._session_id:
             raise CryptoException("Missing key exchange data for key generation")
         
-        # Key lengths (simplified - using AES256 = 32 bytes, HMAC-SHA256 = 32 bytes)
-        key_length = 32
-        iv_length = 16
+        # Get key lengths from negotiated ciphers
+        c2s_cipher_info = self._cipher_suite.get_cipher_info(self._encryption_algorithm_c2s)
+        s2c_cipher_info = self._cipher_suite.get_cipher_info(self._encryption_algorithm_s2c)
+        
+        key_len_c2s = c2s_cipher_info['key_len']
+        iv_len_c2s = c2s_cipher_info['iv_len']
+        key_len_s2c = s2c_cipher_info['key_len']
+        iv_len_s2c = s2c_cipher_info['iv_len']
+        
+        # Get MAC key lengths
+        mac_key_len_c2s = 0
+        if self._mac_algorithm_c2s != 'none':
+            mac_key_len_c2s = self._cipher_suite.get_mac_info(self._mac_algorithm_c2s)['key_len']
+            
+        mac_key_len_s2c = 0
+        if self._mac_algorithm_s2c != 'none':
+            mac_key_len_s2c = self._cipher_suite.get_mac_info(self._mac_algorithm_s2c)['key_len']
         
         # Choose hash algorithm based on KEX algorithm
-        hash_alg = 'sha1' if self._kex_algorithm == "diffie-hellman-group14-sha1" else 'sha256'
+        hash_alg = 'sha256'
+        if 'sha512' in self._kex_algorithm:
+            hash_alg = 'sha512'
+        elif 'sha1' in self._kex_algorithm:
+            hash_alg = 'sha1'
         
         # Generate keys using SSH key derivation
         # A: IV client to server
         self._iv_c2s = default_crypto_backend.derive_key(
             hash_alg, self._shared_secret, self._exchange_hash, 
-            self._session_id, b'A', iv_length
+            self._session_id, b'A', iv_len_c2s
         )
         
         # B: IV server to client
         self._iv_s2c = default_crypto_backend.derive_key(
             hash_alg, self._shared_secret, self._exchange_hash,
-            self._session_id, b'B', iv_length
+            self._session_id, b'B', iv_len_s2c
         )
         
         # C: Encryption key client to server
         self._encryption_key_c2s = default_crypto_backend.derive_key(
             hash_alg, self._shared_secret, self._exchange_hash,
-            self._session_id, b'C', key_length
+            self._session_id, b'C', key_len_c2s
         )
         
         # D: Encryption key server to client
         self._encryption_key_s2c = default_crypto_backend.derive_key(
             hash_alg, self._shared_secret, self._exchange_hash,
-            self._session_id, b'D', key_length
+            self._session_id, b'D', key_len_s2c
         )
         
         # E: MAC key client to server
-        self._mac_key_c2s = default_crypto_backend.derive_key(
-            hash_alg, self._shared_secret, self._exchange_hash,
-            self._session_id, b'E', key_length
-        )
+        self._mac_key_c2s = b""
+        if mac_key_len_c2s > 0:
+            self._mac_key_c2s = default_crypto_backend.derive_key(
+                hash_alg, self._shared_secret, self._exchange_hash,
+                self._session_id, b'E', mac_key_len_c2s
+            )
         
         # F: MAC key server to client
-        self._mac_key_s2c = default_crypto_backend.derive_key(
-            hash_alg, self._shared_secret, self._exchange_hash,
-            self._session_id, b'F', key_length
-        )
+        self._mac_key_s2c = b""
+        if mac_key_len_s2c > 0:
+            self._mac_key_s2c = default_crypto_backend.derive_key(
+                hash_alg, self._shared_secret, self._exchange_hash,
+                self._session_id, b'F', mac_key_len_s2c
+            )
         
-        # Update transport with keys
+        # Update transport with keys and parameters
         self._transport._encryption_key_c2s = self._encryption_key_c2s
         self._transport._encryption_key_s2c = self._encryption_key_s2c
         self._transport._mac_key_c2s = self._mac_key_c2s
         self._transport._mac_key_s2c = self._mac_key_s2c
+        self._transport._iv_c2s = self._iv_c2s
+        self._transport._iv_s2c = self._iv_s2c
         self._transport._cipher_c2s = self._encryption_algorithm_c2s
         self._transport._cipher_s2c = self._encryption_algorithm_s2c
         self._transport._mac_c2s = self._mac_algorithm_c2s

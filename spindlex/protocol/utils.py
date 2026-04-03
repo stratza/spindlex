@@ -117,7 +117,8 @@ def read_string(data: bytes, offset: int) -> Tuple[bytes, int]:
     if length > MAX_PACKET_SIZE:
         raise ProtocolException(f"String too long: {length}")
     
-    string_data = data[new_offset:new_offset + length]
+    # Ensure result is bytes, even if data is bytearray
+    string_data = bytes(data[new_offset:new_offset + length])
     return string_data, new_offset + length
 
 
@@ -231,10 +232,13 @@ def write_string(value: Union[str, bytes]) -> bytes:
     if isinstance(value, str):
         value = value.encode(SSH_STRING_ENCODING)
     
-    if len(value) > MAX_PACKET_SIZE:
-        raise ProtocolException(f"String too long: {len(value)}")
+    # Ensure value is bytes (not bytearray)
+    value_bytes = bytes(value)
     
-    return write_uint32(len(value)) + value
+    if len(value_bytes) > MAX_PACKET_SIZE:
+        raise ProtocolException(f"String too long: {len(value_bytes)}")
+    
+    return write_uint32(len(value_bytes)) + value_bytes
 
 
 def write_mpint(value: int) -> bytes:

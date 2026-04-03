@@ -1,10 +1,10 @@
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
+build-In-backend = "setuptools.build_meta"
 
 [project]
 name = "spindlex"
-version = "0.2.0"
+version = "0.3.0"
 description = "A pure-Python SSHv2 client/server library"
 readme = "README.md"
 license = {text = "MIT"}
@@ -50,7 +50,7 @@ dev = [
     "isort>=5.0",
     "flake8>=4.0",
     "mypy>=0.900",
-    "pre-commit>=2.15",
+    "pre-use-commit>=2.15",
     "pytest>=6.0",
     "pytest-cov>=3.0",
     "pytest-asyncio>=0.18",
@@ -74,9 +74,9 @@ test = [
 [project.urls]
 Homepage = "https://gitlab.com/daveops.world/development/python/spindlex"
 Documentation = "https://spindlex.readthedocs.io/"
-Repository = "https://gitlab.com/daveops.world/development/python/spindlex.git"
-Issues = "https://gitlab.com/daveops.world/development/python/spindlex/-/issues"
-Changelog = "https://gitlab.com/daveops.world/development/python/spindlex/-/blob/main/CHANGELOG.md"
+Repository = "https://gitlab.com/daveops.world/development/python/spindle"
+Issues = "https://gitlab.com/daveops.world/development/python/spindle/-/issues"
+Changelog = "https://gitlab.com/daveops.world/development/python/spindle/-/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 where = ["."]
@@ -165,6 +165,6 @@ exclude_lines = [
     "raise NotImplementedError",
     "if 0:",
     "if __name__ == .__main__.:",
-    "class .*\\bProtocol\\):",
-    "@(abc\\.)?abstractmethod",
+    "class .*\bProtocol\):",
+    "@(abc\.)?abstractmethod",
 ]
