@@ -123,9 +123,12 @@ CIPHER_CHACHA20_POLY1305 = "chacha20-poly1305@openssh.com"
 CIPHER_AES256_GCM = "aes256-gcm@openssh.com"
 CIPHER_AES128_GCM = "aes128-gcm@openssh.com"
 CIPHER_AES256_CTR = "aes256-ctr"
+CIPHER_AES192_CTR = "aes192-ctr"
+CIPHER_AES128_CTR = "aes128-ctr"
 
 MAC_HMAC_SHA2_256 = "hmac-sha2-256"
 MAC_HMAC_SHA2_512 = "hmac-sha2-512"
+MAC_HMAC_SHA1 = "hmac-sha1"
 
 COMPRESS_NONE = "none"
 COMPRESS_ZLIB = "zlib@openssh.com"

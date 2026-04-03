@@ -30,20 +30,24 @@ class CipherSuite:
         "ssh-ed25519",
         "ecdsa-sha2-nistp256",
         "rsa-sha2-256",
+        "ssh-rsa",
     ]
     
     # Supported encryption algorithms (in preference order)
     ENCRYPTION_ALGORITHMS = [
+        "aes256-ctr",
+        "aes192-ctr",
+        "aes128-ctr",
         "chacha20-poly1305@openssh.com",
         "aes256-gcm@openssh.com",
         "aes128-gcm@openssh.com", 
-        "aes256-ctr",
     ]
     
     # Supported MAC algorithms (in preference order)
     MAC_ALGORITHMS = [
         "hmac-sha2-256",
         "hmac-sha2-512",
+        "hmac-sha1",
     ]
     
     # Cipher key and IV lengths
@@ -52,12 +56,15 @@ class CipherSuite:
         "aes256-gcm@openssh.com": {"key_len": 32, "iv_len": 12, "aead": True},
         "aes128-gcm@openssh.com": {"key_len": 16, "iv_len": 12, "aead": True},
         "aes256-ctr": {"key_len": 32, "iv_len": 16, "aead": False},
+        "aes192-ctr": {"key_len": 24, "iv_len": 16, "aead": False},
+        "aes128-ctr": {"key_len": 16, "iv_len": 16, "aead": False},
     }
     
     # MAC key lengths
     MAC_INFO = {
         "hmac-sha2-256": {"key_len": 32, "digest_len": 32},
         "hmac-sha2-512": {"key_len": 64, "digest_len": 64},
+        "hmac-sha1": {"key_len": 20, "digest_len": 20},
     }
     
     def __init__(self, crypto_backend: Optional[CryptoBackend] = None) -> None:

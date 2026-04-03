@@ -141,12 +141,42 @@ class PKey:
         except:
             return False
     
-    def __hash__(self) -> int:
-        """Get hash of key for use in sets/dicts."""
+    @classmethod
+    def from_string(cls, data: bytes) -> "PKey":
+        """
+        Create PKey instance from SSH wire format bytes.
+        
+        Args:
+            data: Public key data in SSH wire format
+            
+        Returns:
+            Loaded PKey instance
+            
+        Raises:
+            CryptoException: If key loading fails
+        """
         try:
-            return hash(self.get_public_key_bytes())
-        except:
-            return 0
+            # Parse algorithm name from SSH blob
+            import struct
+            offset = 0
+            algo_len = struct.unpack(">I", data[offset:offset+4])[0]
+            offset += 4
+            algorithm = data[offset:offset+algo_len].decode()
+            
+            # Determine key type and load
+            if algorithm == "ssh-ed25519":
+                key = Ed25519Key()
+            elif algorithm.startswith("ecdsa-sha2-"):
+                key = ECDSAKey()
+            elif algorithm in ["ssh-rsa", "rsa-sha2-256", "rsa-sha2-512"]:
+                key = RSAKey()
+            else:
+                raise CryptoException(f"Unsupported key algorithm: {algorithm}")
+            
+            key.load_public_key(data)
+            return key
+        except Exception as e:
+            raise CryptoException(f"Failed to load public key from bytes: {e}")
 
 
 class Ed25519Key(PKey):
@@ -201,7 +231,7 @@ class Ed25519Key(PKey):
             algorithm = key_data[offset:offset+algo_len].decode()
             offset += algo_len
             
-            if algorithm != "ssh-ed25519":
+            if algorithm not in ["ssh-ed25519", "ed25519"]:
                 raise CryptoException(f"Expected ssh-ed25519, got {algorithm}")
             
             # Read public key bytes
@@ -382,7 +412,7 @@ class ECDSAKey(PKey):
             algorithm = key_data[offset:offset+algo_len].decode()
             offset += algo_len
             
-            if algorithm != "ecdsa-sha2-nistp256":
+            if algorithm not in ["ecdsa-sha2-nistp256", "ecdsa"]:
                 raise CryptoException(f"Expected ecdsa-sha2-nistp256, got {algorithm}")
             
             # Read curve name
@@ -592,7 +622,7 @@ class RSAKey(PKey):
             algorithm = key_data[offset:offset+algo_len].decode()
             offset += algo_len
             
-            if algorithm not in ["ssh-rsa", "rsa-sha2-256", "rsa-sha2-512"]:
+            if algorithm not in ["ssh-rsa", "rsa-sha2-256", "rsa-sha2-512", "rsa"]:
                 raise CryptoException(f"Expected RSA algorithm, got {algorithm}")
             
             # Read public exponent

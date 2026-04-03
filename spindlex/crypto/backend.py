@@ -72,8 +72,10 @@ class CryptographyBackend:
     # MAC algorithm mapping
     MAC_ALGORITHMS = {
         'hmac-sha1': hashes.SHA1,
-        'hmac-sha256': hashes.SHA256,
-        'hmac-sha512': hashes.SHA512,
+        'hmac-sha2-256': hashes.SHA256,
+        'hmac-sha2-512': hashes.SHA512,
+        'hmac-sha256': hashes.SHA256,  # Alias
+        'hmac-sha512': hashes.SHA512,  # Alias
     }
     
     def __init__(self) -> None:
@@ -116,9 +118,12 @@ class CryptographyBackend:
             if algorithm not in self.HASH_ALGORITHMS:
                 raise CryptoException(f"Unsupported hash algorithm: {algorithm}")
             
+            # Ensure data is bytes (not bytearray)
+            data_bytes = bytes(data)
+            
             hash_class = self.HASH_ALGORITHMS[algorithm]
             digest = hashes.Hash(hash_class(), backend=self.backend)
-            digest.update(data)
+            digest.update(data_bytes)
             return digest.finalize()
         except Exception as e:
             raise CryptoException(f"Hash operation failed: {e}")
@@ -140,18 +145,23 @@ class CryptographyBackend:
             CryptoException: If encryption fails or algorithm unsupported
         """
         try:
+            # Ensure all inputs are bytes
+            key_bytes = bytes(key)
+            iv_bytes = bytes(iv)
+            data_bytes = bytes(data)
+            
             if algorithm == "chacha20-poly1305@openssh.com":
-                cipher = ChaCha20Poly1305(key)
-                return cipher.encrypt(iv, data, None)
+                cipher = ChaCha20Poly1305(key_bytes)
+                return cipher.encrypt(iv_bytes, data_bytes, None)
             elif algorithm in ["aes256-gcm@openssh.com", "aes128-gcm@openssh.com"]:
-                cipher = AESGCM(key)
-                return cipher.encrypt(iv, data, None)
+                cipher = AESGCM(key_bytes)
+                return cipher.encrypt(iv_bytes, data_bytes, None)
             elif algorithm == "aes256-ctr":
-                cipher_algo = algorithms.AES(key)
-                mode = modes.CTR(iv)
+                cipher_algo = algorithms.AES(key_bytes)
+                mode = modes.CTR(iv_bytes)
                 cipher = Cipher(cipher_algo, mode, backend=self.backend)
                 encryptor = cipher.encryptor()
-                return encryptor.update(data) + encryptor.finalize()
+                return encryptor.update(data_bytes) + encryptor.finalize()
             else:
                 raise CryptoException(f"Unsupported cipher algorithm: {algorithm}")
         except Exception as e:
@@ -174,18 +184,23 @@ class CryptographyBackend:
             CryptoException: If decryption fails or algorithm unsupported
         """
         try:
+            # Ensure all inputs are bytes
+            key_bytes = bytes(key)
+            iv_bytes = bytes(iv)
+            data_bytes = bytes(data)
+            
             if algorithm == "chacha20-poly1305@openssh.com":
-                cipher = ChaCha20Poly1305(key)
-                return cipher.decrypt(iv, data, None)
+                cipher = ChaCha20Poly1305(key_bytes)
+                return cipher.decrypt(iv_bytes, data_bytes, None)
             elif algorithm in ["aes256-gcm@openssh.com", "aes128-gcm@openssh.com"]:
-                cipher = AESGCM(key)
-                return cipher.decrypt(iv, data, None)
+                cipher = AESGCM(key_bytes)
+                return cipher.decrypt(iv_bytes, data_bytes, None)
             elif algorithm == "aes256-ctr":
-                cipher_algo = algorithms.AES(key)
-                mode = modes.CTR(iv)
+                cipher_algo = algorithms.AES(key_bytes)
+                mode = modes.CTR(iv_bytes)
                 cipher = Cipher(cipher_algo, mode, backend=self.backend)
                 decryptor = cipher.decryptor()
-                return decryptor.update(data) + decryptor.finalize()
+                return decryptor.update(data_bytes) + decryptor.finalize()
             else:
                 raise CryptoException(f"Unsupported cipher algorithm: {algorithm}")
         except Exception as e:
@@ -207,10 +222,18 @@ class CryptographyBackend:
             CryptoException: If cipher creation fails
         """
         try:
-            if algorithm == "aes256-ctr":
-                cipher_algo = algorithms.AES(key)
-                mode = modes.CTR(iv)
+            # Ensure all inputs are bytes
+            key_bytes = bytes(key)
+            iv_bytes = bytes(iv)
+            
+            if algorithm in ["aes128-ctr", "aes192-ctr", "aes256-ctr"]:
+                cipher_algo = algorithms.AES(key_bytes)
+                mode = modes.CTR(iv_bytes)
                 return Cipher(cipher_algo, mode, backend=self.backend)
+            elif algorithm == "chacha20-poly1305@openssh.com":
+                return ChaCha20Poly1305(key_bytes)
+            elif algorithm in ["aes256-gcm@openssh.com", "aes128-gcm@openssh.com"]:
+                return AESGCM(key_bytes)
             else:
                 raise CryptoException(f"Streaming cipher not supported for: {algorithm}")
         except Exception as e:
@@ -235,9 +258,13 @@ class CryptographyBackend:
             if algorithm not in self.MAC_ALGORITHMS:
                 raise CryptoException(f"Unsupported MAC algorithm: {algorithm}")
             
+            # Ensure all inputs are bytes
+            key_bytes = bytes(key)
+            data_bytes = bytes(data)
+            
             hash_class = self.MAC_ALGORITHMS[algorithm]
-            h = hmac.HMAC(key, hash_class(), backend=self.backend)
-            h.update(data)
+            h = hmac.HMAC(key_bytes, hash_class(), backend=self.backend)
+            h.update(data_bytes)
             return h.finalize()
         except Exception as e:
             raise CryptoException(f"MAC computation failed: {e}")
@@ -268,8 +295,14 @@ class CryptographyBackend:
             
             hash_class = self.HASH_ALGORITHMS[algorithm]
             
+            # Ensure all inputs are bytes
+            shared_secret_bytes = bytes(shared_secret)
+            exchange_hash_bytes = bytes(exchange_hash)
+            key_type_bytes = bytes(key_type)
+            session_id_bytes = bytes(session_id)
+            
             # SSH key derivation: K || H || key_type || session_id
-            initial_data = shared_secret + exchange_hash + key_type + session_id
+            initial_data = shared_secret_bytes + exchange_hash_bytes + key_type_bytes + session_id_bytes
             
             # Hash the initial data
             digest = hashes.Hash(hash_class(), backend=self.backend)
@@ -279,7 +312,7 @@ class CryptographyBackend:
             # Extend key material if needed
             while len(key_material) < key_length:
                 digest = hashes.Hash(hash_class(), backend=self.backend)
-                digest.update(shared_secret + exchange_hash + key_material)
+                digest.update(shared_secret_bytes + exchange_hash_bytes + key_material)
                 key_material += digest.finalize()
             
             return key_material[:key_length]
