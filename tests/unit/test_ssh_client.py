@@ -108,6 +108,10 @@ class MockTransport:
         self.channels[channel_id] = channel
         return channel
 
+    def get_server_host_key(self):
+        """Mock getting server host key."""
+        return MockPKey()
+
     def close(self):
         self.active = False
         self.authenticated = False
