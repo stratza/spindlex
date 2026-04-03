@@ -41,7 +41,7 @@ class ChannelFile:
         Read data from channel.
         
         Args:
-            size: Number of bytes to read (-1 for all available)
+            size: Number of bytes to read (-1 for all until EOF)
             
         Returns:
             Read data
@@ -49,12 +49,22 @@ class ChannelFile:
         if self._closed:
             raise ValueError("I/O operation on closed file")
         
-        if self._mode == 'stderr':
-            return self._channel.recv_stderr(size if size > 0 else 8192)
-        elif self._mode == 'r':
-            return self._channel.recv(size if size > 0 else 8192)
+        if size > 0:
+            if self._mode == 'stderr':
+                return self._channel.recv_stderr(size)
+            elif self._mode == 'r':
+                return self._channel.recv(size)
+            else:
+                raise ValueError("File not opened for reading")
         else:
-            raise ValueError("File not opened for reading")
+            # Read until EOF
+            result = bytearray()
+            while True:
+                chunk = self._channel.recv(8192) if self._mode == 'r' else self._channel.recv_stderr(8192)
+                if not chunk:
+                    break
+                result.extend(chunk)
+            return bytes(result)
     
     def write(self, data: Union[str, bytes]) -> int:
         """
@@ -219,20 +229,19 @@ class SSHClient:
         hostname = self._hostname or "unknown"
         
         try:
-            # TODO: Get actual server host key from transport
-            # server_key = self._transport.get_server_host_key()
+            # Get actual server host key from transport
+            server_key = self._transport.get_server_host_key()
             
-            # For now, we'll simulate the host key verification process
+            if server_key is None:
+                self._logger.warning("No host key received from server")
+                return
+
             # Check if we have a known host key for this hostname
             known_key = self._host_key_storage.get(hostname)
             
             if known_key is None:
                 # No known key - apply missing host key policy
                 self._logger.debug(f"No known host key for {hostname}")
-                
-                # Create a placeholder key for policy handling
-                # In real implementation, this would be the actual server key
-                server_key = None  # Placeholder
                 
                 try:
                     self._host_key_policy.missing_host_key(self, hostname, server_key)
@@ -243,13 +252,16 @@ class SSHClient:
                     # Policy had an error but didn't reject
                     self._logger.warning(f"Host key policy error: {e}")
             else:
-                # We have a known key - in real implementation we would compare
-                # with the actual server key
+                # We have a known key - compare with the actual server key
                 self._logger.debug(f"Found known host key for {hostname}")
                 
-                # TODO: Compare known_key with actual server_key
-                # if not known_key == server_key:
-                #     raise BadHostKeyException(hostname, server_key, known_key)
+                if known_key.get_public_key_bytes() != server_key.get_public_key_bytes():
+                    # Key mismatch!
+                    raise BadHostKeyException(
+                        f"Host key mismatch for {hostname}! "
+                        f"Expected: {known_key.get_fingerprint()}, "
+                        f"Got: {server_key.get_fingerprint()}"
+                    )
             
         except BadHostKeyException:
             raise

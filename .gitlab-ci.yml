@@ -285,7 +285,8 @@ release:
       ### 🔗 Links
       - [PyPI Package](https://pypi.org/project/spindlex/$CI_COMMIT_TAG/)
       - [Documentation](https://spindlex.readthedocs.io/)
-      - [Changelog](https://gitlab.com/daveops.world/development/python/spindlex/-/blob/main/CHANGELOG.md)
+      Changelog = "https://gitlab.com/daveops.world/development/python/spindle/-/blob/main/CHANGELOG.md"
+
 
       ### 🚀 What's New
       See the [CHANGELOG.md](https://gitlab.com/daveops.world/development/python/spindlex/-/blob/main/CHANGELOG.md) for detailed changes.

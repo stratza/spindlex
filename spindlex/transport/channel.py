@@ -6,6 +6,7 @@ with support for different channel types and operations.
 """
 
 import threading
+import time
 from typing import Optional, Any, Deque
 from collections import deque
 from ..exceptions import ChannelException
@@ -123,39 +124,39 @@ class Channel:
         if nbytes <= 0:
             return b""
             
-        with self._lock:
-            if self._closed:
-                raise ChannelException("Channel is closed")
-            
-            # Check if we have data in buffer
-            if self._recv_buffer:
-                # Get data from buffer
-                data_chunk = self._recv_buffer.popleft()
+        while True:
+            with self._lock:
+                # Check if we have data in buffer
+                if self._recv_buffer:
+                    # Get data from buffer
+                    data_chunk = self._recv_buffer.popleft()
+                    
+                    if len(data_chunk) <= nbytes:
+                        # Return entire chunk
+                        return data_chunk
+                    else:
+                        # Split chunk and put remainder back
+                        result = data_chunk[:nbytes]
+                        remainder = data_chunk[nbytes:]
+                        self._recv_buffer.appendleft(remainder)
+                        return result
                 
-                if len(data_chunk) <= nbytes:
-                    # Return entire chunk
-                    return data_chunk
-                else:
-                    # Split chunk and put remainder back
-                    result = data_chunk[:nbytes]
-                    remainder = data_chunk[nbytes:]
-                    self._recv_buffer.appendleft(remainder)
-                    return result
+                # No data available in buffer
+                if self._eof_received:
+                    return b""  # EOF reached and buffer is empty
+                
+                # Reset data event before waiting
+                self._data_event.clear()
             
-            # No data available
-            if self._eof_received:
-                return b""  # EOF reached
-            
-            # Wait for data with timeout
-            self._data_event.clear()
-        
-        # Wait outside the lock to avoid blocking other operations
-        if self._data_event.wait(timeout=1.0):  # 1 second timeout
-            # Data arrived, try again
-            return self.recv(nbytes)
-        else:
-            # Timeout - return empty bytes
-            return b""
+            # Wait outside the lock to avoid blocking other operations
+            # If we are in a synchronous implementation, we might need to poll transport
+            if not self._data_event.wait(timeout=0.1):
+                # Timeout, poll transport once to see if data arrived
+                try:
+                    self._transport._recv_message()
+                except Exception:
+                    # Connection might have closed, but we check _eof_received in next loop
+                    pass
     
     def exec_command(self, command: str) -> None:
         """
@@ -308,11 +309,28 @@ class Channel:
         if want_reply:
             # Wait for response outside the lock
             timeout = getattr(self, '_test_timeout', 30.0)  # Allow tests to set shorter timeout
-            if self._request_event.wait(timeout=timeout):
-                with self._lock:
-                    return self._request_success is True
-            else:
-                raise ChannelException("Timeout waiting for channel request response")
+            start_time = time.time()
+            
+            while time.time() - start_time < timeout:
+                if self._request_event.is_set():
+                    with self._lock:
+                        return self._request_success is True
+                
+                try:
+                    # In a synchronous implementation without a background thread,
+                    # we must manually receive and dispatch messages.
+                    # We use a short timeout on the socket if possible, or just call _recv_message
+                    # if it's non-blocking. But here _recv_message is blocking.
+                    # However, since we are waiting for a response to OUR request,
+                    # it's likely to arrive soon.
+                    self._transport._recv_message()
+                except Exception as e:
+                    # If it's a timeout, just continue. Otherwise, it might be a real error.
+                    if "Timeout" in str(e):
+                        continue
+                    raise ChannelException(f"Error waiting for channel request response: {e}")
+            
+            raise ChannelException("Timeout waiting for channel request response")
         
         return True  # No reply requested
     
