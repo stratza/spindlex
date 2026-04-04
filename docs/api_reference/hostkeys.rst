@@ -1,34 +1,6 @@
 Host Keys API
 =============
 
-Host Key Policies
------------------
-
-.. automodule:: spindlex.hostkeys.policy
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. autoclass:: spindlex.hostkeys.policy.MissingHostKeyPolicy
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. autoclass:: spindlex.hostkeys.policy.AutoAddPolicy
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. autoclass:: spindlex.hostkeys.policy.RejectPolicy
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. autoclass:: spindlex.hostkeys.policy.WarningPolicy
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 Host Key Storage
 ----------------
 
@@ -37,12 +9,10 @@ Host Key Storage
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: spindlex.hostkeys.storage.HostKeys
-   :members:
-   :undoc-members:
-   :show-inheritance:
+Host Key Policies
+-----------------
 
-.. autoclass:: spindlex.hostkeys.storage.HostKeyEntry
+.. automodule:: spindlex.hostkeys.policy
    :members:
    :undoc-members:
    :show-inheritance:
@@ -50,98 +20,17 @@ Host Key Storage
 Example Usage
 -------------
 
-Basic Host Key Policy::
+Manage Host Keys::
 
-    from spindlex import SSHClient
-    from spindlex.hostkeys.policy import AutoAddPolicy, RejectPolicy
+    from spindlex.hostkeys.storage import HostKeyStorage
+    from spindlex.hostkeys.policy import AutoAddPolicy
     
-    client = SSHClient()
+    # Load host keys
+    storage = HostKeyStorage('~/.ssh/known_hosts')
     
-    # Automatically add unknown host keys (development only)
-    client.set_missing_host_key_policy(AutoAddPolicy())
+    # Get host key for a host
+    key = storage.get('example.com')
     
-    # Reject unknown host keys (production)
-    client.set_missing_host_key_policy(RejectPolicy())
-
-Custom Host Key Policy::
-
-    from spindlex.hostkeys.policy import MissingHostKeyPolicy
-    from spindlex.exceptions import SSHException
-    import logging
-    
-    class CustomHostKeyPolicy(MissingHostKeyPolicy):
-        def __init__(self, trusted_fingerprints):
-            self.trusted_fingerprints = trusted_fingerprints
-        
-        def missing_host_key(self, client, hostname, key):
-            fingerprint = key.get_fingerprint()
-            
-            if fingerprint in self.trusted_fingerprints:
-                # Add to client's host keys
-                client.get_host_keys().add(hostname, key.get_name(), key)
-                logging.info(f"Added trusted host key for {hostname}")
-            else:
-                logging.warning(f"Rejected untrusted host key for {hostname}: {fingerprint}")
-                raise SSHException(f"Untrusted host key for {hostname}")
-
-Host Key Management::
-
-    from spindlex.hostkeys.storage import HostKeys
-    
-    # Load host keys from file
-    host_keys = HostKeys()
-    host_keys.load('/home/user/.ssh/known_hosts')
-    
-    # Check if host key exists
-    if host_keys.check('example.com', key):
-        print("Host key is known")
-    
-    # Add new host key
-    host_keys.add('newserver.com', key.get_name(), key)
-    
-    # Save host keys
-    host_keys.save('/home/user/.ssh/known_hosts')
-
-Host Key Verification::
-
-    from spindlex import SSHClient, BadHostKeyException
-    from spindlex.hostkeys.policy import RejectPolicy
-    
-    client = SSHClient()
-    client.set_missing_host_key_policy(RejectPolicy())
-    
-    try:
-        client.connect('example.com', username='user', password='pass')
-    except BadHostKeyException as e:
-        print(f"Host key verification failed: {e}")
-        # Handle appropriately - don't ignore!
-        
-        # Option 1: Manually verify and add
-        # fingerprint = e.key.get_fingerprint()
-        # if verify_fingerprint_out_of_band(fingerprint):
-        #     client.get_host_keys().add(e.hostname, e.key.get_name(), e.key)
-        #     client.connect('example.com', username='user', password='pass')
-        
-        # Option 2: Reject connection
-        raise
-
-Fingerprint Verification::
-
-    from spindlex.crypto.pkey import Ed25519Key
-    
-    # Load host key
-    key = Ed25519Key.from_public_key_file('/etc/ssh/ssh_host_ed25519_key.pub')
-    
-    # Get different fingerprint formats
-    md5_fingerprint = key.get_fingerprint()  # Default MD5
-    sha256_fingerprint = key.get_fingerprint('sha256')
-    
-    print(f"MD5: {md5_fingerprint}")
-    print(f"SHA256: {sha256_fingerprint}")
-    
-    # Compare fingerprints
-    expected_fingerprint = "SHA256:abc123..."
-    if sha256_fingerprint == expected_fingerprint:
-        print("Host key verified!")
-    else:
-        print("Host key verification failed!")
+    # Use policy
+    policy = AutoAddPolicy()
+    # policy.missing_host_key(client, 'example.com', key)
