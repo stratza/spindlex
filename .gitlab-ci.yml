@@ -42,9 +42,9 @@ lint_flake8:
   stage: lint
   image: python:3.11
   before_script:
-    - pip install flake8
+    - pip install flake8 pyproject-flake8
   script:
-    - flake8 spindlex/ tests/ || echo "Flake8 issues found but allowing to continue"
+    - pflake8 spindlex/ tests/ || echo "Flake8 issues found but allowing to continue"
   allow_failure: true
 
 lint_mypy:
@@ -52,7 +52,7 @@ lint_mypy:
   image: python:3.11
   before_script:
     - pip install mypy types-all
-    - pip install -e .
+    - pip install .
   script:
     - mypy spindlex/
   allow_failure: true
@@ -64,9 +64,9 @@ lint_mypy:
     - python -m venv venv
     - source venv/bin/activate
     - pip install --upgrade pip
-    - pip install -e ".[test]"
+    - pip install .[test]
   script:
-    - pytest tests/unit/ --ignore=tests/unit/test_benchmarks.py --ignore=tests/unit/test_interoperability.py -v --cov=spindlex --cov-report=xml --cov-report=term --cov-report=html:htmlcov
+    - python -m pytest tests/ -v --cov=spindlex --cov-report=xml --cov-report=term --cov-report=html:htmlcov
   coverage: '/TOTAL.*\s+(\d+%)$/'
   artifacts:
     reports:
@@ -98,7 +98,7 @@ test_python313:
   <<: *test_template
   image: python:3.13
 
-# Integration tests (only run if SSH server is available)
+# Integration tests
 test_integration:
   stage: test
   image: python:3.11
@@ -116,10 +116,10 @@ test_integration:
     - python -m venv venv
     - source venv/bin/activate
     - pip install --upgrade pip
-    - pip install -e ".[test]"
+    - pip install .[test]
     - sleep 30  # Wait for SSH server to start
   script:
-    - TEST_SSH_HOST=ssh-server TEST_SSH_USER=testuser TEST_SSH_PASS=testpass pytest tests/unit/test_integration.py -v
+    - TEST_SSH_HOST=ssh-server TEST_SSH_USER=testuser TEST_SSH_PASS=testpass python -m pytest tests/ -k integration -v
   allow_failure: true
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
@@ -132,7 +132,7 @@ security_bandit:
   before_script:
     - pip install bandit[toml]
   script:
-    - bandit -r spindlex/ -f json -o bandit-report.json || echo "Bandit scan completed with issues"
+    - bandit -r spindlex/ -c pyproject.toml -f json -o bandit-report.json || echo "Bandit scan completed with issues"
   artifacts:
     reports:
       sast: bandit-report.json
@@ -146,7 +146,7 @@ security_safety:
   image: python:3.11
   before_script:
     - pip install safety
-    - pip install -e .
+    - pip install .
   script:
     - safety check --json --output safety-report.json
   artifacts:
@@ -174,7 +174,7 @@ build_docs:
   image: python:3.11
   before_script:
     - pip install sphinx sphinx-rtd-theme myst-parser
-    - pip install -e .
+    - pip install .
   script:
     - cd docs
     - sphinx-build -b html . _build/html || echo "Documentation build failed but continuing"

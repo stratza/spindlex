@@ -5,10 +5,10 @@ Provides SSH server functionality including client authentication,
 channel management, and SFTP server capabilities.
 """
 
-from .ssh_server import SSHServer
 from .sftp_server import SFTPServer
+from .ssh_server import SSHServer
 
 __all__ = [
-    "SSHServer", 
+    "SSHServer",
     "SFTPServer",
 ]

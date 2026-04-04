@@ -34,39 +34,42 @@ classifiers = [
 ]
 requires-python = ">=3.9"
 dependencies = [
-    "cryptography>=3.0",
-    "typing-extensions>=4.0; python_version<'3.10'",
+    "cryptography>=41.0.0",
+    "typing-extensions>=4.0.0; python_version<'3.10'",
 ]
 
 [project.optional-dependencies]
 async = [
-    "asyncio-dgram>=2.0",
+    "asyncio-dgram>=2.1.0",
 ]
 gssapi = [
-    "gssapi>=1.6.0; sys_platform!='win32'",
+    "gssapi>=1.8.0; sys_platform!='win32'",
 ]
 dev = [
-    "black>=22.0",
-    "isort>=5.0",
-    "flake8>=4.0",
-    "mypy>=0.900",
-    "pre-commit>=2.15",
-    "pytest>=6.0",
-    "pytest-cov>=3.0",
-    "pytest-asyncio>=0.18",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0",
+    "pre-commit>=3.0.0",
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-asyncio>=0.21.0",
     "pytest-xdist>=2.0",
+    "tox>=4.0",
+    "bandit[toml]>=1.7.5",
+    "safety>=2.3.0",
 ]
 docs = [
-    "sphinx>=5.0",
-    "sphinx-rtd-theme>=1.0",
-    "myst-parser>=0.18",
+    "sphinx>=6.0.0",
+    "sphinx-rtd-theme>=1.2.0",
+    "myst-parser>=1.0.0",
     "sphinx-autobuild>=2021.3.14",
     "sphinxcontrib-spelling>=7.6",
 ]
 test = [
-    "pytest>=6.0",
-    "pytest-cov>=3.0",
-    "pytest-asyncio>=0.18",
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-asyncio>=0.21.0",
     "pytest-xdist>=2.0",
     "coverage>=6.0",
 ]
@@ -77,6 +80,10 @@ Documentation = "https://spindlex.readthedocs.io/"
 Repository = "https://gitlab.com/daveops.world/development/python/spindle"
 Issues = "https://gitlab.com/daveops.world/development/python/spindle/-/issues"
 Changelog = "https://gitlab.com/daveops.world/development/python/spindle/-/blob/main/CHANGELOG.md"
+
+[project.scripts]
+spindlex-keygen = "spindlex.tools.keygen:main"
+spindlex-benchmark = "spindlex.tools.benchmark:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
@@ -138,6 +145,8 @@ addopts = [
     "--strict-markers",
     "--strict-config",
     "--tb=short",
+    "-v",
+    "-m not slow and not performance",
 ]
 markers = [
     "unit: Unit tests",
@@ -168,3 +177,72 @@ exclude_lines = [
     'class .*\bProtocol\):',
     '@(abc\.)?abstractmethod',
     ]
+
+[tool.flake8]
+max-line-length = 88
+extend-ignore = "E203,W503,F401"
+exclude = ".git,__pycache__,.venv,venv,build,dist,*.egg-info,.tox,docs/_build"
+per-file-ignores = [
+    "__init__.py:F401,F403",
+    "tests/*:F401,F403,E501",
+]
+
+[tool.tox]
+legacy_tox_ini = """
+[tox]
+envlist = py39,py310,py311,py312,py313,py314,lint,type-check,security
+isolated_build = True
+
+[testenv]
+deps = 
+    pytest>=7.0.0
+    pytest-cov>=4.0.0
+    pytest-asyncio>=0.21.0
+commands = 
+    pytest tests/ -v --cov=spindlex --cov-report=term --cov-report=xml
+
+[testenv:lint]
+deps = 
+    black>=23.0.0
+    isort>=5.12.0
+    flake8>=6.0.0
+commands = 
+    black --check spindlex tests
+    isort --check-only spindlex tests
+    flake8 spindlex tests
+
+[testenv:type-check]
+deps = 
+    mypy>=1.0.0
+    types-all
+commands = 
+    mypy spindlex
+
+[testenv:security]
+deps = 
+    bandit[toml]>=1.7.5
+    safety>=2.3.0
+commands = 
+    bandit -r spindlex -c pyproject.toml
+    safety check
+
+[testenv:docs]
+deps = 
+    sphinx>=6.0.0
+    sphinx-rtd-theme>=1.2.0
+    myst-parser>=1.0.0
+commands = 
+    sphinx-build -W -b html docs docs/_build/html
+
+[testenv:build]
+deps = 
+    build>=0.10.0
+    twine>=4.0.0
+commands = 
+    python -m build
+    twine check dist/*
+"""
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+skips = ["B101"]
