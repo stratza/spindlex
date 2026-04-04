@@ -9,16 +9,6 @@ Crypto Backend
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: spindlex.crypto.backend.CryptoBackend
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. autoclass:: spindlex.crypto.backend.CryptographyBackend
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 Public Key Cryptography
 -----------------------
 
@@ -27,50 +17,10 @@ Public Key Cryptography
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: spindlex.crypto.pkey.PKey
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. autoclass:: spindlex.crypto.pkey.Ed25519Key
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. autoclass:: spindlex.crypto.pkey.ECDSAKey
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. autoclass:: spindlex.crypto.pkey.RSAKey
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 Ciphers and Encryption
 ----------------------
 
 .. automodule:: spindlex.crypto.ciphers
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. autoclass:: spindlex.crypto.ciphers.Cipher
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. autoclass:: spindlex.crypto.ciphers.ChaCha20Poly1305
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. autoclass:: spindlex.crypto.ciphers.AESGCMCipher
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. autoclass:: spindlex.crypto.ciphers.AESCTRCipher
    :members:
    :undoc-members:
    :show-inheritance:
@@ -116,16 +66,14 @@ Crypto Backend Usage::
     backend = get_crypto_backend()
     
     # Get supported algorithms
-    ciphers = backend.get_supported_ciphers()
-    macs = backend.get_supported_macs()
-    kex_algorithms = backend.get_supported_kex()
+    # ciphers = backend.ENCRYPTION_ALGORITHMS (in CipherSuite)
     
     # Create cipher
     cipher = backend.create_cipher('chacha20-poly1305@openssh.com', key, iv)
     
     # Encrypt/decrypt
-    encrypted = cipher.encrypt(plaintext)
-    decrypted = cipher.decrypt(encrypted)
+    encrypted = backend.encrypt('aes256-ctr', key, iv, plaintext)
+    decrypted = backend.decrypt('aes256-ctr', key, iv, encrypted)
 
 Digital Signatures::
 
@@ -135,8 +83,7 @@ Digital Signatures::
     
     # Sign data
     message = b"Hello, World!"
-    signature = key.sign_ssh_data(message)
+    signature = key.sign(message)
     
     # Verify signature
-    public_key = key.get_public_key()
-    is_valid = public_key.verify_ssh_sig(message, signature)
+    is_valid = key.verify(message, signature)

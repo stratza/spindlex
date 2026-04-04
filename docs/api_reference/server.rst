@@ -9,38 +9,10 @@ SSH Server
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: spindlex.server.ssh_server.SSHServer
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 SFTP Server
 -----------
 
 .. automodule:: spindlex.server.sftp_server
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. autoclass:: spindlex.server.sftp_server.SFTPServer
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. autoclass:: spindlex.server.sftp_server.SFTPHandle
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. autoclass:: spindlex.server.sftp_server.SFTPAttributes
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-Server Interface
-----------------
-
-.. automodule:: spindlex.server
    :members:
    :undoc-members:
    :show-inheritance:
@@ -55,18 +27,14 @@ Basic SSH Server::
     
     class MySSHServer(SSHServer):
         def check_auth_password(self, username, password):
-            if username == 'admin' and password == 'secret':
-                return self.AUTH_SUCCESSFUL
-            return self.AUTH_FAILED
+            # Return auth status
+            return True
         
         def check_channel_request(self, kind, chanid):
-            return self.OPEN_SUCCEEDED
+            return 0 # OPEN_SUCCEEDED
     
-    # Create server with host key
-    host_key = Ed25519Key.generate()
+    # Create server instance
     server = MySSHServer()
-    
-    # Start server (implementation depends on transport setup)
 
 SFTP Server::
 
@@ -76,14 +44,6 @@ SFTP Server::
     class MyFileServer(SFTPServer):
         def list_folder(self, path):
             try:
-                files = os.listdir(path)
-                return [SFTPAttributes.from_stat(os.stat(os.path.join(path, f)), f) 
-                        for f in files]
+                return os.listdir(path)
             except OSError:
                 return []
-        
-        def stat(self, path):
-            try:
-                return SFTPAttributes.from_stat(os.stat(path))
-            except OSError:
-                return SFTPServer.convert_errno(errno.ENOENT)
