@@ -173,26 +173,26 @@ build_docs:
   stage: build
   image: python:3.11
   before_script:
-    - pip install sphinx sphinx-rtd-theme myst-parser
+    - apt-get update && apt-get install -y libssl-dev rustc cargo
+    - pip install -r docs/requirements.txt
     - pip install .
   script:
-    - cd docs
-    - sphinx-build -b html . _build/html || echo "Documentation build failed but continuing"
+    - sphinx-build -b html docs/ public/
   artifacts:
     paths:
-      - docs/_build/html/
+      - public/
     expire_in: 1 week
-  allow_failure: true
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
 # Deploy stage
 pages:
   stage: deploy
   script:
-    - mkdir public
-    - cp -r docs/_build/html/* public/
+    - echo "GitLab Pages deployment"
   artifacts:
     paths:
-      - public
+      - public/
   needs:
     - build_docs
   rules:
