@@ -1,5 +1,5 @@
 Contributing Guide
-=================
+==================
 
 We welcome contributions to SpindleX! This guide will help you get started with contributing code, documentation, bug reports, and feature requests.
 

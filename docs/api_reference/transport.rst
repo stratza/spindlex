@@ -27,7 +27,7 @@ Channel Management
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: spindlex.transport.channel.ChannelFile
+.. autoclass:: spindlex.client.ssh_client.ChannelFile
    :members:
    :undoc-members:
    :show-inheritance:
@@ -40,22 +40,7 @@ Key Exchange
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: spindlex.transport.kex.KexAlgorithm
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. autoclass:: spindlex.transport.kex.Curve25519KEX
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. autoclass:: spindlex.transport.kex.ECDHKEX
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. autoclass:: spindlex.transport.kex.DiffieHellmanKEX
+.. autoclass:: spindlex.transport.kex.KeyExchange
    :members:
    :undoc-members:
    :show-inheritance:
