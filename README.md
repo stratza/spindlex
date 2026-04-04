@@ -66,11 +66,16 @@ SSH client & server • SFTP operations • Port forwarding
 # Install SpindleX
 pip install spindlex
 
-# With async support
-pip install spindlex[async]
+# From source
+git clone https://gitlab.com/daveops.world/development/python/spindle.git
+cd spindle
+pip install .
 
-# With all features
-pip install spindlex[dev,gssapi]
+# With async support
+pip install .[async]
+
+# With all features for development
+pip install .[dev,gssapi]
 ```
 
 ### 30-Second Example
@@ -261,13 +266,13 @@ graph TB
 ### Optional Features
 ```bash
 # Async support
-pip install spindlex[async]
+pip install .[async]
 
 # Development tools  
-pip install spindlex[dev]
+pip install .[dev]
 
 # GSSAPI authentication (Unix only)
-pip install spindlex[gssapi]
+pip install .[gssapi]
 ```
 
 ---
@@ -281,7 +286,7 @@ We ❤️ contributions! SpindleX is built by developers, for developers.
 1. **🍴 Fork** the repository
 2. **🌿 Create** a feature branch: `git checkout -b feature/amazing-feature`
 3. **✨ Make** your changes with tests
-4. **🧪 Test** your changes: `pytest tests/`
+4. **🧪 Test** your changes: `python -m pytest tests/`
 5. **📝 Commit** with clear messages: `git commit -m "Add amazing feature"`
 6. **🚀 Push** and create a Pull Request
 
