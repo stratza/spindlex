@@ -184,53 +184,56 @@ ERROR_UNSUPPORTED_ALGORITHM = "Unsupported algorithm"
 ERROR_AUTH_FAILED = "Authentication failed"
 ERROR_CHANNEL_FAILED = "Channel operation failed"
 
+
 def parse_version_string(version_line: str) -> tuple[str, str]:
     """
     Parse SSH version string.
-    
+
     Args:
         version_line: SSH version line (e.g., "SSH-2.0-OpenSSH_8.0")
-        
+
     Returns:
         Tuple of (protocol_version, software_version)
-        
+
     Raises:
         ValueError: If version string is invalid
     """
     if not version_line.startswith("SSH-"):
         raise ValueError(f"Invalid SSH version string: {version_line}")
-    
+
     parts = version_line.split("-", 2)
     if len(parts) < 2:
         raise ValueError(f"Invalid SSH version string format: {version_line}")
-    
+
     protocol_version = parts[1]
     software_version = parts[2] if len(parts) > 2 else ""
-    
+
     return protocol_version, software_version
 
 
 def is_supported_version(protocol_version: str) -> bool:
     """
     Check if protocol version is supported.
-    
+
     Args:
         protocol_version: Protocol version string (e.g., "2.0")
-        
+
     Returns:
         True if version is supported, False otherwise
     """
     return protocol_version in SUPPORTED_PROTOCOL_VERSIONS
 
 
-def create_version_string(software_name: str = "spindlex", software_version: str = None) -> str:
+def create_version_string(
+    software_name: str = "spindlex", software_version: str = None
+) -> str:
     """
     Create SSH version string for this implementation.
-    
+
     Args:
         software_name: Name of SSH software
         software_version: Version of SSH software (defaults to package version)
-        
+
     Returns:
         Complete SSH version string
     """
@@ -242,34 +245,34 @@ def create_version_string(software_name: str = "spindlex", software_version: str
 def validate_message_type(msg_type: int) -> bool:
     """
     Validate SSH message type.
-    
+
     Args:
         msg_type: Message type code
-        
+
     Returns:
         True if message type is valid, False otherwise
     """
     # Valid message type ranges according to RFC 4250
     return (
-        (1 <= msg_type <= 19) or      # Transport layer generic
-        (20 <= msg_type <= 29) or     # Algorithm negotiation
-        (30 <= msg_type <= 41) or     # Key exchange method specific
-        (50 <= msg_type <= 59) or     # User authentication generic
-        (60 <= msg_type <= 79) or     # User authentication method specific
-        (80 <= msg_type <= 89) or     # Connection protocol generic
-        (90 <= msg_type <= 127) or    # Channel related messages
-        (128 <= msg_type <= 191) or   # Reserved for client protocols
-        (192 <= msg_type <= 255)      # Local extensions
+        (1 <= msg_type <= 19)  # Transport layer generic
+        or (20 <= msg_type <= 29)  # Algorithm negotiation
+        or (30 <= msg_type <= 41)  # Key exchange method specific
+        or (50 <= msg_type <= 59)  # User authentication generic
+        or (60 <= msg_type <= 79)  # User authentication method specific
+        or (80 <= msg_type <= 89)  # Connection protocol generic
+        or (90 <= msg_type <= 127)  # Channel related messages
+        or (128 <= msg_type <= 191)  # Reserved for client protocols
+        or (192 <= msg_type <= 255)  # Local extensions
     )
 
 
 def get_message_name(msg_type: int) -> str:
     """
     Get human-readable name for message type.
-    
+
     Args:
         msg_type: Message type code
-        
+
     Returns:
         Message type name or "UNKNOWN" if not recognized
     """
@@ -306,5 +309,5 @@ def get_message_name(msg_type: int) -> str:
         MSG_CHANNEL_SUCCESS: "MSG_CHANNEL_SUCCESS",
         MSG_CHANNEL_FAILURE: "MSG_CHANNEL_FAILURE",
     }
-    
+
     return message_names.get(msg_type, f"UNKNOWN({msg_type})")

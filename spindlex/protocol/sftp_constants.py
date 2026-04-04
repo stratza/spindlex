@@ -90,7 +90,7 @@ SSH_FILEXFER_TYPE_UNKNOWN = 0o000000
 
 # Default Values
 SFTP_MAX_PACKET_SIZE = 32768  # 32KB
-SFTP_MAX_READ_SIZE = 32768    # 32KB per read request
+SFTP_MAX_READ_SIZE = 32768  # 32KB per read request
 SFTP_DEFAULT_BUFFER_SIZE = 32768
 
 # SFTP Subsystem Name
@@ -126,10 +126,10 @@ SFTP_STATUS_MESSAGES = {
 def get_status_message(status_code: int) -> str:
     """
     Get human-readable message for SFTP status code.
-    
+
     Args:
         status_code: SFTP status code
-        
+
     Returns:
         Human-readable status message
     """
@@ -139,10 +139,10 @@ def get_status_message(status_code: int) -> str:
 def is_success_status(status_code: int) -> bool:
     """
     Check if SFTP status code indicates success.
-    
+
     Args:
         status_code: SFTP status code
-        
+
     Returns:
         True if status indicates success
     """
@@ -152,21 +152,42 @@ def is_success_status(status_code: int) -> bool:
 def validate_sftp_message_type(msg_type: int) -> bool:
     """
     Validate SFTP message type.
-    
+
     Args:
         msg_type: SFTP message type code
-        
+
     Returns:
         True if message type is valid
     """
     valid_types = {
-        SSH_FXP_INIT, SSH_FXP_VERSION, SSH_FXP_OPEN, SSH_FXP_CLOSE,
-        SSH_FXP_READ, SSH_FXP_WRITE, SSH_FXP_LSTAT, SSH_FXP_FSTAT,
-        SSH_FXP_SETSTAT, SSH_FXP_FSETSTAT, SSH_FXP_OPENDIR, SSH_FXP_READDIR,
-        SSH_FXP_REMOVE, SSH_FXP_MKDIR, SSH_FXP_RMDIR, SSH_FXP_REALPATH,
-        SSH_FXP_STAT, SSH_FXP_RENAME, SSH_FXP_READLINK, SSH_FXP_SYMLINK,
-        SSH_FXP_LINK, SSH_FXP_STATUS, SSH_FXP_HANDLE, SSH_FXP_DATA,
-        SSH_FXP_NAME, SSH_FXP_ATTRS, SSH_FXP_EXTENDED, SSH_FXP_EXTENDED_REPLY
+        SSH_FXP_INIT,
+        SSH_FXP_VERSION,
+        SSH_FXP_OPEN,
+        SSH_FXP_CLOSE,
+        SSH_FXP_READ,
+        SSH_FXP_WRITE,
+        SSH_FXP_LSTAT,
+        SSH_FXP_FSTAT,
+        SSH_FXP_SETSTAT,
+        SSH_FXP_FSETSTAT,
+        SSH_FXP_OPENDIR,
+        SSH_FXP_READDIR,
+        SSH_FXP_REMOVE,
+        SSH_FXP_MKDIR,
+        SSH_FXP_RMDIR,
+        SSH_FXP_REALPATH,
+        SSH_FXP_STAT,
+        SSH_FXP_RENAME,
+        SSH_FXP_READLINK,
+        SSH_FXP_SYMLINK,
+        SSH_FXP_LINK,
+        SSH_FXP_STATUS,
+        SSH_FXP_HANDLE,
+        SSH_FXP_DATA,
+        SSH_FXP_NAME,
+        SSH_FXP_ATTRS,
+        SSH_FXP_EXTENDED,
+        SSH_FXP_EXTENDED_REPLY,
     }
     return msg_type in valid_types
 
@@ -174,21 +195,42 @@ def validate_sftp_message_type(msg_type: int) -> bool:
 def validate_sftp_message_type(msg_type: int) -> bool:
     """
     Validate SFTP message type.
-    
+
     Args:
         msg_type: SFTP message type code
-        
+
     Returns:
         True if message type is valid
     """
     valid_types = {
-        SSH_FXP_INIT, SSH_FXP_VERSION, SSH_FXP_OPEN, SSH_FXP_CLOSE,
-        SSH_FXP_READ, SSH_FXP_WRITE, SSH_FXP_LSTAT, SSH_FXP_FSTAT,
-        SSH_FXP_SETSTAT, SSH_FXP_FSETSTAT, SSH_FXP_OPENDIR, SSH_FXP_READDIR,
-        SSH_FXP_REMOVE, SSH_FXP_MKDIR, SSH_FXP_RMDIR, SSH_FXP_REALPATH,
-        SSH_FXP_STAT, SSH_FXP_RENAME, SSH_FXP_READLINK, SSH_FXP_SYMLINK, SSH_FXP_LINK,
-        SSH_FXP_STATUS, SSH_FXP_HANDLE, SSH_FXP_DATA, SSH_FXP_NAME, SSH_FXP_ATTRS,
-        SSH_FXP_EXTENDED, SSH_FXP_EXTENDED_REPLY
+        SSH_FXP_INIT,
+        SSH_FXP_VERSION,
+        SSH_FXP_OPEN,
+        SSH_FXP_CLOSE,
+        SSH_FXP_READ,
+        SSH_FXP_WRITE,
+        SSH_FXP_LSTAT,
+        SSH_FXP_FSTAT,
+        SSH_FXP_SETSTAT,
+        SSH_FXP_FSETSTAT,
+        SSH_FXP_OPENDIR,
+        SSH_FXP_READDIR,
+        SSH_FXP_REMOVE,
+        SSH_FXP_MKDIR,
+        SSH_FXP_RMDIR,
+        SSH_FXP_REALPATH,
+        SSH_FXP_STAT,
+        SSH_FXP_RENAME,
+        SSH_FXP_READLINK,
+        SSH_FXP_SYMLINK,
+        SSH_FXP_LINK,
+        SSH_FXP_STATUS,
+        SSH_FXP_HANDLE,
+        SSH_FXP_DATA,
+        SSH_FXP_NAME,
+        SSH_FXP_ATTRS,
+        SSH_FXP_EXTENDED,
+        SSH_FXP_EXTENDED_REPLY,
     }
     return msg_type in valid_types
 
@@ -196,10 +238,10 @@ def validate_sftp_message_type(msg_type: int) -> bool:
 def get_message_name(msg_type: int) -> str:
     """
     Get human-readable name for SFTP message type.
-    
+
     Args:
         msg_type: SFTP message type code
-        
+
     Returns:
         Message type name or "UNKNOWN" if not recognized
     """
@@ -233,17 +275,17 @@ def get_message_name(msg_type: int) -> str:
         SSH_FXP_EXTENDED: "SSH_FXP_EXTENDED",
         SSH_FXP_EXTENDED_REPLY: "SSH_FXP_EXTENDED_REPLY",
     }
-    
+
     return message_names.get(msg_type, f"UNKNOWN({msg_type})")
 
 
 def is_error_status(status_code: int) -> bool:
     """
     Check if SFTP status code indicates an error.
-    
+
     Args:
         status_code: SFTP status code
-        
+
     Returns:
         True if status indicates an error
     """
@@ -253,10 +295,10 @@ def is_error_status(status_code: int) -> bool:
 def is_file_not_found_error(status_code: int) -> bool:
     """
     Check if SFTP status code indicates file not found.
-    
+
     Args:
         status_code: SFTP status code
-        
+
     Returns:
         True if status indicates file not found
     """
@@ -266,10 +308,10 @@ def is_file_not_found_error(status_code: int) -> bool:
 def is_permission_error(status_code: int) -> bool:
     """
     Check if SFTP status code indicates permission error.
-    
+
     Args:
         status_code: SFTP status code
-        
+
     Returns:
         True if status indicates permission error
     """
@@ -279,10 +321,10 @@ def is_permission_error(status_code: int) -> bool:
 def get_error_category(status_code: int) -> str:
     """
     Get error category for SFTP status code.
-    
+
     Args:
         status_code: SFTP status code
-        
+
     Returns:
         Error category string
     """
@@ -296,7 +338,11 @@ def get_error_category(status_code: int) -> str:
         return "storage"
     elif status_code in (SSH_FX_NO_CONNECTION, SSH_FX_CONNECTION_LOST):
         return "connection"
-    elif status_code in (SSH_FX_BAD_MESSAGE, SSH_FX_INVALID_HANDLE, SSH_FX_INVALID_FILENAME):
+    elif status_code in (
+        SSH_FX_BAD_MESSAGE,
+        SSH_FX_INVALID_HANDLE,
+        SSH_FX_INVALID_FILENAME,
+    ):
         return "protocol"
     else:
         return "general"

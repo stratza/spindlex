@@ -36,18 +36,18 @@ By participating in this project, you agree to abide by our Code of Conduct. Ple
 
 ```bash
 # Run all tests
-pytest
+python -m pytest
 
 # Run with coverage
-pytest --cov=ssh_library --cov-report=html
+python -m pytest --cov=spindlex --cov-report=html
 
 # Run specific test categories
-pytest -m unit
-pytest -m integration
-pytest -m performance
+python -m pytest -m unit
+python -m pytest -m integration
+python -m pytest -m performance
 
 # Run tests for specific modules
-pytest tests/test_crypto_backend.py
+python -m pytest tests/test_protocol_utils.py
 ```
 
 ### Code Quality
@@ -56,17 +56,17 @@ We maintain high code quality standards:
 
 ```bash
 # Format code
-black ssh_library tests
-isort ssh_library tests
+black spindlex tests
+isort spindlex tests
 
 # Lint code
-flake8 ssh_library tests
+flake8 spindlex tests
 
 # Type checking
-mypy ssh_library
+mypy spindlex
 
 # Security scanning
-bandit -r ssh_library
+bandit -r spindlex -c pyproject.toml
 
 # Run all quality checks
 tox -e lint,type-check,security
@@ -102,7 +102,7 @@ Use our issue templates:
 
 3. **Test Changes**
    ```bash
-   pytest
+   python -m pytest
    tox  # Test across multiple Python versions
    ```
 

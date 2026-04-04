@@ -5,26 +5,27 @@ Implements SSH password authentication method according to RFC 4252.
 """
 
 from typing import Any
+
 from ..exceptions import AuthenticationException
 
 
 class PasswordAuth:
     """
     SSH password authentication implementation.
-    
+
     Handles password-based authentication with secure credential handling
     and protection against timing attacks.
     """
-    
+
     def __init__(self, transport: Any) -> None:
         """
         Initialize password authentication.
-        
+
         Args:
             transport: SSH transport instance
         """
         self._transport = transport
-    
+
     def authenticate(self, username: str, password: str) -> bool:
         """
         Perform password authentication.
@@ -40,8 +41,8 @@ class PasswordAuth:
             AuthenticationException: If authentication fails
         """
         try:
-            from ..protocol.messages import UserAuthRequestMessage
             from ..protocol.constants import SERVICE_CONNECTION
+            from ..protocol.messages import UserAuthRequestMessage
 
             # Build password authentication request
             # RFC 4252:
@@ -56,7 +57,7 @@ class PasswordAuth:
                 username=username,
                 service=SERVICE_CONNECTION,
                 method="password",
-                method_data=b"\x00" + self._write_string(password)
+                method_data=b"\x00" + self._write_string(password),
             )
 
             # Send authentication request
@@ -73,4 +74,5 @@ class PasswordAuth:
     def _write_string(self, s: str) -> bytes:
         """Helper to write SSH string."""
         from ..protocol.utils import write_string
+
         return write_string(s)

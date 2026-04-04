@@ -5,10 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.0] - 2026-04-03
+## [0.3.0] - 2026-04-04
 
 ### Fixed
 
+- **Protocol Utilities:** Fixed `write_mpint` to use the minimum number of bytes for negative integers (e.g., -128 now correctly serializes to `0x80` instead of `0xff80`).
+- **Version Parsing:** Improved error handling in `parse_version_string` to provide clearer messages for invalid SSH version strings.
 - **SSH Connection Stability:** Resolved numerous issues preventing reliable SSH connections, including:
     - Corrected KEX initialization to prevent protocol mismatches (`MSG_UNIMPLEMENTED` errors).
     - Addressed `bytearray` vs `bytes` type issues in cryptography operations.
@@ -27,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Unit Tests:** Created a comprehensive test suite in `tests/` covering protocol utilities and constants.
+- **Configuration Consolidation:** Unified project configuration into `pyproject.toml`, removing redundant `setup.cfg`, `pytest.ini`, `.flake8`, and `tox.ini` files.
 - Implemented robust password authentication in `spindlex/auth/password.py`.
 - Enhanced `spindlex/transport/channel.py` to ensure `Channel.recv` blocks appropriately until data or EOF.
 
