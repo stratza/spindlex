@@ -1,12 +1,12 @@
 Performance Guide
 ================
 
-This guide covers performance optimization techniques, benchmarking, and best practices for achieving optimal performance with SSH Library.
+This guide covers performance optimization techniques, benchmarking, and best practices for achieving optimal performance with SpindleX.
 
 Performance Overview
 --------------------
 
-SSH Library is designed for high performance while maintaining security. Key performance factors include:
+SpindleX is designed for high performance while maintaining security. Key performance factors include:
 
 - **Connection Management**: Efficient connection pooling and reuse
 - **Cryptographic Operations**: Hardware acceleration and algorithm selection
@@ -20,7 +20,7 @@ Benchmarking and Profiling
 Built-in Performance Monitoring
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-SSH Library includes built-in performance monitoring::
+SpindleX includes built-in performance monitoring::
 
     from spindlex.logging.monitoring import PerformanceMonitor
     from spindlex import SSHClient

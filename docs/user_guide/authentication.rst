@@ -1,7 +1,7 @@
 Authentication Guide
 ===================
 
-SSH Library supports multiple authentication methods to provide secure access to remote systems. This guide covers all supported authentication methods and best practices.
+SpindleX supports multiple authentication methods to provide secure access to remote systems. This guide covers all supported authentication methods and best practices.
 
 Supported Authentication Methods
 --------------------------------
@@ -19,7 +19,7 @@ Public key authentication is the most secure method and is recommended for produ
 Key Generation
 ~~~~~~~~~~~~~~
 
-Generate SSH keys using SSH Library::
+Generate SSH keys using SpindleX::
 
     from spindlex.crypto.pkey import Ed25519Key, RSAKey, ECDSAKey
     

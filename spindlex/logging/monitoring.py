@@ -1,5 +1,5 @@
 """
-Performance monitoring and metrics collection for SSH library.
+Performance monitoring and metrics collection for SpindleX.
 """
 
 import threading

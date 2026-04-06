@@ -1,5 +1,5 @@
 """
-SSH Library Logging Module
+SpindleX Logging Module
 
 Provides structured logging with security-aware sanitization and configurable output formats.
 """

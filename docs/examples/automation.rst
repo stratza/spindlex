@@ -1,7 +1,7 @@
 Automation Examples
 ===================
 
-This section provides examples for automating common tasks using SSH Library.
+This section provides examples for automating common tasks using SpindleX.
 
 Server Management
 -----------------

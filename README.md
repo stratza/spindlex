@@ -2,7 +2,7 @@
 
 # 🚀 SpindleX
 
-### *The Next-Generation Pure-Python SSH Library*
+### *The Next-Generation Pure-Python SpindleX*
 
 [![PyPI version](https://badge.fury.io/py/spindlex.svg)](https://badge.fury.io/py/spindlex)
 [![Python Support](https://img.shields.io/pypi/pyversions/spindlex.svg)](https://pypi.org/project/spindlex/)
@@ -24,7 +24,7 @@
 
 ## 🌟 Why SpindleX?
 
-SpindleX is a **pure-Python SSH library** designed for the modern developer. Built from the ground up with security, performance, and developer experience in mind.
+SpindleX is a **pure-Python SpindleX** designed for the modern developer. Built from the ground up with security, performance, and developer experience in mind.
 
 ### 🎯 **Key Advantages**
 

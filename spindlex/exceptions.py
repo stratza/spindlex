@@ -1,7 +1,7 @@
 """
-SSH Library Exception Hierarchy
+SpindleX Exception Hierarchy
 
-Defines all exceptions used throughout the SSH library with a unified hierarchy
+Defines all exceptions used throughout the SpindleX with a unified hierarchy
 for consistent error handling and reporting.
 """
 
@@ -12,7 +12,7 @@ class SSHException(Exception):
     """
     Base exception for all SSH-related errors.
 
-    All SSH library exceptions inherit from this base class to provide
+    All SpindleX exceptions inherit from this base class to provide
     a unified exception hierarchy for error handling.
     """
 
@@ -184,7 +184,7 @@ class ConfigurationException(SSHException):
     """
     Configuration error.
 
-    Raised when SSH library configuration is invalid or incomplete.
+    Raised when SpindleX configuration is invalid or incomplete.
     """
 
     pass

@@ -1,5 +1,5 @@
 """
-Custom log formatters for SSH library.
+Custom log formatters for SpindleX.
 """
 
 import json
@@ -11,7 +11,7 @@ from .sanitizer import LogSanitizer
 
 
 class SSHFormatter(logging.Formatter):
-    """Standard SSH library log formatter with security sanitization."""
+    """Standard SpindleX log formatter with security sanitization."""
 
     def __init__(self, fmt: str = None, datefmt: str = None, sanitize: bool = True):
         """

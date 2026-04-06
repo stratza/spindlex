@@ -19,6 +19,7 @@ from cryptography.hazmat.primitives.asymmetric.utils import (
 )
 
 from ..exceptions import BadHostKeyException, CryptoException
+from ..protocol.utils import write_mpint
 from .backend import CryptoBackend, default_crypto_backend
 
 
@@ -508,13 +509,8 @@ class ECDSAKey(PKey):
             # Convert DER signature to SSH format (r, s values)
             r, s = decode_dss_signature(signature)
 
-            # Format r and s as SSH mpints (32 bytes each for P-256)
-            r_bytes = r.to_bytes(32, "big")
-            s_bytes = s.to_bytes(32, "big")
-
-            # Create SSH signature blob
-            sig_blob = struct.pack(">I", len(r_bytes)) + r_bytes
-            sig_blob += struct.pack(">I", len(s_bytes)) + s_bytes
+            # Create SSH signature blob with proper mpint encoding
+            sig_blob = write_mpint(r) + write_mpint(s)
 
             # Format as SSH signature
             algorithm = b"ecdsa-sha2-nistp256"
@@ -681,15 +677,11 @@ class RSAKey(PKey):
             # Get public numbers
             numbers = public_key.public_numbers()
 
-            # Convert to bytes
-            e_bytes = numbers.e.to_bytes((numbers.e.bit_length() + 7) // 8, "big")
-            n_bytes = numbers.n.to_bytes((numbers.n.bit_length() + 7) // 8, "big")
-
             # Format as SSH wire format
             algorithm = b"ssh-rsa"
             result = struct.pack(">I", len(algorithm)) + algorithm
-            result += struct.pack(">I", len(e_bytes)) + e_bytes
-            result += struct.pack(">I", len(n_bytes)) + n_bytes
+            result += write_mpint(numbers.e)
+            result += write_mpint(numbers.n)
             return result
         except Exception as e:
             raise CryptoException(f"Failed to get RSA public key bytes: {e}")
@@ -760,8 +752,11 @@ class RSAKey(PKey):
             # Choose hash algorithm based on signature type
             if algorithm == "rsa-sha2-512":
                 hash_algo = hashes.SHA512()
-            else:
+            elif algorithm == "rsa-sha2-256":
                 hash_algo = hashes.SHA256()
+            else:
+                # Default to SHA-1 for ssh-rsa
+                hash_algo = hashes.SHA1()
 
             # Verify signature
             public_key.verify(sig_bytes, data, padding.PKCS1v15(), hash_algo)
