@@ -279,7 +279,7 @@ pip install .[gssapi]
 
 ## 🤝 Contributing
 
-We ❤️ contributions! SpindleX is built by developers, for developers.
+I ❤️ contributions! SpindleX is built by developers, for developers.
 
 ### 🚀 Quick Contribution Guide
 
@@ -290,7 +290,7 @@ We ❤️ contributions! SpindleX is built by developers, for developers.
 5. **📝 Commit** with clear messages: `git commit -m "Add amazing feature"`
 6. **🚀 Push** and create a Pull Request
 
-### 🎯 Areas We Need Help
+### 🎯 Areas I Need Help
 
 - 📖 Documentation improvements
 - 🧪 Test coverage expansion  
@@ -304,7 +304,7 @@ We ❤️ contributions! SpindleX is built by developers, for developers.
 
 ## 🛡️ Security
 
-Security is our top priority. SpindleX implements:
+Security is my top priority. SpindleX implements:
 
 - 🔐 **Modern Cryptography**: Ed25519, ECDSA, ChaCha20-Poly1305
 - 🛡️ **Secure Defaults**: No weak algorithms enabled
@@ -313,7 +313,7 @@ Security is our top priority. SpindleX implements:
 
 ### 🚨 Security Issues
 
-Found a security vulnerability? Please report it through our [GitLab security issue tracker](https://gitlab.com/daveops.world/development/python/spindlex/-/issues) with the "security" label.
+Found a security vulnerability? Please report it through my [GitLab security issue tracker](https://gitlab.com/daveops.world/development/python/spindlex/-/issues) with the "security" label.
 
 ---
 
@@ -357,11 +357,11 @@ SpindleX stands on the shoulders of giants:
 
 <div align="center">
 
-### 🌟 **Star us on GitLab!** 🌟
+### 🌟 **Star me on GitLab!** 🌟
 
-If SpindleX helps you build amazing things, consider giving us a ⭐
+If SpindleX helps you build amazing things, consider giving me a ⭐
 
-**Made with ❤️ by the SpindleX Team**
+**Made with ❤️ by Di3Z1E**
 
 [🐛 Report Bug](https://gitlab.com/daveops.world/development/python/spindlex/-/issues) • [✨ Request Feature](https://gitlab.com/daveops.world/development/python/spindlex/-/issues) • [💬 Discussions](https://gitlab.com/daveops.world/development/python/spindlex/-/issues)
 

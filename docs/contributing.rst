@@ -1,7 +1,7 @@
 Contributing Guide
 ==================
 
-We welcome contributions to SpindleX! This guide will help you get started with contributing code, documentation, bug reports, and feature requests.
+I welcome contributions to SpindleX! This guide will help you get started with contributing code, documentation, bug reports, and feature requests.
 
 Getting Started
 ---------------
@@ -48,7 +48,7 @@ Development Workflow
     git checkout -b bugfix/issue-number
 
 2. **Make Your Changes**
-   - Write code following our style guidelines
+   - Write code following the style guidelines
    - Add tests for new functionality
    - Update documentation as needed
 
@@ -90,7 +90,7 @@ Code Style and Standards
 Python Code Style
 ~~~~~~~~~~~~~~~~~
 
-We follow PEP 8 with some modifications:
+I follow PEP 8 with some modifications:
 
 - **Line Length**: 88 characters (Black default)
 - **Imports**: Use isort for import sorting
@@ -153,7 +153,7 @@ Example code style::
 Code Formatting Tools
 ~~~~~~~~~~~~~~~~~~~~~
 
-We use automated tools for code formatting:
+I use automated tools for code formatting:
 
 **Black** for code formatting::
 
@@ -174,7 +174,7 @@ We use automated tools for code formatting:
 Pre-commit Configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-Our `.pre-commit-config.yaml`::
+The `.pre-commit-config.yaml`::
 
     repos:
       - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -599,7 +599,7 @@ Vulnerability Reporting
 If you discover a security vulnerability:
 
 1. **Do NOT** create a public issue
-2. **Email** security@spindlex.org with details
+2. **Email** di3z1e@proton.me with details
 3. **Include** steps to reproduce the vulnerability
 4. **Wait** for acknowledgment before public disclosure
 
@@ -659,7 +659,7 @@ Release Process
 Version Numbering
 ~~~~~~~~~~~~~~~~~
 
-We follow Semantic Versioning (SemVer):
+I follow Semantic Versioning (SemVer):
 
 - **MAJOR**: Incompatible API changes
 - **MINOR**: New functionality (backward compatible)
@@ -714,7 +714,7 @@ Community Guidelines
 Code of Conduct
 ~~~~~~~~~~~~~~~
 
-We are committed to providing a welcoming and inclusive environment:
+I am committed to providing a welcoming and inclusive environment:
 
 1. **Be Respectful**: Treat all community members with respect
 2. **Be Inclusive**: Welcome people of all backgrounds and identities
@@ -727,7 +727,7 @@ Communication Channels
 
 - **GitLab Issues**: Bug reports and feature requests
 - **GitLab Discussions**: General questions and discussions
-- **Email**: security@spindlex.org for security issues
+- **Email**: di3z1e@proton.me for security issues
 - **Documentation**: Comprehensive guides and API reference
 
 Getting Help

@@ -7,7 +7,7 @@ Provides modern cryptographic standards and comprehensive RFC 4251-4254 complian
 
 from ._version import __version__, __version_info__, get_version, get_version_info
 
-__author__ = "SpindleX Team"
+__author__ = "Di3Z1E"
 __license__ = "MIT"
 
 from .client.sftp_client import SFTPClient

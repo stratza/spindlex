@@ -4,7 +4,7 @@ Thank you for your interest in contributing to SpindleX! This document provides 
 
 ## Code of Conduct
 
-By participating in this project, you agree to abide by our Code of Conduct. Please be respectful and constructive in all interactions.
+By participating in this project, you agree to abide by the project's Code of Conduct. Please be respectful and constructive in all interactions.
 
 ## Getting Started
 
@@ -52,7 +52,7 @@ python -m pytest tests/test_protocol_utils.py
 
 ### Code Quality
 
-We maintain high code quality standards:
+I maintain high code quality standards:
 
 ```bash
 # Format code
@@ -83,10 +83,10 @@ When reporting issues, please include:
 - **Environment**: Python version, OS, library version
 - **Error Messages**: Full stack traces when applicable
 
-Use our issue templates:
+Use the project's issue templates:
 - Bug Report
 - Feature Request
-- Security Issue (use security@spindlex.dev for sensitive issues)
+- Security Issue (use di3z1e@proton.me for sensitive issues)
 
 ### Submitting Changes
 
@@ -119,7 +119,7 @@ Use our issue templates:
 
 ### Commit Message Format
 
-We use conventional commits:
+I use conventional commits:
 
 ```
 <type>(<scope>): <description>
@@ -150,7 +150,7 @@ test(crypto): add tests for key generation
 
 ### Python Style
 
-We follow PEP 8 with some modifications:
+I follow PEP 8 with some modifications:
 
 - **Line Length**: 88 characters (Black default)
 - **Imports**: Use isort for import sorting
@@ -383,7 +383,7 @@ open _build/html/index.html
 
 ### Version Management
 
-We use semantic versioning (SemVer):
+I use semantic versioning (SemVer):
 - **MAJOR**: Breaking changes
 - **MINOR**: New features (backward compatible)
 - **PATCH**: Bug fixes (backward compatible)
@@ -403,14 +403,14 @@ We use semantic versioning (SemVer):
 
 - **GitHub Issues**: Bug reports and feature requests
 - **GitHub Discussions**: General questions and discussions
-- **Security Email**: security@ssh-library.org for security issues
+- **Security Email**: di3z1e@proton.me for security issues
 
 ### Getting Help
 
 - **Documentation**: Check the documentation first
 - **Search Issues**: Look for existing issues
 - **Ask Questions**: Use GitHub Discussions for questions
-- **Stack Overflow**: Tag questions with `ssh-library`
+- **Stack Overflow**: Tag questions with `spindlex`
 
 ## Recognition
 
@@ -427,12 +427,12 @@ By contributing to SpindleX, you agree that:
 
 1. Your contributions are your original work
 2. You have the right to submit the contributions
-3. Your contributions are licensed under the Apache 2.0 license
-4. You grant the project maintainers the right to use your contributions
+3. Your contributions are licensed under the MIT license
+4. You grant the project creator the right to use your contributions
 
 ### Copyright
 
-- **New Files**: Include Apache 2.0 license header
+- **New Files**: Include MIT license header
 - **Existing Files**: Maintain existing copyright notices
 - **Third-Party Code**: Clearly mark and attribute third-party code
 
@@ -440,4 +440,4 @@ By contributing to SpindleX, you agree that:
 
 Thank you for contributing to SpindleX! Your contributions help make secure SSH communication accessible to Python developers worldwide.
 
-For questions about contributing, please open a GitHub Discussion or contact the maintainers.
+For questions about contributing, please open a GitHub Discussion or contact me.
