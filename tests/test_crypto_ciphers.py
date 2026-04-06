@@ -1,7 +1,8 @@
-
 import pytest
+
 from spindlex.crypto.ciphers import CipherSuite
 from spindlex.exceptions import CryptoException
+
 
 def test_cipher_suite_negotiation():
     suite = CipherSuite()
@@ -21,10 +22,11 @@ def test_cipher_suite_negotiation():
         "mac_algorithms_client_to_server": ["hmac-sha2-256"],
         "mac_algorithms_server_to_client": ["hmac-sha2-256"],
     }
-    
+
     negotiated = suite.negotiate_algorithms(client_algs, server_algs)
     assert negotiated["kex"] == "diffie-hellman-group14-sha256"
     assert negotiated["server_host_key"] == "rsa-sha2-256"
+
 
 def test_cipher_suite_aead_negotiation():
     suite = CipherSuite()
@@ -37,25 +39,28 @@ def test_cipher_suite_aead_negotiation():
         "mac_algorithms_server_to_client": ["hmac-sha2-256"],
     }
     server_algs = client_algs
-    
+
     negotiated = suite.negotiate_algorithms(client_algs, server_algs)
     assert negotiated["encryption_client_to_server"] == "chacha20-poly1305@openssh.com"
     assert negotiated["mac_client_to_server"] == "none"
+
 
 def test_cipher_info():
     suite = CipherSuite()
     info = suite.get_cipher_info("aes256-ctr")
     assert info["key_len"] == 32
     assert not info["aead"]
-    
+
     info_aead = suite.get_cipher_info("chacha20-poly1305@openssh.com")
     assert info_aead["aead"]
+
 
 def test_mac_info():
     suite = CipherSuite()
     info = suite.get_mac_info("hmac-sha2-256")
     assert info["key_len"] == 32
     assert info["digest_len"] == 32
+
 
 def test_unsupported_cipher():
     suite = CipherSuite()

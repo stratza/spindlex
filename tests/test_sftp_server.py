@@ -1,20 +1,37 @@
+import os
+import shutil
+import tempfile
+from unittest.mock import MagicMock, patch
 
 import pytest
-import os
-import tempfile
-import shutil
-from unittest.mock import MagicMock, patch
-from spindlex.server.sftp_server import SFTPServer, SFTPHandle
-from spindlex.protocol.sftp_messages import (
-    SFTPInitMessage, SFTPVersionMessage, SFTPOpenMessage, SFTPHandleMessage,
-    SFTPStatusMessage, SFTPAttributes, SFTPReadMessage, SFTPDataMessage,
-    SFTPWriteMessage, SFTPCloseMessage, SFTPStatMessage, SFTPAttrsMessage,
-    SFTPOpenDirMessage, SFTPReadDirMessage, SFTPNameMessage, SFTPRealPathMessage,
-    SFTPMkdirMessage, SFTPRmdirMessage, SFTPRemoveMessage, SFTPRenameMessage,
-    SFTPSetStatMessage
-)
-from spindlex.protocol.sftp_constants import *
+
 from spindlex.exceptions import SFTPError
+from spindlex.protocol.sftp_constants import *
+from spindlex.protocol.sftp_messages import (
+    SFTPAttributes,
+    SFTPAttrsMessage,
+    SFTPCloseMessage,
+    SFTPDataMessage,
+    SFTPHandleMessage,
+    SFTPInitMessage,
+    SFTPMkdirMessage,
+    SFTPNameMessage,
+    SFTPOpenDirMessage,
+    SFTPOpenMessage,
+    SFTPReadDirMessage,
+    SFTPReadMessage,
+    SFTPRealPathMessage,
+    SFTPRemoveMessage,
+    SFTPRenameMessage,
+    SFTPRmdirMessage,
+    SFTPSetStatMessage,
+    SFTPStatMessage,
+    SFTPStatusMessage,
+    SFTPVersionMessage,
+    SFTPWriteMessage,
+)
+from spindlex.server.sftp_server import SFTPHandle, SFTPServer
+
 
 @pytest.fixture
 def temp_root():
@@ -22,59 +39,64 @@ def temp_root():
     yield path
     shutil.rmtree(path)
 
+
 @pytest.fixture
 def mock_channel():
     channel = MagicMock()
     return channel
 
+
 def test_sftp_handle_file(temp_root):
     file_path = os.path.join(temp_root, "test.txt")
     with open(file_path, "wb") as f:
         f.write(b"hello world")
-    
+
     with open(file_path, "rb+") as f:
         handle = SFTPHandle(b"h1", file_path, SSH_FXF_READ | SSH_FXF_WRITE, f)
-        
+
         assert handle.read(5) == b"hello"
         handle.seek(6)
         assert handle.read(5) == b"world"
-        
+
         handle.seek(0)
         handle.write(b"HELLO")
         handle.seek(0)
         assert handle.read(5) == b"HELLO"
-        
+
         handle.close()
         assert f.closed
 
+
 def test_sftp_server_init_failure(mock_channel, temp_root):
     # Mock _receive_message to fail during INIT
-    with patch.object(SFTPServer, '_receive_message') as mock_recv:
+    with patch.object(SFTPServer, "_receive_message") as mock_recv:
         mock_recv.side_effect = Exception("Failed to receive INIT")
-        
+
         with pytest.raises(SFTPError, match="SFTP initialization failed"):
             SFTPServer(mock_channel, temp_root)
 
+
 def test_sftp_server_init_success(mock_channel, temp_root):
     # Mock _receive_message to return INIT then stop
-    with patch.object(SFTPServer, '_receive_message') as mock_recv:
-        with patch.object(SFTPServer, '_send_message') as mock_send:
+    with patch.object(SFTPServer, "_receive_message") as mock_recv:
+        with patch.object(SFTPServer, "_send_message") as mock_send:
             mock_recv.side_effect = [SFTPInitMessage(3), Exception("Stop")]
-            
+
             # SFTPServer won't raise SFTPError if it stops in _process_messages
             SFTPServer(mock_channel, temp_root)
-            
+
             assert mock_send.called
             sent_msg = mock_send.call_args_list[0][0][0]
             assert isinstance(sent_msg, SFTPVersionMessage)
+
 
 def test_sftp_server_open_read_close(mock_channel, temp_root):
     file_path = os.path.join(temp_root, "test.txt")
     with open(file_path, "wb") as f:
         f.write(b"sftp test data")
-    
-    with patch.object(SFTPServer, '_receive_message') as mock_recv:
-        with patch.object(SFTPServer, '_send_message') as mock_send:
+
+    with patch.object(SFTPServer, "_receive_message") as mock_recv:
+        with patch.object(SFTPServer, "_send_message") as mock_send:
             # Sequence: INIT, OPEN, READ, CLOSE, STOP
             attrs = SFTPAttributes()
             mock_recv.side_effect = [
@@ -82,14 +104,14 @@ def test_sftp_server_open_read_close(mock_channel, temp_root):
                 SFTPOpenMessage(1, "test.txt", SSH_FXF_READ, attrs),
                 SFTPReadMessage(2, b"handle_1", 0, 100),
                 SFTPCloseMessage(3, b"handle_1"),
-                Exception("Stop")
+                Exception("Stop"),
             ]
-            
+
             try:
                 SFTPServer(mock_channel, temp_root)
             except SFTPError:
                 pass
-            
+
             # Check sent messages
             sent_messages = [call[0][0] for call in mock_send.call_args_list]
             assert isinstance(sent_messages[0], SFTPVersionMessage)
@@ -100,136 +122,150 @@ def test_sftp_server_open_read_close(mock_channel, temp_root):
             assert isinstance(sent_messages[3], SFTPStatusMessage)
             assert sent_messages[3].status_code == SSH_FX_OK
 
+
 def test_sftp_server_realpath(mock_channel, temp_root):
-    with patch.object(SFTPServer, '_receive_message') as mock_recv:
-        with patch.object(SFTPServer, '_send_message') as mock_send:
+    with patch.object(SFTPServer, "_receive_message") as mock_recv:
+        with patch.object(SFTPServer, "_send_message") as mock_send:
             mock_recv.side_effect = [
                 SFTPInitMessage(3),
                 SFTPRealPathMessage(1, "."),
-                Exception("Stop")
+                Exception("Stop"),
             ]
-            
+
             try:
                 SFTPServer(mock_channel, temp_root)
             except SFTPError:
                 pass
-            
+
             sent_messages = [call[0][0] for call in mock_send.call_args_list]
             assert isinstance(sent_messages[1], SFTPNameMessage)
             assert sent_messages[1].names[0][0] == "/"
 
+
 def test_sftp_server_resolve_path_security(mock_channel, temp_root):
     # Test path traversal prevention
-    with patch.object(SFTPServer, '_receive_message') as mock_recv:
+    with patch.object(SFTPServer, "_receive_message") as mock_recv:
         mock_recv.side_effect = [SFTPInitMessage(3), Exception("Stop")]
         try:
             server = SFTPServer(mock_channel, temp_root)
         except SFTPError:
             # We need to get the server instance, but __init__ enters loop
             pass
-    
+
     # Let's bypass __init__ loop for easier testing of helper methods
-    with patch.object(SFTPServer, '_start_sftp_session'):
+    with patch.object(SFTPServer, "_start_sftp_session"):
         server = SFTPServer(mock_channel, temp_root)
-        
-        assert server._resolve_path("test.txt") == os.path.abspath(os.path.join(temp_root, "test.txt"))
-        assert server._resolve_path("/test.txt") == os.path.abspath(os.path.join(temp_root, "test.txt"))
-        
+
+        assert server._resolve_path("test.txt") == os.path.abspath(
+            os.path.join(temp_root, "test.txt")
+        )
+        assert server._resolve_path("/test.txt") == os.path.abspath(
+            os.path.join(temp_root, "test.txt")
+        )
+
         with pytest.raises(SFTPError, match="outside root"):
             server._resolve_path("../outside.txt")
-        
+
         with pytest.raises(SFTPError, match="outside root"):
             server._resolve_path("/../outside.txt")
+
 
 def test_sftp_server_stat(mock_channel, temp_root):
     file_path = os.path.join(temp_root, "test.txt")
     with open(file_path, "wb") as f:
         f.write(b"data")
-    
-    with patch.object(SFTPServer, '_receive_message') as mock_recv:
-        with patch.object(SFTPServer, '_send_message') as mock_send:
+
+    with patch.object(SFTPServer, "_receive_message") as mock_recv:
+        with patch.object(SFTPServer, "_send_message") as mock_send:
             mock_recv.side_effect = [
                 SFTPInitMessage(3),
                 SFTPStatMessage(1, "test.txt"),
-                Exception("Stop")
+                Exception("Stop"),
             ]
-            
+
             try:
                 SFTPServer(mock_channel, temp_root)
             except SFTPError:
                 pass
-            
+
             sent_messages = [call[0][0] for call in mock_send.call_args_list]
             assert isinstance(sent_messages[1], SFTPAttrsMessage)
             assert sent_messages[1].attrs.size == 4
 
+
 def test_sftp_server_mkdir_rmdir(mock_channel, temp_root):
     dir_name = "new_dir"
     dir_path = os.path.join(temp_root, dir_name)
-    
-    with patch.object(SFTPServer, '_receive_message') as mock_recv:
-        with patch.object(SFTPServer, '_send_message') as mock_send:
+
+    with patch.object(SFTPServer, "_receive_message") as mock_recv:
+        with patch.object(SFTPServer, "_send_message") as mock_send:
             attrs = SFTPAttributes()
             mock_recv.side_effect = [
                 SFTPInitMessage(3),
                 SFTPMkdirMessage(1, dir_name, attrs),
                 SFTPRmdirMessage(2, dir_name),
-                Exception("Stop")
+                Exception("Stop"),
             ]
-            
+
             try:
                 SFTPServer(mock_channel, temp_root)
             except SFTPError:
                 pass
-            
-            assert os.path.exists(dir_path) is False # because it was created then removed
+
+            assert (
+                os.path.exists(dir_path) is False
+            )  # because it was created then removed
             sent_messages = [call[0][0] for call in mock_send.call_args_list]
             assert sent_messages[1].status_code == SSH_FX_OK
             assert sent_messages[2].status_code == SSH_FX_OK
 
+
 def test_sftp_server_write(mock_channel, temp_root):
     file_path = os.path.join(temp_root, "write_test.txt")
-    
-    with patch.object(SFTPServer, '_receive_message') as mock_recv:
-        with patch.object(SFTPServer, '_send_message') as mock_send:
+
+    with patch.object(SFTPServer, "_receive_message") as mock_recv:
+        with patch.object(SFTPServer, "_send_message") as mock_send:
             attrs = SFTPAttributes()
             mock_recv.side_effect = [
                 SFTPInitMessage(3),
-                SFTPOpenMessage(1, "write_test.txt", SSH_FXF_WRITE | SSH_FXF_CREAT, attrs),
+                SFTPOpenMessage(
+                    1, "write_test.txt", SSH_FXF_WRITE | SSH_FXF_CREAT, attrs
+                ),
                 SFTPWriteMessage(2, b"handle_1", 0, b"new data"),
                 SFTPCloseMessage(3, b"handle_1"),
-                Exception("Stop")
+                Exception("Stop"),
             ]
-            
+
             try:
                 SFTPServer(mock_channel, temp_root)
             except SFTPError:
                 pass
-            
+
             with open(file_path, "rb") as f:
                 assert f.read() == b"new data"
+
 
 def test_sftp_server_opendir_readdir(mock_channel, temp_root):
     os.mkdir(os.path.join(temp_root, "subdir"))
     with open(os.path.join(temp_root, "subdir", "file1.txt"), "w") as f:
         f.write("test")
-    
-    with patch.object(SFTPServer, '_receive_message') as mock_recv:
-        with patch.object(SFTPServer, '_send_message') as mock_send:
+
+    with patch.object(SFTPServer, "_receive_message") as mock_recv:
+        with patch.object(SFTPServer, "_send_message") as mock_send:
             mock_recv.side_effect = [
                 SFTPInitMessage(3),
                 SFTPOpenDirMessage(1, "subdir"),
                 SFTPReadDirMessage(2, b"handle_1"),
-                SFTPReadDirMessage(3, b"handle_1"), # Should return EOF
+                SFTPReadDirMessage(3, b"handle_1"),  # Should return EOF
                 SFTPCloseMessage(4, b"handle_1"),
-                Exception("Stop")
+                Exception("Stop"),
             ]
-            
+
             try:
                 SFTPServer(mock_channel, temp_root)
             except SFTPError:
                 pass
-            
+
             sent_messages = [call[0][0] for call in mock_send.call_args_list]
             assert isinstance(sent_messages[2], SFTPNameMessage)
             assert len(sent_messages[2].names) == 1
@@ -237,72 +273,77 @@ def test_sftp_server_opendir_readdir(mock_channel, temp_root):
             assert isinstance(sent_messages[3], SFTPStatusMessage)
             assert sent_messages[3].status_code == SSH_FX_EOF
 
+
 def test_sftp_server_remove_rename(mock_channel, temp_root):
     file1 = os.path.join(temp_root, "file1.txt")
     file2 = os.path.join(temp_root, "file2.txt")
-    with open(file1, "w") as f: f.write("1")
-    
-    with patch.object(SFTPServer, '_receive_message') as mock_recv:
-        with patch.object(SFTPServer, '_send_message') as mock_send:
+    with open(file1, "w") as f:
+        f.write("1")
+
+    with patch.object(SFTPServer, "_receive_message") as mock_recv:
+        with patch.object(SFTPServer, "_send_message") as mock_send:
             mock_recv.side_effect = [
                 SFTPInitMessage(3),
                 SFTPRenameMessage(1, "file1.txt", "file2.txt"),
                 SFTPRemoveMessage(2, "file2.txt"),
-                Exception("Stop")
+                Exception("Stop"),
             ]
-            
+
             try:
                 SFTPServer(mock_channel, temp_root)
             except SFTPError:
                 pass
-            
+
             assert not os.path.exists(file1)
             assert not os.path.exists(file2)
 
+
 def test_sftp_server_setstat(mock_channel, temp_root):
     file_path = os.path.join(temp_root, "test.txt")
-    with open(file_path, "w") as f: f.write("test")
-    
+    with open(file_path, "w") as f:
+        f.write("test")
+
     try:
-        with patch.object(SFTPServer, '_receive_message') as mock_recv:
-            with patch.object(SFTPServer, '_send_message') as mock_send:
+        with patch.object(SFTPServer, "_receive_message") as mock_recv:
+            with patch.object(SFTPServer, "_send_message") as mock_send:
                 attrs = SFTPAttributes()
                 attrs.permissions = 0o444
                 attrs.flags = SSH_FILEXFER_ATTR_PERMISSIONS
                 mock_recv.side_effect = [
                     SFTPInitMessage(3),
                     SFTPSetStatMessage(1, "test.txt", attrs),
-                    Exception("Stop")
+                    Exception("Stop"),
                 ]
-                
+
                 try:
                     SFTPServer(mock_channel, temp_root)
                 except SFTPError:
                     pass
-                
+
                 st = os.stat(file_path)
                 assert (st.st_mode & 0o777) == 0o444
     finally:
         os.chmod(file_path, 0o666)
 
+
 def test_sftp_server_errors(mock_channel, temp_root):
-    with patch.object(SFTPServer, '_receive_message') as mock_recv:
-        with patch.object(SFTPServer, '_send_message') as mock_send:
+    with patch.object(SFTPServer, "_receive_message") as mock_recv:
+        with patch.object(SFTPServer, "_send_message") as mock_send:
             mock_recv.side_effect = [
                 SFTPInitMessage(3),
                 SFTPStatMessage(1, "nonexistent.txt"),
                 SFTPOpenMessage(2, "nonexistent.txt", SSH_FXF_READ, SFTPAttributes()),
                 SFTPReadMessage(3, b"invalid_handle", 0, 10),
-                Exception("Stop")
+                Exception("Stop"),
             ]
-            
+
             try:
                 SFTPServer(mock_channel, temp_root)
             except SFTPError:
                 pass
-            
+
             sent_messages = [call[0][0] for call in mock_send.call_args_list]
             # [Version, Status(Stat Error), Status(Open Error), Status(Read Error)]
             assert sent_messages[1].status_code == SSH_FX_NO_SUCH_FILE
             assert sent_messages[2].status_code == SSH_FX_NO_SUCH_FILE
-            assert sent_messages[3].status_code == SSH_FX_FAILURE # Invalid handle
+            assert sent_messages[3].status_code == SSH_FX_FAILURE  # Invalid handle

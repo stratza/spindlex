@@ -9,10 +9,10 @@ description = "A pure-Python SSHv2 client/server library"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
-    {name = "SpindleX Team", email = "team@spindlex.org"}
+    {name = "Di3Z1E", email = "di3z1e@proton.me"}
 ]
 maintainers = [
-    {name = "SpindleX Team", email = "team@spindlex.org"}
+    {name = "Di3Z1E", email = "di3z1e@proton.me"}
 ]
 keywords = ["ssh", "sftp", "client", "server", "cryptography", "security"]
 classifiers = [

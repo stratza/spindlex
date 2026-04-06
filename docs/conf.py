@@ -17,8 +17,8 @@ sys.path.insert(0, str(project_root))
 # -- Project information -----------------------------------------------------
 
 project = 'SpindleX'
-copyright = '2024, SpindleX Team'
-author = 'SpindleX Team'
+copyright = '2024, Di3Z1E'
+author = 'Di3Z1E'
 
 # The full version, including alpha/beta/rc tags
 try:
