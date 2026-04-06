@@ -1,7 +1,7 @@
 Advanced Examples
 =================
 
-This section provides advanced usage examples for SSH Library, including async operations, custom protocols, and complex integrations.
+This section provides advanced usage examples for SpindleX, including async operations, custom protocols, and complex integrations.
 
 Async SSH Operations
 --------------------

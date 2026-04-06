@@ -1,5 +1,5 @@
 """
-Custom log handlers for SSH library.
+Custom log handlers for SpindleX.
 """
 
 import logging

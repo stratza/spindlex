@@ -1,5 +1,5 @@
 """
-Main logging interface for SSH library.
+Main logging interface for SpindleX.
 """
 
 import logging
@@ -11,7 +11,7 @@ from .handlers import PerformanceHandler, SecurityHandler
 
 
 class SSHLogger:
-    """Enhanced logger for SSH library with security and performance features."""
+    """Enhanced logger for SpindleX with security and performance features."""
 
     def __init__(self, name: str, logger: Optional[logging.Logger] = None):
         """
@@ -149,7 +149,7 @@ def configure_logging(
     json_format: bool = False,
 ) -> None:
     """
-    Configure SSH library logging.
+    Configure SpindleX logging.
 
     Args:
         level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
