@@ -1,7 +1,7 @@
 Monitoring Examples
 ===================
 
-This section provides examples for monitoring systems and applications using SSH Library.
+This section provides examples for monitoring systems and applications using SpindleX.
 
 System Monitoring
 -----------------

@@ -1,7 +1,7 @@
 SFTP Guide
 ==========
 
-The SSH File Transfer Protocol (SFTP) provides secure file transfer capabilities over SSH connections. This guide covers all aspects of using SFTP with SSH Library.
+The SSH File Transfer Protocol (SFTP) provides secure file transfer capabilities over SSH connections. This guide covers all aspects of using SFTP with SpindleX.
 
 Basic SFTP Operations
 ---------------------

@@ -78,25 +78,9 @@ lint_mypy:
       - htmlcov/
     expire_in: 1 week
 
-test_python39:
-  <<: *test_template
-  image: python:3.9
-
-test_python310:
-  <<: *test_template
-  image: python:3.10
-
 test_python311:
   <<: *test_template
   image: python:3.11
-
-test_python312:
-  <<: *test_template
-  image: python:3.12
-
-test_python313:
-  <<: *test_template
-  image: python:3.13
 
 # Integration tests
 test_integration:
