@@ -47,13 +47,13 @@ Use the release automation script:
 
 ```bash
 # Create a new minor release
-python scripts/release.py --version 0.3.0 --type minor
+python scripts/release.py --version 0.4.0 --type minor
 
 # Create a patch release
 python scripts/release.py --version 0.2.1 --type patch
 
 # Dry run to see what would happen
-python scripts/release.py --version 0.3.0 --dry-run
+python scripts/release.py --version 0.4.0 --dry-run
 ```
 
 The script will:
@@ -72,26 +72,26 @@ If you prefer manual control:
 1. **Update Version Files**
    ```bash
    # Update spindlex/_version.py
-   __version__ = "0.3.0"
+   __version__ = "0.4.0"
    __version_info__ = (0, 3, 0)
    
    # Update pyproject.toml
-   version = "0.3.0"
+   version = "0.4.0"
    ```
 
 2. **Update Changelog**
    ```bash
-   # Replace [Unreleased] with [0.3.0] - 2024-01-15
+   # Replace [Unreleased] with [0.4.0] - 2024-01-15
    # Add new [Unreleased] section
    ```
 
 3. **Create Git Tag**
    ```bash
    git add .
-   git commit -m "Release version 0.3.0"
-   git tag -a v0.3.0 -m "Release version 0.3.0"
+   git commit -m "Release version 0.4.0"
+   git tag -a v0.4.0 -m "Release version 0.4.0"
    git push origin main
-   git push origin v0.3.0
+   git push origin v0.4.0
    ```
 
 ## 📦 PyPI Deployment
@@ -106,7 +106,7 @@ Once you push a tag, GitLab CI will automatically:
 
 1. **Go to GitLab Pipelines**
    - Visit: https://gitlab.com/daveops.world/development/python/spindle/-/pipelines
-   - Find the pipeline for your tag (e.g., `v0.3.0`)
+   - Find the pipeline for your tag (e.g., `v0.4.0`)
 
 2. **Deploy to Test PyPI First**
    - Click the manual `deploy:pypi:test` job
