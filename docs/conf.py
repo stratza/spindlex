@@ -93,6 +93,9 @@ autodoc_typehints = 'description'
 # Don't show class signature with the class' name.
 autodoc_class_signature = 'mixed'
 
+# Mock modules that require system dependencies for building
+autodoc_mock_imports = ["gssapi"]
+
 # -- Options for intersphinx extension --------------------------------------
 
 # Example configuration for intersphinx: refer to the Python standard library.
