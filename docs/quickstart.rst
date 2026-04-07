@@ -70,10 +70,10 @@ For key-based authentication:
 .. code-block:: python
 
    from spindlex import SSHClient
-   from spindlex.crypto.pkey import Ed25519Key
+   from spindlex.crypto.pkey import load_key_from_file
 
    # Load private key
-   private_key = Ed25519Key.from_private_key_file('/path/to/private_key')
+   private_key = load_key_from_file('/path/to/private_key')
 
    client = SSHClient()
    client.connect(
@@ -95,22 +95,19 @@ Transfer files using SFTP:
    client.connect('example.com', username='user', password='pass')
 
    # Open SFTP session
-   sftp = client.open_sftp()
-
    try:
-       # Upload a file
-       sftp.put('/local/file.txt', '/remote/file.txt')
-       
-       # Download a file
-       sftp.get('/remote/data.csv', '/local/data.csv')
-       
-       # List directory contents
-       files = sftp.listdir('/remote/directory')
-       for filename in files:
-           print(filename)
-
+       with client.open_sftp() as sftp:
+           # Upload a file
+           sftp.put('/local/file.txt', '/remote/file.txt')
+           
+           # Download a file
+           sftp.get('/remote/data.csv', '/local/data.csv')
+           
+           # List directory contents
+           files = sftp.listdir('/remote/directory')
+           for filename in files:
+               print(filename)
    finally:
-       sftp.close()
        client.close()
 
 Port Forwarding
@@ -126,10 +123,9 @@ Set up local port forwarding:
    client.connect('jump-server.com', username='user', password='pass')
 
    # Forward local port 8080 to remote server port 80
-   transport = client.get_transport()
-   local_port = transport.request_port_forward('', 8080, 'internal-server', 80)
+   tunnel_id = client.create_local_port_forward(8080, 'internal-server', 80)
 
-   print(f"Port forwarding active on port {local_port}")
+   print(f"Port forwarding active for tunnel {tunnel_id}")
    
    # Keep the connection alive
    input("Press Enter to stop forwarding...")

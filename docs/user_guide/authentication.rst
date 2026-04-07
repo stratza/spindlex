@@ -19,48 +19,20 @@ Public key authentication is the most secure method and is recommended for produ
 Key Generation
 ~~~~~~~~~~~~~~
 
-Generate SSH keys using SpindleX::
-
-    from spindlex.crypto.pkey import Ed25519Key, RSAKey, ECDSAKey
-    
-    # Generate Ed25519 key (recommended)
-    private_key = Ed25519Key.generate()
-    
-    # Save private key with passphrase
-    private_key.save_to_file('/path/to/private_key', password='strong_passphrase')
-    
-    # Get public key for server configuration
-    public_key = private_key.get_public_key()
-    public_key_string = public_key.get_base64()
-    
-    print(f"ssh-ed25519 {public_key_string} user@hostname")
-
-Alternative key types::
-
-    # RSA key (minimum 2048 bits, recommend 4096)
-    rsa_key = RSAKey.generate(4096)
-    
-    # ECDSA key
-    ecdsa_key = ECDSAKey.generate()
+Currently, SpindleX focuses on key usage rather than generation. It is recommended to use standard tools like `ssh-keygen` to generate your keys.
 
 Loading Existing Keys
 ~~~~~~~~~~~~~~~~~~~~~
 
-Load private keys from files::
+Load private keys from files using the utility function::
 
-    from spindlex.crypto.pkey import Ed25519Key
+    from spindlex.crypto.pkey import load_key_from_file
     
     # Load key with passphrase
-    private_key = Ed25519Key.from_private_key_file(
+    private_key = load_key_from_file(
         '/path/to/private_key',
         password='passphrase'
     )
-    
-    # Load key from string
-    with open('/path/to/private_key', 'r') as f:
-        key_data = f.read()
-    
-    private_key = Ed25519Key.from_private_key(key_data, password='passphrase')
 
 Using Keys for Authentication
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -68,10 +40,10 @@ Using Keys for Authentication
 Authenticate using private keys::
 
     from spindlex import SSHClient
-    from spindlex.crypto.pkey import Ed25519Key
+    from spindlex.crypto.pkey import load_key_from_file
     
     # Load private key
-    private_key = Ed25519Key.from_private_key_file('/path/to/key')
+    private_key = load_key_from_file('/path/to/key')
     
     # Connect using key
     client = SSHClient()
@@ -87,12 +59,12 @@ Multiple Key Authentication
 Try multiple keys automatically::
 
     from spindlex import SSHClient
-    from spindlex.crypto.pkey import Ed25519Key, RSAKey
+    from spindlex.crypto.pkey import load_key_from_file
     
     # Load multiple keys
     keys = [
-        Ed25519Key.from_private_key_file('/path/to/ed25519_key'),
-        RSAKey.from_private_key_file('/path/to/rsa_key')
+        load_key_from_file('/path/to/ed25519_key'),
+        load_key_from_file('/path/to/rsa_key')
     ]
     
     client = SSHClient()
@@ -105,7 +77,7 @@ Try multiple keys automatically::
                 username='user',
                 pkey=key
             )
-            print(f"Connected using {key.get_name()} key")
+            print(f"Connected successfully")
             break
         except AuthenticationException:
             continue
@@ -295,145 +267,46 @@ GSSAPI/Kerberos Authentication
 
 GSSAPI authentication provides single sign-on capabilities in Kerberos environments.
 
-Basic GSSAPI Authentication
+.. note::
+   As of version 0.3.0, GSSAPI authentication is fully integrated into `AsyncSSHClient`. For the synchronous `SSHClient`, it can be performed by accessing the underlying `Transport`.
+
+Async GSSAPI Authentication
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ::
 
-    from spindlex import SSHClient
-    from spindlex.auth.gssapi import GSSAPIAuth
+    from spindlex import AsyncSSHClient
     
-    # Ensure Kerberos ticket is available
-    # Run: kinit username@REALM.COM
-    
-    client = SSHClient()
-    
-    try:
-        client.connect(
-            hostname='server.example.com',
-            username='user',
-            gss_auth=True  # Enable GSSAPI authentication
-        )
-        print("GSSAPI authentication successful")
-    except AuthenticationException as e:
-        print(f"GSSAPI authentication failed: {e}")
+    async def connect_gssapi():
+        async with AsyncSSHClient() as client:
+            try:
+                await client.connect(
+                    hostname='server.example.com',
+                    username='user',
+                    gss_auth=True  # Enable GSSAPI authentication
+                )
+                print("GSSAPI authentication successful")
+            except AuthenticationException as e:
+                print(f"GSSAPI authentication failed: {e}")
 
-Advanced GSSAPI Configuration
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Synchronous GSSAPI (via Transport)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ::
 
     from spindlex import SSHClient
-    from spindlex.auth.gssapi import GSSAPIAuth
-    
-    # Configure GSSAPI authentication
-    gssapi_auth = GSSAPIAuth(
-        target_name='host@server.example.com',  # Service principal
-        mech_type='kerberos',  # Mechanism type
-        delegate_credentials=True  # Delegate credentials
-    )
     
     client = SSHClient()
-    client.connect(
-        hostname='server.example.com',
-        username='user',
-        auth_method=gssapi_auth
-    )
+    client.connect('server.example.com', username=None) # Connect without auth first
+    
+    transport = client.get_transport()
+    if transport.auth_gssapi('user'):
+        print("GSSAPI authentication successful")
 
 Combined Authentication Methods
 -------------------------------
 
-Try Multiple Methods
-~~~~~~~~~~~~~~~~~~~~
-
-Attempt different authentication methods in order::
-
-    from spindlex import SSHClient
-    from spindlex.crypto.pkey import Ed25519Key
-    from spindlex.exceptions import AuthenticationException
-    import getpass
-    
-    def multi_method_auth(hostname, username):
-        """Try multiple authentication methods."""
-        client = SSHClient()
-        
-        # Method 1: Try public key authentication
-        try:
-            private_key = Ed25519Key.from_private_key_file(
-                f'/home/{username}/.ssh/id_ed25519'
-            )
-            client.connect(hostname=hostname, username=username, pkey=private_key)
-            print("Authenticated using public key")
-            return client
-        except (AuthenticationException, FileNotFoundError):
-            pass
-        
-        # Method 2: Try GSSAPI authentication
-        try:
-            client.connect(hostname=hostname, username=username, gss_auth=True)
-            print("Authenticated using GSSAPI")
-            return client
-        except AuthenticationException:
-            pass
-        
-        # Method 3: Fall back to password authentication
-        try:
-            password = getpass.getpass(f"Password for {username}@{hostname}: ")
-            client.connect(hostname=hostname, username=username, password=password)
-            print("Authenticated using password")
-            return client
-        except AuthenticationException:
-            pass
-        
-        raise AuthenticationException("All authentication methods failed")
-    
-    # Usage
-    try:
-        client = multi_method_auth('server.example.com', 'user')
-    except AuthenticationException as e:
-        print(f"Authentication failed: {e}")
-
-Partial Authentication
-~~~~~~~~~~~~~~~~~~~~~~
-
-Handle partial authentication scenarios::
-
-    from spindlex import SSHClient
-    from spindlex.exceptions import PartialAuthentication
-    from spindlex.crypto.pkey import Ed25519Key
-    import getpass
-    
-    def handle_partial_auth(hostname, username):
-        """Handle partial authentication."""
-        client = SSHClient()
-        
-        try:
-            # First authentication method (e.g., public key)
-            private_key = Ed25519Key.from_private_key_file('/path/to/key')
-            client.connect(hostname=hostname, username=username, pkey=private_key)
-            
-        except PartialAuthentication as e:
-            print(f"Partial authentication successful. Remaining methods: {e.allowed_types}")
-            
-            # Continue with additional authentication
-            if 'password' in e.allowed_types:
-                password = getpass.getpass("Additional password required: ")
-                client.auth_password(username, password)
-            
-            elif 'keyboard-interactive' in e.allowed_types:
-                def ki_handler(title, instructions, prompts):
-                    responses = []
-                    for prompt, echo in prompts:
-                        if echo:
-                            response = input(prompt)
-                        else:
-                            response = getpass.getpass(prompt)
-                        responses.append(response)
-                    return responses
-                
-                client.auth_keyboard_interactive(username, ki_handler)
-        
-        return client
+SpindleX's `connect()` method automatically attempts provided credentials. For advanced multi-factor scenarios, you can use the transport layer directly or perform sequential authentication.
 
 Authentication Configuration
 ----------------------------
@@ -441,28 +314,22 @@ Authentication Configuration
 SSH Client Configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-Configure authentication preferences::
+Configure host key policies and timeouts::
 
     from spindlex import SSHClient
     from spindlex.hostkeys.policy import RejectPolicy
     
     client = SSHClient()
     
-    # Configure authentication preferences
-    client.set_auth_timeout(30)  # 30 second timeout
-    client.set_auth_methods(['publickey', 'keyboard-interactive', 'password'])
+    # Configure host key policy
     client.set_missing_host_key_policy(RejectPolicy())  # Strict host key checking
     
-    # Disable less secure methods
-    client.disable_auth_method('password')  # Disable password auth
-    
-    # Connect with configuration
+    # Connect with timeout
     client.connect(
         hostname='server.example.com',
         username='user',
-        pkey=private_key,
-        timeout=60,
-        banner_timeout=30
+        password='mypassword',
+        timeout=60
     )
 
 Agent Authentication
