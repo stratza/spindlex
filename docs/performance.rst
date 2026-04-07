@@ -1,5 +1,5 @@
 Performance Guide
-================
+=================
 
 This guide covers performance optimization techniques, benchmarking, and best practices for achieving optimal performance with SpindleX.
 
