@@ -150,42 +150,67 @@ class PKey:
             return False
 
     @classmethod
-    def from_string(cls, data: bytes) -> "PKey":
+    def generate(cls, *args: Any, **kwargs: Any) -> "PKey":
         """
-        Create PKey instance from SSH wire format bytes.
+        Generate a new key pair.
+
+        Returns:
+            New PKey instance with generated key pair
+        """
+        raise NotImplementedError("Subclasses must implement generate")
+
+    def save_to_file(self, filename: str, password: Optional[str] = None) -> None:
+        """
+        Save private key to file in PEM format.
 
         Args:
-            data: Public key data in SSH wire format
+            filename: Path to save key file
+            password: Optional password for encryption
+
+        Raises:
+            CryptoException: If saving fails
+        """
+        raise NotImplementedError("Subclasses must implement save_to_file")
+
+    def get_openssh_string(self) -> str:
+        """
+        Get public key in OpenSSH format.
+
+        Returns:
+            Public key string in OpenSSH format (e.g., "ssh-rsa AAAAB3N...")
+        """
+        key_bytes = self.get_public_key_bytes()
+        # Parse out the algorithm name from the bytes (first string)
+        algo_len = struct.unpack(">I", key_bytes[:4])[0]
+        algo_name = key_bytes[4 : 4 + algo_len].decode()
+        
+        key_base64 = base64.b64encode(key_bytes).decode()
+        return f"{algo_name} {key_base64}"
+
+    @classmethod
+    def from_private_key_file(cls, filename: str, password: Optional[str] = None) -> "PKey":
+        """
+        Load private key from file.
+
+        Args:
+            filename: Path to key file
+            password: Optional password for encrypted keys
 
         Returns:
             Loaded PKey instance
-
-        Raises:
-            CryptoException: If key loading fails
         """
-        try:
-            # Parse algorithm name from SSH blob
-            import struct
+        return load_key_from_file(filename, password)
 
-            offset = 0
-            algo_len = struct.unpack(">I", data[offset : offset + 4])[0]
-            offset += 4
-            algorithm = data[offset : offset + algo_len].decode()
+    def get_public_key(self) -> "PKey":
+        """
+        Get a PKey instance containing only the public key.
 
-            # Determine key type and load
-            if algorithm == "ssh-ed25519":
-                key = Ed25519Key()
-            elif algorithm.startswith("ecdsa-sha2-"):
-                key = ECDSAKey()
-            elif algorithm in ["ssh-rsa", "rsa-sha2-256", "rsa-sha2-512"]:
-                key = RSAKey()
-            else:
-                raise CryptoException(f"Unsupported key algorithm: {algorithm}")
-
-            key.load_public_key(data)
-            return key
-        except Exception as e:
-            raise CryptoException(f"Failed to load public key from bytes: {e}")
+        Returns:
+            PKey instance with only public key loaded
+        """
+        new_key = self.__class__(self.crypto_backend)
+        new_key.load_public_key(self.get_public_key_bytes())
+        return new_key
 
 
 class Ed25519Key(PKey):
@@ -318,6 +343,36 @@ class Ed25519Key(PKey):
             return result
         except Exception as e:
             raise CryptoException(f"Ed25519 signing failed: {e}")
+
+    @classmethod
+    def generate(cls, *args: Any, **kwargs: Any) -> "Ed25519Key":
+        """Generate a new Ed25519 key pair."""
+        key = cls()
+        key._key = ed25519.Ed25519PrivateKey.generate()
+        return key
+
+    def save_to_file(self, filename: str, password: Optional[str] = None) -> None:
+        """Save Ed25519 private key to file."""
+        try:
+            if not isinstance(self._key, ed25519.Ed25519PrivateKey):
+                raise CryptoException("No Ed25519 private key loaded")
+
+            encryption_algorithm = (
+                serialization.BestAvailableEncryption(password.encode())
+                if password
+                else serialization.NoEncryption()
+            )
+
+            pem = self._key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.OpenSSH,
+                encryption_algorithm=encryption_algorithm,
+            )
+
+            with open(filename, "wb") as f:
+                f.write(pem)
+        except Exception as e:
+            raise CryptoException(f"Failed to save Ed25519 key: {e}")
 
     def verify(self, signature: bytes, data: bytes) -> bool:
         """
@@ -520,6 +575,36 @@ class ECDSAKey(PKey):
         except Exception as e:
             raise CryptoException(f"ECDSA signing failed: {e}")
 
+    @classmethod
+    def generate(cls, *args: Any, **kwargs: Any) -> "ECDSAKey":
+        """Generate a new ECDSA key pair (P-256)."""
+        key = cls()
+        key._key = ec.generate_private_key(key.curve, backend=default_backend())
+        return key
+
+    def save_to_file(self, filename: str, password: Optional[str] = None) -> None:
+        """Save ECDSA private key to file."""
+        try:
+            if not isinstance(self._key, ec.EllipticCurvePrivateKey):
+                raise CryptoException("No ECDSA private key loaded")
+
+            encryption_algorithm = (
+                serialization.BestAvailableEncryption(password.encode())
+                if password
+                else serialization.NoEncryption()
+            )
+
+            pem = self._key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.OpenSSH,
+                encryption_algorithm=encryption_algorithm,
+            )
+
+            with open(filename, "wb") as f:
+                f.write(pem)
+        except Exception as e:
+            raise CryptoException(f"Failed to save ECDSA key: {e}")
+
     def verify(self, signature: bytes, data: bytes) -> bool:
         """
         Verify ECDSA signature.
@@ -713,6 +798,40 @@ class RSAKey(PKey):
             return result
         except Exception as e:
             raise CryptoException(f"RSA signing failed: {e}")
+
+    @classmethod
+    def generate(cls, bits: int = 2048, *args: Any, **kwargs: Any) -> "RSAKey":
+        """Generate a new RSA key pair."""
+        key = cls()
+        key._key = rsa.generate_private_key(
+            public_exponent=65537,
+            key_size=bits,
+            backend=default_backend()
+        )
+        return key
+
+    def save_to_file(self, filename: str, password: Optional[str] = None) -> None:
+        """Save RSA private key to file."""
+        try:
+            if not isinstance(self._key, rsa.RSAPrivateKey):
+                raise CryptoException("No RSA private key loaded")
+
+            encryption_algorithm = (
+                serialization.BestAvailableEncryption(password.encode())
+                if password
+                else serialization.NoEncryption()
+            )
+
+            pem = self._key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.OpenSSH,
+                encryption_algorithm=encryption_algorithm,
+            )
+
+            with open(filename, "wb") as f:
+                f.write(pem)
+        except Exception as e:
+            raise CryptoException(f"Failed to save RSA key: {e}")
 
     def verify(self, signature: bytes, data: bytes) -> bool:
         """
