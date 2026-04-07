@@ -73,7 +73,7 @@ If you prefer manual control:
    ```bash
    # Update spindlex/_version.py
    __version__ = "0.4.0"
-   __version_info__ = (0, 3, 0)
+   __version_info__ = (0, 4, 0)
    
    # Update pyproject.toml
    version = "0.4.0"

@@ -365,4 +365,4 @@ If SpindleX helps you build amazing things, consider giving me a ⭐
 
 [🐛 Report Bug](https://gitlab.com/daveops.world/development/python/spindle/-/issues) • [✨ Request Feature](https://gitlab.com/daveops.world/development/python/spindle/-/issues) • [💬 Discussions](https://gitlab.com/daveops.world/development/python/spindle/-/issues)
 
-</div>div>v>
+</div>
