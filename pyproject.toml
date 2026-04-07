@@ -75,7 +75,7 @@ test = [
 ]
 
 [project.urls]
-Homepage = "https://gitlab.com/daveops.world/development/python/spindlex"
+Homepage = "https://gitlab.com/daveops.world/development/python/spindle"
 Documentation = "https://spindlex.readthedocs.io/"
 Repository = "https://gitlab.com/daveops.world/development/python/spindle"
 Issues = "https://gitlab.com/daveops.world/development/python/spindle/-/issues"
