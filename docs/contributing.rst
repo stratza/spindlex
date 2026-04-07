@@ -11,7 +11,7 @@ Development Environment Setup
 
 1. **Fork and Clone the Repository**::
 
-    git clone https://gitlab.com/yourusername/spindlex.git
+    git clone https://gitlab.com/daveops.world/development/python/spindle.git
     cd spindlex
 
 2. **Set Up Development Environment**::

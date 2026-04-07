@@ -8,9 +8,9 @@
 [![Python Support](https://img.shields.io/pypi/pyversions/spindlex.svg)](https://pypi.org/project/spindlex/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![PyPI Downloads](https://static.pepy.tech/personalized-badge/spindlex?period=total&units=NONE&left_color=BLUE&right_color=GRAY&left_text=Downloads)](https://pepy.tech/projects/spindlex)
-[![GitLab CI](https://gitlab.com/daveops.world/development/python/spindlex/badges/main/pipeline.svg)](https://gitlab.com/daveops.world/development/python/spindlex/-/pipelines)
-[![Coverage](https://gitlab.com/daveops.world/development/python/spindlex/badges/main/coverage.svg)](https://gitlab.com/daveops.world/development/python/spindlex/-/commits/main)
-[![Code Quality](https://img.shields.io/badge/code%20quality-A-brightgreen.svg)](https://gitlab.com/daveops.world/development/python/spindlex)
+[![GitLab CI](https://gitlab.com/daveops.world/development/python/spindle/badges/main/pipeline.svg)](https://gitlab.com/daveops.world/development/python/spindle/-/pipelines)
+[![Coverage](https://gitlab.com/daveops.world/development/python/spindle/badges/main/coverage.svg)](https://gitlab.com/daveops.world/development/python/spindle/-/commits/main)
+[![Code Quality](https://img.shields.io/badge/code%20quality-A-brightgreen.svg)](https://gitlab.com/daveops.world/development/python/spindle)
 [![Code Style](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![Type Hints](https://img.shields.io/badge/type%20hints-mypy-blue.svg)](http://mypy-lang.org/)
 
@@ -313,7 +313,7 @@ Security is my top priority. SpindleX implements:
 
 ### 🚨 Security Issues
 
-Found a security vulnerability? Please report it through my [GitLab security issue tracker](https://gitlab.com/daveops.world/development/python/spindlex/-/issues) with the "security" label.
+Found a security vulnerability? Please report it through my [GitLab security issue tracker](https://gitlab.com/daveops.world/development/python/spindle/-/issues) with the "security" label.
 
 ---
 
@@ -363,6 +363,6 @@ If SpindleX helps you build amazing things, consider giving me a ⭐
 
 **Made with ❤️ by Di3Z1E**
 
-[🐛 Report Bug](https://gitlab.com/daveops.world/development/python/spindlex/-/issues) • [✨ Request Feature](https://gitlab.com/daveops.world/development/python/spindlex/-/issues) • [💬 Discussions](https://gitlab.com/daveops.world/development/python/spindlex/-/issues)
+[🐛 Report Bug](https://gitlab.com/daveops.world/development/python/spindle/-/issues) • [✨ Request Feature](https://gitlab.com/daveops.world/development/python/spindle/-/issues) • [💬 Discussions](https://gitlab.com/daveops.world/development/python/spindle/-/issues)
 
-</div>
+</div>div>v>
