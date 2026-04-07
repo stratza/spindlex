@@ -76,14 +76,15 @@ Upload with file attributes::
     with client.open_sftp() as sftp:
         # Create file attributes
         attrs = SFTPAttributes()
-        attrs.st_mode = stat.S_IFREG | 0o644  # Regular file, rw-r--r--
-        attrs.st_size = os.path.getsize('/local/file.txt')
+        attrs.permissions = stat.S_IFREG | 0o644  # Regular file, rw-r--r--
+        attrs.size = os.path.getsize('/local/file.txt')
+        attrs.flags |= SSH_FILEXFER_ATTR_SIZE | SSH_FILEXFER_ATTR_PERMISSIONS
         
         # Upload with attributes
         sftp.putfo(
             open('/local/file.txt', 'rb'),
             '/remote/file.txt',
-            file_size=attrs.st_size,
+            file_size=attrs.size,
             callback=progress_callback
         )
 

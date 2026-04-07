@@ -5,17 +5,17 @@ The SSH client is the primary interface for connecting to SSH servers and execut
 
 Basic Usage
 -----------
-
 Creating and Configuring a Client
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: python
 
-   from spindlex import SSHClient, AutoAddPolicy
+   from spindlex import SSHClient
+   from spindlex.hostkeys.policy import AutoAddPolicy
 
    # Create client
    client = SSHClient()
-   
+
    # Configure host key policy
    client.set_missing_host_key_policy(AutoAddPolicy())
 
@@ -40,23 +40,19 @@ Public Key Authentication
 
 .. code-block:: python
 
-   from spindlex.crypto.pkey import Ed25519Key
+   from spindlex import SSHClient
+   from spindlex.crypto.pkey import load_key_from_file
 
    # Load key from file
-   private_key = Ed25519Key.from_private_key_file('/path/to/key')
-   
+   private_key = load_key_from_file('/path/to/key')
+
+   client = SSHClient()
    client.connect(
        hostname='example.com',
        username='myuser',
        pkey=private_key
    )
 
-   # Or specify key file path
-   client.connect(
-       hostname='example.com',
-       username='myuser',
-       key_filename='/path/to/key'
-   )
 
 Keyboard-Interactive Authentication
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
