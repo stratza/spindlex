@@ -1,5 +1,5 @@
 Authentication Guide
-===================
+====================
 
 SpindleX supports multiple authentication methods to provide secure access to remote systems. This guide covers all supported authentication methods and best practices.
 
