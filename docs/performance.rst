@@ -46,15 +46,15 @@ SpindleX includes built-in performance monitoring::
         sftp.put('/local/file.txt', '/remote/file.txt')
         sftp.close()
     
-    # Get performance statistics
-    stats = monitor.get_statistics()
+    # Get performance statistics for a specific operation
+    stats = monitor.get_operation_stats('file_transfer')
     
-    for operation, metrics in stats.items():
-        print(f"{operation}:")
-        print(f"  Average: {metrics['avg']:.3f}s")
-        print(f"  Min: {metrics['min']:.3f}s")
-        print(f"  Max: {metrics['max']:.3f}s")
-        print(f"  Count: {metrics['count']}")
+    if stats:
+        print(f"File Transfer Statistics:")
+        print(f"  Average: {stats['mean']:.3f}s")
+        print(f"  Min: {stats['min']:.3f}s")
+        print(f"  Max: {stats['max']:.3f}s")
+        print(f"  Count: {stats['count']}")
 
 Custom Benchmarking
 ~~~~~~~~~~~~~~~~~~~

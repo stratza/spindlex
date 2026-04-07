@@ -42,9 +42,11 @@ Basic SSH client usage:
 .. code-block:: python
 
    from spindlex import SSHClient
+   from spindlex.hostkeys.policy import AutoAddPolicy
 
    # Create client and connect
    client = SSHClient()
+   client.set_missing_host_key_policy(AutoAddPolicy())
    client.connect('example.com', username='user', password='password')
 
    # Execute a command
@@ -52,9 +54,9 @@ Basic SSH client usage:
    print(stdout.read().decode())
 
    # Use SFTP
-   sftp = client.open_sftp()
-   sftp.get('/remote/file.txt', '/local/file.txt')
-   sftp.close()
+   with client.open_sftp() as sftp:
+       files = sftp.listdir('.')
+       print(f"Files: {files}")
 
    # Clean up
    client.close()
