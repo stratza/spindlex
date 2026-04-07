@@ -64,13 +64,13 @@ Create custom benchmarks for your use case::
     import time
     import statistics
     from spindlex import SSHClient
-    from spindlex.crypto.pkey import Ed25519Key
+    from spindlex.crypto.pkey import load_key_from_file
     
     class SSHBenchmark:
         def __init__(self, hostname, username, private_key_path):
             self.hostname = hostname
             self.username = username
-            self.private_key = Ed25519Key.from_private_key_file(private_key_path)
+            self.private_key = load_key_from_file(private_key_path)
         
         def benchmark_connection(self, iterations=10):
             """Benchmark connection establishment."""
