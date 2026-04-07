@@ -1,0 +1,18 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy project files
+COPY . .
+
+# Install the package and test dependencies
+RUN pip install --no-cache-dir .[test]
+
+# Run tests by default
+CMD ["pytest", "tests/", "-v"]
