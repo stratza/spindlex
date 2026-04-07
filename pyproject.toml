@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "spindlex"
-version = "0.3.0"
-description = "A pure-Python SSHv2 client/server library"
+version = "0.4.0"
+description = "A modern, high-performance, pure-Python SSHv2 and SFTP client/server library"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [

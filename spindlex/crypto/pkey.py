@@ -150,6 +150,46 @@ class PKey:
             return False
 
     @classmethod
+    def from_string(cls, data: bytes) -> "PKey":
+        """
+        Create PKey instance from SSH wire format bytes.
+
+        Args:
+            data: Public key data in SSH wire format
+
+        Returns:
+            Loaded PKey instance
+
+        Raises:
+            CryptoException: If key loading fails
+        """
+        try:
+            # Parse algorithm name from SSH blob
+            import struct
+
+            offset = 0
+            algo_len = struct.unpack(">I", data[offset : offset + 4])[0]
+            offset += 4
+            algorithm = data[offset : offset + algo_len].decode()
+
+            # Determine key type and load
+            if algorithm == "ssh-ed25519":
+                key = Ed25519Key()
+            elif algorithm.startswith("ecdsa-sha2-"):
+                key = ECDSAKey()
+            elif algorithm in ["ssh-rsa", "rsa-sha2-256", "rsa-sha2-512"]:
+                key = RSAKey()
+            else:
+                raise CryptoException(f"Unsupported key algorithm: {algorithm}")
+
+            key.load_public_key(data)
+            return key
+        except Exception as e:
+            if isinstance(e, CryptoException):
+                raise
+            raise CryptoException(f"Failed to load public key from bytes: {e}")
+
+    @classmethod
     def generate(cls, *args: Any, **kwargs: Any) -> "PKey":
         """
         Generate a new key pair.

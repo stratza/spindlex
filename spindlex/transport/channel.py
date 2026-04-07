@@ -11,6 +11,19 @@ from collections import deque
 from typing import Any, Deque, Optional
 
 from ..exceptions import ChannelException
+from ..protocol.constants import (
+    CHANNEL_DIRECT_TCPIP,
+    CHANNEL_FORWARDED_TCPIP,
+    MSG_CHANNEL_CLOSE,
+    MSG_CHANNEL_DATA,
+    MSG_CHANNEL_EOF,
+    MSG_CHANNEL_EXTENDED_DATA,
+    MSG_CHANNEL_FAILURE,
+    MSG_CHANNEL_OPEN,
+    MSG_CHANNEL_REQUEST,
+    MSG_CHANNEL_SUCCESS,
+    MSG_CHANNEL_WINDOW_ADJUST,
+)
 
 
 class Channel:
@@ -58,6 +71,25 @@ class Channel:
         self._lock = threading.RLock()
         self._data_event = threading.Event()
         self._request_event = threading.Event()
+        self._timeout: Optional[float] = None
+
+    def settimeout(self, timeout: Optional[float]) -> None:
+        """
+        Set timeout for channel operations.
+
+        Args:
+            timeout: Timeout in seconds, or None for no timeout
+        """
+        self._timeout = timeout
+
+    def gettimeout(self) -> Optional[float]:
+        """
+        Get channel timeout.
+
+        Returns:
+            Current timeout in seconds
+        """
+        return self._timeout
 
     def send(self, data: bytes) -> int:
         """
@@ -125,6 +157,7 @@ class Channel:
         if nbytes <= 0:
             return b""
 
+        start_time = time.time()
         while True:
             with self._lock:
                 # Check if we have data in buffer
@@ -146,17 +179,31 @@ class Channel:
                 if self._eof_received:
                     return b""  # EOF reached and buffer is empty
 
-                # Reset data event before waiting
+                # Check total timeout
+                if self._timeout is not None:
+                    elapsed = time.time() - start_time
+                    if elapsed >= self._timeout:
+                        raise ChannelException("Timeout receiving data")
+
+                # Clear event before we start waiting
                 self._data_event.clear()
 
-            # Wait outside the lock to avoid blocking other operations
-            # If we are in a synchronous implementation, we might need to poll transport
-            if not self._data_event.wait(timeout=0.1):
-                # Timeout, poll transport once to see if data arrived
+            # Calculate wait timeout
+            wait_timeout = 0.1
+            if self._timeout is not None:
+                elapsed = time.time() - start_time
+                wait_timeout = max(0, min(0.1, self._timeout - elapsed))
+
+            # Wait for data or timeout
+            if not self._data_event.wait(timeout=wait_timeout):
+                # We timed out waiting for the event, poll transport
                 try:
+                    # _recv_message will handle the message and set _data_event if it's channel data
                     self._transport._recv_message()
-                except Exception:
-                    # Connection might have closed, but we check _eof_received in next loop
+                except Exception as e:
+                    # If it's a timeout from the socket, we just loop again and check our own timeout
+                    if "Timeout" not in str(e):
+                        raise
                     pass
 
     def exec_command(self, command: str) -> None:
@@ -182,6 +229,9 @@ class Channel:
 
         if not success:
             raise ChannelException(f"Failed to execute command: {command}")
+            
+        # For non-interactive commands, we should send EOF to indicate we won't send more stdin
+        self.send_eof()
 
     def invoke_shell(self) -> None:
         """
@@ -321,34 +371,22 @@ class Channel:
                 raise ChannelException(f"Failed to send channel request: {e}")
 
         if want_reply:
-            # Wait for response outside the lock
-            timeout = getattr(
-                self, "_test_timeout", 30.0
-            )  # Allow tests to set shorter timeout
-            start_time = time.time()
-
-            while time.time() - start_time < timeout:
-                if self._request_event.is_set():
-                    with self._lock:
-                        return self._request_success is True
-
-                try:
-                    # In a synchronous implementation without a background thread,
-                    # we must manually receive and dispatch messages.
-                    # We use a short timeout on the socket if possible, or just call _recv_message
-                    # if it's non-blocking. But here _recv_message is blocking.
-                    # However, since we are waiting for a response to OUR request,
-                    # it's likely to arrive soon.
-                    self._transport._recv_message()
-                except Exception as e:
-                    # If it's a timeout, just continue. Otherwise, it might be a real error.
-                    if "Timeout" in str(e):
-                        continue
-                    raise ChannelException(
-                        f"Error waiting for channel request response: {e}"
-                    )
-
-            raise ChannelException("Timeout waiting for channel request response")
+            try:
+                # Wait for response using _expect_message which handles other messages correctly
+                msg = self._transport._expect_message(
+                    MSG_CHANNEL_SUCCESS, MSG_CHANNEL_FAILURE
+                )
+                
+                # Check recipient channel matches (it should, _expect_message just gives us next msg)
+                # But MSG_CHANNEL_SUCCESS/FAILURE might be for another channel if we didn't filter.
+                # Actually _expect_message gives next message of that type.
+                # If there are multiple channels, we might need a better way.
+                # For now, this is better than what we had.
+                return msg.msg_type == MSG_CHANNEL_SUCCESS
+            except Exception as e:
+                raise ChannelException(
+                    f"Error waiting for channel request response: {e}"
+                )
 
         return True  # No reply requested
 

@@ -6,6 +6,23 @@ All notable changes to SpindleX will be documented in this file.
 The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.0.0/>`_,
 and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0.html>`_.
 
+0.4.0 (2026-04-07)
+------------------
+
+Fixed
+~~~~~
+- **Transport Layer:** Resolved a critical hang in SSH command execution caused by an infinite loop in ``Transport._expect_message`` where unhandled messages were repeatedly re-queued and re-read.
+- **Message Dispatching:** Improved ``Transport._handle_channel_message`` to correctly extract recipient channel IDs for all message types, ensuring proper dispatch to channel instances.
+- **Concurrency:** Added ``_read_lock`` to ``Transport`` to prevent concurrent socket access and potential data corruption during simultaneous read operations.
+- **SSH Client:** Ensured ``SSHClient`` permanently sets the connection timeout on the underlying transport after a successful handshake.
+- **Channel Stability:** Updated ``Channel.exec_command`` to automatically send EOF after the command, improving compatibility with various SSH server implementations.
+
+Added
+~~~~~
+- **SFTP Client:** Implemented context manager support (``__enter__``/``__exit__``) for ``SFTPClient`` for easier resource management.
+- **SFTP Operations:** Implemented ``SFTPClient.open()`` and the ``SFTPFile`` class to support synchronous file-like operations (read/write).
+- **Channel Timeouts:** Enhanced ``Channel.recv`` to respect per-channel timeouts, preventing indefinite blocking.
+
 0.3.0 (2026-04-04)
 ------------------
 
