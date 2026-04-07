@@ -5,6 +5,7 @@ Core SSH transport functionality including protocol handshake, key exchange,
 authentication, and secure packet transmission.
 """
 
+import collections
 import os
 import socket
 import struct
@@ -74,6 +75,7 @@ class Transport:
         self._sequence_number_out = 0
         self._packet_buffer = b""
         self._lock = threading.RLock()
+        self._read_lock = threading.Lock()
         self._server_host_key_blob: Optional[bytes] = None
 
         # KEX state
@@ -92,6 +94,16 @@ class Transport:
 
         # Port forwarding
         self._port_forwarding_manager = None
+
+        # Message dispatching
+        self._message_queue: List[Message] = []
+        self._timeout = 10.0
+
+    def set_timeout(self, timeout: float) -> None:
+        """Set default timeout for transport operations."""
+        self._timeout = timeout
+        if self._socket:
+            self._socket.settimeout(timeout)
 
     def start_client(self, timeout: Optional[float] = None) -> None:
         """
@@ -281,7 +293,7 @@ class Transport:
         self._send_message(auth_request)
 
         # Wait for response
-        msg = self._recv_message()
+        msg = self._expect_message(MSG_USERAUTH_FAILURE, MSG_USERAUTH_PK_OK)
 
         if isinstance(msg, UserAuthFailureMessage):
             return False
@@ -400,7 +412,11 @@ class Transport:
     def _handle_keyboard_interactive_auth(self, handler: Any) -> bool:
         """Handle keyboard-interactive authentication prompts."""
         while True:
-            msg = self._recv_message()
+            msg = self._expect_message(
+                MSG_USERAUTH_SUCCESS,
+                MSG_USERAUTH_FAILURE,
+                MSG_USERAUTH_INFO_REQUEST,
+            )
 
             if isinstance(msg, UserAuthSuccessMessage):
                 self._authenticated = True
@@ -507,7 +523,7 @@ class Transport:
         self._send_message(service_request)
 
         # Wait for service accept
-        msg = self._recv_message()
+        msg = self._expect_message(MSG_SERVICE_ACCEPT)
         if not isinstance(msg, ServiceAcceptMessage):
             raise AuthenticationException(
                 f"Expected SERVICE_ACCEPT, got {type(msg).__name__}"
@@ -520,7 +536,7 @@ class Transport:
 
     def _handle_auth_response(self) -> bool:
         """Handle authentication response message."""
-        msg = self._recv_message()
+        msg = self._expect_message(MSG_USERAUTH_SUCCESS, MSG_USERAUTH_FAILURE)
 
         if isinstance(msg, UserAuthSuccessMessage):
             self._authenticated = True
@@ -591,7 +607,9 @@ class Transport:
                 self._send_message(open_msg)
 
                 # Wait for response
-                response = self._recv_message()
+                response = self._expect_message(
+                    MSG_CHANNEL_OPEN_CONFIRMATION, MSG_CHANNEL_OPEN_FAILURE
+                )
 
                 if isinstance(response, ChannelOpenConfirmationMessage):
                     # Channel opened successfully
@@ -660,29 +678,39 @@ class Transport:
         Args:
             msg: Channel message to handle
         """
-        if msg.msg_type == MSG_CHANNEL_DATA:
-            self._handle_channel_data(msg)
-        elif msg.msg_type == MSG_CHANNEL_EXTENDED_DATA:
-            self._handle_channel_extended_data(msg)
-        elif msg.msg_type == MSG_CHANNEL_EOF:
-            self._handle_channel_eof(msg)
-        elif msg.msg_type == MSG_CHANNEL_CLOSE:
-            self._handle_channel_close(msg)
-        elif msg.msg_type == MSG_CHANNEL_WINDOW_ADJUST:
-            self._handle_channel_window_adjust(msg)
-        elif msg.msg_type == MSG_CHANNEL_SUCCESS:
-            self._handle_channel_success(msg)
-        elif msg.msg_type == MSG_CHANNEL_FAILURE:
-            self._handle_channel_failure(msg)
-        elif msg.msg_type == MSG_CHANNEL_REQUEST:
-            self._handle_channel_request(msg)
-        elif msg.msg_type == MSG_CHANNEL_OPEN:
-            self._handle_channel_open(msg)
-        elif msg.msg_type == MSG_GLOBAL_REQUEST:
+        # All channel messages (80-100) have recipient_channel as first uint32
+        recipient_channel = None
+        if len(msg._data) >= 4:
+            recipient_channel, _ = read_uint32(msg._data, 0)
+
+        if recipient_channel is not None:
+            with self._lock:
+                channel = self._channels.get(recipient_channel)
+                if channel:
+                    if msg.msg_type == MSG_CHANNEL_DATA:
+                        self._handle_channel_data(msg)
+                    elif msg.msg_type == MSG_CHANNEL_EXTENDED_DATA:
+                        self._handle_channel_extended_data(msg)
+                    elif msg.msg_type == MSG_CHANNEL_EOF:
+                        channel._handle_eof()
+                    elif msg.msg_type == MSG_CHANNEL_CLOSE:
+                        channel._handle_close()
+                        # Remove from channels dict
+                        del self._channels[recipient_channel]
+                    elif msg.msg_type == MSG_CHANNEL_WINDOW_ADJUST:
+                        self._handle_channel_window_adjust(msg)
+                    elif msg.msg_type == MSG_CHANNEL_SUCCESS:
+                        channel._handle_request_success()
+                    elif msg.msg_type == MSG_CHANNEL_FAILURE:
+                        channel._handle_request_failure()
+                    elif msg.msg_type == MSG_CHANNEL_REQUEST:
+                        self._handle_channel_request(msg)
+                    elif msg.msg_type == MSG_CHANNEL_OPEN:
+                        self._handle_channel_open(msg)
+        
+        # If it's a global request, handle it separately
+        if msg.msg_type == MSG_GLOBAL_REQUEST:
             self._handle_global_request(msg)
-        else:
-            # Unknown channel message - ignore or log
-            pass
 
     def _handle_channel_open(self, msg: Message) -> None:
         """
@@ -1060,7 +1088,7 @@ class Transport:
 
             if want_reply:
                 # Wait for response
-                response = self._recv_message()
+                response = self._expect_message(MSG_REQUEST_SUCCESS, MSG_REQUEST_FAILURE)
 
                 if response.msg_type == MSG_REQUEST_SUCCESS:
                     return True
@@ -1351,7 +1379,7 @@ class Transport:
 
     def _recv_kexinit(self) -> None:
         """Receive and process KEXINIT message."""
-        msg = self._recv_message()
+        msg = self._expect_message(MSG_KEXINIT)
 
         if not isinstance(msg, KexInitMessage):
             raise ProtocolException(f"Expected KEXINIT, got {type(msg).__name__}")
@@ -1389,63 +1417,87 @@ class Transport:
         except Exception as e:
             raise TransportException(f"Failed to send message: {e}")
 
-    def _recv_message(self) -> Message:
+    def _read_message(self) -> Message:
         """
-        Receive SSH message.
-
-        Returns:
-            Received message
-
-        Raises:
-            TransportException: If receive fails
-            ProtocolException: If message is invalid
+        Read next message from socket and dispatch if needed.
+        Does NOT check the message queue.
         """
         while True:
             try:
-                packet = self._recv_packet()
-                payload = extract_message_from_packet(packet)
+                # We need to hold the read_lock while reading from the socket to ensure
+                # only one thread reads a complete packet at a time.
+                with self._read_lock:
+                    packet = self._recv_packet()
+                    payload = extract_message_from_packet(packet)
 
-                with self._lock:
-                    msg = Message.unpack(payload)
+                    with self._lock:
+                        msg = Message.unpack(payload)
 
-                    # Handle internal messages
-                    is_internal = False
-                    if msg.msg_type in [MSG_IGNORE, MSG_DEBUG, MSG_GLOBAL_REQUEST]:
-                        is_internal = True
-                    elif msg.msg_type == MSG_DISCONNECT:
-                        # Parse disconnect reason if possible
-                        try:
-                            disconnect_msg = DisconnectMessage.unpack(payload)
-                            raise TransportException(
-                                f"Disconnected: {disconnect_msg.description} (code: {disconnect_msg.reason_code})"
-                            )
-                        except:
-                            raise TransportException("Disconnected by peer")
+                        # ALWAYS increment sequence number for EVERY packet received
+                        self._sequence_number_in = (
+                            self._sequence_number_in + 1
+                        ) & 0xFFFFFFFF
 
-                    if msg.msg_type == MSG_NEWKEYS:
-                        self._activate_inbound_encryption()
+                        # Handle internal messages
+                        if msg.msg_type in [MSG_IGNORE, MSG_DEBUG]:
+                            continue
+                        
+                        if msg.msg_type == MSG_DISCONNECT:
+                            # Parse disconnect reason if possible
+                            try:
+                                disconnect_msg = DisconnectMessage.unpack(payload)
+                                raise TransportException(
+                                    f"Disconnected: {disconnect_msg.description} (code: {disconnect_msg.reason_code})"
+                                )
+                            except Exception as e:
+                                if isinstance(e, TransportException):
+                                    raise
+                                raise TransportException("Disconnected by peer")
 
-                    # ALWAYS increment sequence number for EVERY packet received
-                    self._sequence_number_in = (
-                        self._sequence_number_in + 1
-                    ) & 0xFFFFFFFF
+                        if msg.msg_type == MSG_NEWKEYS:
+                            self._activate_inbound_encryption()
 
-                    if is_internal:
-                        continue
+                        # Dispatch channel messages (80-100) or global requests (80)
+                        if (msg.msg_type >= 80 and msg.msg_type <= 100) or msg.msg_type == MSG_GLOBAL_REQUEST:
+                            self._handle_channel_message(msg)
 
-                    # Dispatch channel messages
-                    if msg.msg_type >= 80 and msg.msg_type <= 100:
-                        self._handle_channel_message(msg)
-                        # If we are in a synchronous call that expects a specific message,
-                        # we might want to return it. But for now, let's return it to the caller
-                        # who called _recv_message().
-
-                return msg
+                        return msg
 
             except Exception as e:
                 if isinstance(e, (TransportException, ProtocolException)):
                     raise
                 raise TransportException(f"Failed to receive message: {e}")
+
+    def _recv_message(self) -> Message:
+        """
+        Receive SSH message, checking the queue first.
+        """
+        with self._lock:
+            if self._message_queue:
+                return self._message_queue.pop(0)
+        
+        return self._read_message()
+
+    def _expect_message(self, *allowed_types: int) -> Message:
+        """
+        Receive next message and ensure it's one of the allowed types.
+        Messages of other types are queued for later processing.
+        """
+        while True:
+            # 1. Check queue for allowed message
+            with self._lock:
+                for i, msg in enumerate(self._message_queue):
+                    if msg.msg_type in allowed_types:
+                        return self._message_queue.pop(i)
+            
+            # 2. Not in queue, read from socket
+            msg = self._read_message()
+            if msg.msg_type in allowed_types:
+                return msg
+            
+            # 3. Not what we wanted, queue it for others
+            with self._lock:
+                self._message_queue.append(msg)
 
     def get_server_host_key(self) -> Optional[Any]:
         """

@@ -44,6 +44,105 @@ from ..transport.channel import Channel
 from ..transport.transport import Transport
 
 
+class SFTPFile:
+    """SFTP file object for remote file operations."""
+
+    def __init__(self, client: "SFTPClient", handle: bytes, mode: str) -> None:
+        """
+        Initialize SFTP file.
+
+        Args:
+            client: SFTP client instance
+            handle: File handle from server
+            mode: File open mode
+        """
+        self._client = client
+        self._handle = handle
+        self._mode = mode
+        self._offset = 0
+        self._closed = False
+
+    def read(self, size: int = -1) -> bytes:
+        """
+        Read data from remote file.
+
+        Args:
+            size: Number of bytes to read (-1 for all)
+
+        Returns:
+            Read data
+        """
+        if self._closed:
+            raise SFTPError("File is closed")
+
+        if size < 0:
+            # Read until EOF
+            result = bytearray()
+            while True:
+                chunk = self.read(SFTP_MAX_READ_SIZE)
+                if not chunk:
+                    break
+                result.extend(chunk)
+            return bytes(result)
+
+        request_id = self._client._get_next_request_id()
+        read_msg = SFTPReadMessage(request_id, self._handle, self._offset, size)
+        
+        response = self._client._send_request_and_wait_response(read_msg)
+        
+        if isinstance(response, SFTPDataMessage):
+            self._offset += len(response.data)
+            return response.data
+        elif isinstance(response, SFTPStatusMessage):
+            if response.status_code == SSH_FX_EOF:
+                return b""
+            raise SFTPError.from_status(response.status_code, response.message)
+        else:
+            raise SFTPError("Unexpected response to read request")
+
+    def write(self, data: bytes) -> int:
+        """
+        Write data to remote file.
+
+        Args:
+            data: Data to write
+
+        Returns:
+            Number of bytes written
+        """
+        if self._closed:
+            raise SFTPError("File is closed")
+
+        request_id = self._client._get_next_request_id()
+        write_msg = SFTPWriteMessage(request_id, self._handle, self._offset, data)
+        
+        response = self._client._send_request_and_wait_response(write_msg)
+        
+        if isinstance(response, SFTPStatusMessage):
+            if response.status_code == SSH_FX_OK:
+                self._offset += len(data)
+                return len(data)
+            raise SFTPError.from_status(response.status_code, response.message)
+        else:
+            raise SFTPError("Unexpected response to write request")
+
+    def close(self) -> None:
+        """Close remote file."""
+        if not self._closed:
+            request_id = self._client._get_next_request_id()
+            close_msg = SFTPCloseMessage(request_id, self._handle)
+            self._client._send_request_and_wait_response(close_msg)
+            self._closed = True
+
+    def __enter__(self) -> "SFTPFile":
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        """Context manager exit."""
+        self.close()
+
+
 class SFTPClient:
     """
     SFTP client for secure file operations.
@@ -725,6 +824,51 @@ class SFTPClient:
                 raise
             raise SFTPError(f"Path normalization failed: {e}", filename=path)
 
+    def open(self, filename: str, mode: str = "r") -> "SFTPFile":
+        """
+        Open remote file.
+
+        Args:
+            filename: Remote file path
+            mode: File open mode (r, w, a, rb, wb, ab)
+
+        Returns:
+            SFTPFile object
+
+        Raises:
+            SFTPError: If file open fails
+        """
+        try:
+            flags = self._mode_to_flags(mode)
+            attrs = SFTPAttributes()
+            request_id = self._get_next_request_id()
+
+            open_msg = SFTPOpenMessage(request_id, filename, flags, attrs)
+            response = self._send_request_and_wait_response(open_msg)
+
+            if isinstance(response, SFTPHandleMessage):
+                return SFTPFile(self, response.handle, mode)
+            elif isinstance(response, SFTPStatusMessage):
+                raise SFTPError.from_status(response.status_code, response.message)
+            else:
+                raise SFTPError("Unexpected response to open request")
+
+        except Exception as e:
+            if isinstance(e, SFTPError):
+                raise
+            raise SFTPError(f"File open failed: {e}", filename=filename)
+
+    def _mode_to_flags(self, mode: str) -> int:
+        """Convert file mode string to SFTP flags."""
+        flags = 0
+        if "r" in mode:
+            flags |= SSH_FXF_READ
+        if "w" in mode:
+            flags |= SSH_FXF_WRITE | SSH_FXF_CREAT | SSH_FXF_TRUNC
+        if "a" in mode:
+            flags |= SSH_FXF_WRITE | SSH_FXF_CREAT
+        return flags
+
     def close(self) -> None:
         """Close SFTP session and cleanup resources."""
         if self._channel:
@@ -734,3 +878,11 @@ class SFTPClient:
                 self._logger.warning(f"Error closing SFTP channel: {e}")
             finally:
                 self._channel = None
+
+    def __enter__(self) -> "SFTPClient":
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        """Context manager exit."""
+        self.close()

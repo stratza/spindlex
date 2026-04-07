@@ -66,14 +66,20 @@ class ChannelFile:
             # Read until EOF
             result = bytearray()
             while True:
-                chunk = (
-                    self._channel.recv(8192)
-                    if self._mode == "r"
-                    else self._channel.recv_stderr(8192)
-                )
-                if not chunk:
-                    break
-                result.extend(chunk)
+                try:
+                    chunk = (
+                        self._channel.recv(8192)
+                        if self._mode == "r"
+                        else self._channel.recv_stderr(8192)
+                    )
+                    if not chunk:
+                        break
+                    result.extend(chunk)
+                except Exception as e:
+                    # If we have some data, return it. Otherwise, raise the exception.
+                    if "Timeout" in str(e) and result:
+                        return bytes(result)
+                    raise
             return bytes(result)
 
     def write(self, data: Union[str, bytes]) -> int:
@@ -199,6 +205,10 @@ class SSHClient:
 
             # Create transport
             self._transport = Transport(sock)
+
+            # Set permanent timeout on transport
+            if timeout:
+                self._transport.set_timeout(timeout)
 
             # Start client transport (handshake and key exchange)
             self._transport.start_client(timeout)
