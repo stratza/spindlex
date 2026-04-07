@@ -26,8 +26,7 @@ lint_black:
   before_script:
     - pip install black
   script:
-    - black --check --diff spindlex/ tests/ || echo "Black formatting issues found but allowing to continue"
-  allow_failure: true
+    - black --check --diff spindlex/ tests/
 
 lint_isort:
   stage: lint
@@ -35,8 +34,7 @@ lint_isort:
   before_script:
     - pip install isort
   script:
-    - isort --check-only --diff spindlex/ tests/ || echo "Import sorting issues found but allowing to continue"
-  allow_failure: true
+    - isort --check-only --diff spindlex/ tests/
 
 lint_flake8:
   stage: lint
@@ -44,8 +42,7 @@ lint_flake8:
   before_script:
     - pip install flake8 pyproject-flake8
   script:
-    - pflake8 spindlex/ tests/ || echo "Flake8 issues found but allowing to continue"
-  allow_failure: true
+    - pflake8 spindlex/ tests/
 
 lint_mypy:
   stage: lint
@@ -55,7 +52,6 @@ lint_mypy:
     - pip install .
   script:
     - mypy spindlex/
-  allow_failure: true
 
 # Test stage
 .test_template: &test_template
