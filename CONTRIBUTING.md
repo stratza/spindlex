@@ -12,8 +12,8 @@ By participating in this project, you agree to abide by the project's Code of Co
 
 1. **Fork and Clone**
    ```bash
-   git clone https://github.com/your-username/spindlex.git
-   cd spindlex
+   git clone https://gitlab.com/daveops.world/development/python/spindle.git
+   cd spindle
    ```
 
 2. **Create Virtual Environment**

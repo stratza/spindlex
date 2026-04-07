@@ -105,7 +105,7 @@ Once you push a tag, GitLab CI will automatically:
 ### Deployment Steps
 
 1. **Go to GitLab Pipelines**
-   - Visit: https://gitlab.com/daveops.world/development/python/spindlex/-/pipelines
+   - Visit: https://gitlab.com/daveops.world/development/python/spindle/-/pipelines
    - Find the pipeline for your tag (e.g., `v0.3.0`)
 
 2. **Deploy to Test PyPI First**
@@ -184,8 +184,8 @@ print('SpindleX imported successfully!')
 ### Getting Help
 
 - 📖 **Documentation**: https://spindlex.readthedocs.io/
-- 🐛 **Issues**: https://gitlab.com/daveops.world/development/python/spindlex/-/issues
-- 💬 **Discussions**: https://gitlab.com/daveops.world/development/python/spindlex/-/issues
+- 🐛 **Issues**: https://gitlab.com/daveops.world/development/python/spindle/-/issues
+- 💬 **Discussions**: https://gitlab.com/daveops.world/development/python/spindle/-/issues
 
 ## 📋 Checklist
 

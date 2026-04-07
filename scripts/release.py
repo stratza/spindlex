@@ -226,7 +226,7 @@ def main():
 🎉 Release process completed for SpindleX {args.version}!
 
 Next steps:
-1. Go to GitLab CI/CD pipelines: https://gitlab.com/daveops.world/development/python/spindlex/-/pipelines
+1. Go to GitLab CI/CD pipelines: https://gitlab.com/daveops.world/development/python/spindle/-/pipelines
 2. Find the pipeline for tag v{args.version}
 3. Manually trigger the PyPI deployment jobs:
    - First: deploy:pypi:test (uploads to Test PyPI)

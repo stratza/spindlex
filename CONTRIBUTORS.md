@@ -61,7 +61,7 @@ Contributors are recognized in several ways:
 To get started contributing:
 
 1. Read my [Contributing Guide](docs/contributing.rst)
-2. Check out the [good first issue](https://gitlab.com/daveops.world/development/python/spindlex/-/issues?label_name%5B%5D=good%20first%20issue) label
+2. Check out the [good first issue](https://gitlab.com/daveops.world/development/python/spindle/-/issues?label_name%5B%5D=good%20first%20issue) label
 3. Join the community discussions
 4. Fork the repository and start coding!
 
