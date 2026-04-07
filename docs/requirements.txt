@@ -3,5 +3,6 @@ sphinx>=5.0.0
 sphinx-rtd-theme>=1.0.0
 myst-parser>=0.18.0
 linkify-it-py
+mdit-py-plugins
 sphinx-autobuild>=2021.3.14
 sphinxcontrib-spelling>=7.6.0
