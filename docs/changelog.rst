@@ -1,13 +1,34 @@
 Changelog
 =========
 
-All notable changes to SpindleX will be documented in this file.
+All notable changes to this project will be documented in this file.
 
 The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.0.0/>`_,
 and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0.html>`_.
 
+0.4.1 (2026-04-10)
+------------------
+
+Fixed
+~~~~~
+* Fixed critical "Receive timeout" in ``AsyncSSHClient`` and ``AsyncSFTPClient`` by implementing transport pumping in ``AsyncChannel``.
+* Corrected attribute naming in ``AsyncChannel`` (e.g., ``_eof_received``, ``_closed``).
+* Fixed ``AsyncChannel.send`` to correctly return total bytes sent and handle window adjustments robustly.
+* Fixed ``AsyncTransport`` to properly initialize channel window and packet sizes from server confirmation.
+* Corrected message argument naming in ``AsyncTransport`` (e.g., ``bytes_to_add`` in window adjust).
+* Fixed message loss bug in ``AsyncTransport`` by ensuring all pumped messages are queued.
+* Fixed ``AsyncSFTPClient._recv_message`` to robustly read length-prefixed messages using new ``recv_exactly`` method.
+
+Added
+~~~~~
+* Added ``recv_exactly`` method to ``AsyncChannel`` for reliable protocol-level data retrieval.
+* Added ``remove`` method to ``AsyncSFTPClient``.
+* Added asynchronous context manager support (``async with``) to ``AsyncSFTPClient`` and ``AsyncSFTPFile``.
+* Added ``makefile_stderr`` support to ``AsyncChannel``.
+
 0.4.0 (2026-04-07)
 ------------------
+
 
 Fixed
 ~~~~~

@@ -39,6 +39,19 @@ class AsyncChannel(Channel):
         self._recv_buffer = b""
         self._stderr_buffer = b""
 
+    def _handle_data(self, data: bytes) -> None:
+        """Handle incoming channel data."""
+        self._recv_buffer += data
+
+    def _handle_extended_data(self, data_type: int, data: bytes) -> None:
+        """Handle incoming channel extended data."""
+        if data_type == SSH_EXTENDED_DATA_STDERR:
+            self._stderr_buffer += data
+
+    def _handle_eof(self) -> None:
+        """Handle incoming channel EOF."""
+        self._eof_received = True
+
     async def send(self, data: bytes) -> int:
         """
         Send data through channel asynchronously.
@@ -55,36 +68,33 @@ class AsyncChannel(Channel):
         if self.closed:
             raise ChannelException("Channel is closed")
 
+        total_sent = 0
+        original_len = len(data)
+
         try:
             # Check if we have enough window space
-            timeout_count = 0
-            while len(data) > self._remote_window_size:
-                # Wait for window adjust or split data
+            while len(data) > 0:
                 if self._remote_window_size == 0:
-                    timeout_count += 1
-                    if timeout_count > 100:  # Prevent infinite loops in tests
-                        raise ChannelException("Window size timeout")
-                    await asyncio.sleep(0.01)  # Small delay
+                    # Wait for window adjustment by pumping the transport
+                    await self._transport._pump_async()
                     continue
 
-                # Send partial data
+                # Send what we can fit in the window and max packet size
                 chunk_size = min(
                     len(data), self._remote_window_size, self._remote_max_packet_size
                 )
+                if chunk_size == 0: # Should be handled by self._remote_window_size == 0 check above but just in case
+                    await self._transport._pump_async()
+                    continue
+
                 chunk = data[:chunk_size]
                 await self._transport._send_channel_data_async(self._channel_id, chunk)
+                
                 data = data[chunk_size:]
                 self._remote_window_size -= chunk_size
+                total_sent += chunk_size
 
-            # Send remaining data
-            if data:
-                chunk_size = min(len(data), self._remote_max_packet_size)
-                chunk = data[:chunk_size]
-                await self._transport._send_channel_data_async(self._channel_id, chunk)
-                self._remote_window_size -= chunk_size
-                return chunk_size
-
-            return 0
+            return total_sent
 
         except Exception as e:
             if isinstance(e, ChannelException):
@@ -104,12 +114,11 @@ class AsyncChannel(Channel):
         Raises:
             ChannelException: If receive fails
         """
-        if self.closed:
+        if self.closed and not self._recv_buffer:
             raise ChannelException("Channel is closed")
 
         try:
             # Wait for data or channel close
-            timeout_count = 0
             while True:
                 if not self._recv_buffer and self.eof_received:
                     return b""
@@ -129,11 +138,74 @@ class AsyncChannel(Channel):
 
                     return data
 
-                # Wait for more data with timeout to prevent infinite loops
-                timeout_count += 1
-                if timeout_count > 100:  # Prevent infinite loops in tests
-                    return b""  # Return empty data instead of hanging
-                await asyncio.sleep(0.01)
+                # Wait for more data by pumping the transport
+                await self._transport._pump_async()
+
+        except Exception as e:
+            if isinstance(e, ChannelException):
+                raise
+            raise ChannelException(f"Receive failed: {e}")
+
+    async def recv_exactly(self, nbytes: int) -> bytes:
+        """
+        Receive exactly nbytes from channel asynchronously.
+
+        Args:
+            nbytes: Number of bytes to receive
+
+        Returns:
+            Received data
+
+        Raises:
+            ChannelException: If receive fails or channel closed
+        """
+        data = b""
+        while len(data) < nbytes:
+            chunk = await self.recv(nbytes - len(data))
+            if not chunk:
+                raise ChannelException("Connection closed while waiting for data")
+            data += chunk
+        return data
+
+    async def recv_stderr(self, nbytes: int) -> bytes:
+        """
+        Receive stderr data from channel asynchronously.
+
+        Args:
+            nbytes: Maximum number of bytes to receive
+
+        Returns:
+            Received data
+
+        Raises:
+            ChannelException: If receive fails
+        """
+        if self.closed and not self._stderr_buffer:
+            raise ChannelException("Channel is closed")
+
+        try:
+            # Wait for data or channel close
+            while True:
+                if not self._stderr_buffer and self.eof_received:
+                    return b""
+
+                if self._stderr_buffer:
+                    # Return available data
+                    if nbytes <= 0:
+                        data = self._stderr_buffer
+                        self._stderr_buffer = b""
+                    else:
+                        data = self._stderr_buffer[:nbytes]
+                        self._stderr_buffer = self._stderr_buffer[nbytes:]
+
+                    # Adjust window if needed
+                    if len(data) > 0:
+                        await self._adjust_window_async(len(data))
+
+                    return data
+
+                # Wait for more data by pumping the transport
+                await self._transport._pump_async()
 
         except Exception as e:
             if isinstance(e, ChannelException):
@@ -164,9 +236,11 @@ class AsyncChannel(Channel):
             )
 
             # Wait for response
-            # In a full implementation, this would wait for the actual response
-            # For now, just return immediately to avoid hanging in tests
-            pass
+            res = await self._transport._expect_message_async(
+                MSG_CHANNEL_SUCCESS, MSG_CHANNEL_FAILURE
+            )
+            if res.msg_type == MSG_CHANNEL_FAILURE:
+                raise ChannelException(f"Command execution failed: {command}")
 
         except Exception as e:
             if isinstance(e, ChannelException):
@@ -190,9 +264,11 @@ class AsyncChannel(Channel):
             )
 
             # Wait for response
-            # In a full implementation, this would wait for the actual response
-            # For now, just return immediately to avoid hanging in tests
-            pass
+            res = await self._transport._expect_message_async(
+                MSG_CHANNEL_SUCCESS, MSG_CHANNEL_FAILURE
+            )
+            if res.msg_type == MSG_CHANNEL_FAILURE:
+                raise ChannelException("Shell invocation failed")
 
         except Exception as e:
             if isinstance(e, ChannelException):
@@ -223,9 +299,11 @@ class AsyncChannel(Channel):
             )
 
             # Wait for response
-            # In a full implementation, this would wait for the actual response
-            # For now, just return immediately to avoid hanging in tests
-            pass
+            res = await self._transport._expect_message_async(
+                MSG_CHANNEL_SUCCESS, MSG_CHANNEL_FAILURE
+            )
+            if res.msg_type == MSG_CHANNEL_FAILURE:
+                raise ChannelException(f"Subsystem invocation failed: {subsystem}")
 
         except Exception as e:
             if isinstance(e, ChannelException):
@@ -234,7 +312,7 @@ class AsyncChannel(Channel):
 
     async def close(self) -> None:
         """Close channel asynchronously."""
-        if not self.closed:
+        if not self._closed:
             try:
                 # Send EOF first
                 await self._transport._send_channel_eof_async(self._channel_id)
@@ -245,7 +323,7 @@ class AsyncChannel(Channel):
             except:
                 pass  # Ignore errors during close
             finally:
-                self.closed = True
+                self._closed = True
                 self._closed_event.set()
 
     async def wait_closed(self) -> None:
@@ -282,6 +360,19 @@ class AsyncChannel(Channel):
         """
         return AsyncChannelFile(self, mode, bufsize)
 
+    def makefile_stderr(self, mode: str = "r", bufsize: int = -1) -> BinaryIO:
+        """
+        Create file-like object for channel stderr.
+
+        Args:
+            mode: File mode
+            bufsize: Buffer size
+
+        Returns:
+            File-like object for channel stderr
+        """
+        return AsyncChannelFile(self, mode, bufsize, is_stderr=True)
+
 
 class AsyncChannelFile:
     """
@@ -292,7 +383,7 @@ class AsyncChannelFile:
     """
 
     def __init__(
-        self, channel: AsyncChannel, mode: str = "r", bufsize: int = -1
+        self, channel: AsyncChannel, mode: str = "r", bufsize: int = -1, is_stderr: bool = False
     ) -> None:
         """
         Initialize async channel file.
@@ -301,10 +392,12 @@ class AsyncChannelFile:
             channel: Async channel instance
             mode: File mode
             bufsize: Buffer size
+            is_stderr: Whether this file object is for stderr
         """
         self._channel = channel
         self._mode = mode
         self._bufsize = bufsize
+        self._is_stderr = is_stderr
         self._closed = False
 
     async def read(self, size: int = -1) -> bytes:
@@ -320,6 +413,8 @@ class AsyncChannelFile:
         if self._closed:
             raise ValueError("I/O operation on closed file")
 
+        if self._is_stderr:
+            return await self._channel.recv_stderr(size)
         return await self._channel.recv(size)
 
     async def write(self, data: bytes) -> int:
