@@ -379,24 +379,6 @@ open _build/html/index.html
 - **Cross-References**: Link to related documentation
 - **Updates**: Keep documentation in sync with code changes
 
-## Release Process
-
-### Version Management
-
-I use semantic versioning (SemVer):
-- **MAJOR**: Breaking changes
-- **MINOR**: New features (backward compatible)
-- **PATCH**: Bug fixes (backward compatible)
-
-### Release Checklist
-
-1. **Update Version**: Update version in `_version.py`
-2. **Update Changelog**: Document all changes
-3. **Run Tests**: Ensure all tests pass
-4. **Build Documentation**: Update and build docs
-5. **Create Release**: Tag and create GitHub release
-6. **Publish Package**: Upload to PyPI
-
 ## Community
 
 ### Communication Channels
