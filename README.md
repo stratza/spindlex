@@ -16,17 +16,18 @@ SpindleX is a modern SSH protocol implementation engineered for speed, security,
 
 ## Technical Highlights
 
-*   **Optimized I/O**: Intelligent 32KB read buffering architecture minimizes syscall overhead.
+*   **Adaptive Buffering**: Intelligent 32KB read buffering architecture minimizes syscall overhead.
+*   **TCP Fast-Path**: Automatically manages `TCP_NODELAY` to bypass Nagle's algorithm.
 *   **Modern Cryptography**: Native support for Ed25519, Curve25519, and ChaCha20-Poly1305.
-*   **Zero Dependencies**: Pure-Python core with no C extensions, ensuring universal compatibility.
-*   **High Concurrency**: Built-in `async/await` primitives for modern, scalable network applications.
+*   **Zero Dependencies**: Pure-Python core with zero dependencies (except `cryptography`).
+*   **High Concurrency**: Built-in `AsyncSSHClient` and `AsyncSFTPClient` for modern, scalable network applications.
 *   **Type Safety**: 100% type-hinted codebase for robust IDE integration and static analysis.
 
 ---
 
 ## Performance Benchmarks
 
-SpindleX is designed for low-latency environments. In head-to-head comparisons with `paramiko`, SpindleX demonstrates a commanding lead in protocol efficiency:
+SpindleX is designed for low-latency environments. In head-to-head comparisons with other libraries, SpindleX demonstrates a commanding lead in protocol efficiency:
 
 | Operation | SpindleX (avg) | Traditional (avg) | Improvement |
 | :--- | :--- | :--- | :--- |
@@ -53,18 +54,31 @@ pip install spindlex
 
 ```python
 from spindlex import SSHClient
+from spindlex.hostkeys.policy import AutoAddPolicy
 
 # High-level client with automatic resource management
 with SSHClient() as client:
+    client.set_missing_host_key_policy(AutoAddPolicy())
     client.connect('deploy.production.local', username='admin')
     
-    # Execute commands with captured streams
+    # Execute commands with captured streams (stdin, stdout, stderr)
     stdin, stdout, stderr = client.exec_command('uptime')
     print(f"Status: {stdout.read().decode().strip()}")
+    
+    # Get exit status
+    exit_status = stdout._channel.get_exit_status()
     
     # Atomic SFTP operations
     with client.open_sftp() as sftp:
         sftp.put('payload.tar.gz', '/tmp/payload.tar.gz')
+```
+
+### Key Generation
+
+SpindleX includes a dedicated CLI tool for key generation:
+
+```bash
+spindlex-keygen -t ed25519 -f my_key
 ```
 
 ---
@@ -74,16 +88,16 @@ with SSHClient() as client:
 The library is structured into four distinct, auditable layers:
 
 1.  **Transport**: Manages the encrypted tunnel and binary packet protocol.
-2.  **Authentication**: Implements Password, Public Key (RSA, ECDSA, Ed25519), and GSSAPI.
+2.  **Authentication**: Implements Password, Public Key (RSA, ECDSA, Ed25519), and GSSAPI (Kerberos).
 3.  **Channel**: Multiplexes shell, exec, and port-forwarding over a single connection.
-4.  **Application**: High-level abstractions for SSH and SFTP workflows.
+4.  **Application**: High-level abstractions for SSH and SFTP workflows (`SSHClient`, `SFTPClient`, `AsyncSSHClient`, `AsyncSFTPClient`).
 
 ---
 
 ## Security Policy
 
 *   **Hardened Defaults**: Legacy SHA-1 and weak ciphers are disabled by design.
-*   **Mandatory Verification**: Host key verification is enforced unless explicitly overridden.
+*   **Mandatory Verification**: Host key verification is enforced unless explicitly overridden (using `AutoAddPolicy`, `RejectPolicy`, or `WarningPolicy`).
 *   **Privacy Aware**: Built-in log sanitizers ensure credentials never reach telemetry.
 
 To report a vulnerability, please use the [GitLab Security Issue Tracker](https://gitlab.com/daveops.world/development/python/spindle/-/issues) with the `security` label.

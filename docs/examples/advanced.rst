@@ -15,7 +15,7 @@ Async SSH Client::
     
     import asyncio
     import aiofiles
-    from spindlex.async_client import AsyncSSHClient
+    from spindlex import AsyncSSHClient
     from spindlex.exceptions import SSHException
     from typing import List, Dict, Any, Optional
     import time
@@ -70,14 +70,17 @@ Async SSH Client::
                     )
                     
                     # Execute command
-                    result = await client.exec_command(command)
+                    stdin, stdout, stderr = await client.exec_command(command)
+                    
+                    stdout_data = await stdout.read()
+                    stderr_data = await stderr.read()
+                    exit_code = stdout._channel.get_exit_status()
                     
                     return {
                         'success': True,
-                        'stdout': result.stdout,
-                        'stderr': result.stderr,
-                        'exit_code': result.exit_code,
-                        'execution_time': result.execution_time
+                        'stdout': stdout_data.decode('utf-8'),
+                        'stderr': stderr_data.decode('utf-8'),
+                        'exit_code': exit_code
                     }
                     
                 except Exception as e:
@@ -222,7 +225,7 @@ Async SSH Client::
                     if callback:
                         await callback('stderr', data)
                 
-                exit_code = channel.recv_exit_status()
+                exit_code = channel.get_exit_status()
                 
                 return {
                     'success': True,
@@ -811,7 +814,7 @@ Custom SSH Subsystem::
     
     # Usage example
     async def custom_protocol_example():
-        from spindlex.async_client import AsyncSSHClient
+        from spindlex import AsyncSSHClient
         
         client = AsyncSSHClient()
         await client.connect('server.example.com', username='user', pkey=private_key)
@@ -854,7 +857,7 @@ Optimized File Transfer::
     import hashlib
     import asyncio
     import aiofiles
-    from spindlex.async_client import AsyncSSHClient
+    from spindlex import AsyncSSHClient
     from typing import Dict, Any, Optional, List
     import time
     import concurrent.futures
@@ -1059,7 +1062,7 @@ Optimized File Transfer::
             """Create temporary directory on remote server."""
             channel = await client.open_channel('session')
             await channel.exec_command(f'mkdir -p {temp_dir}')
-            exit_code = await channel.recv_exit_status()
+            exit_code = await channel.get_exit_status()
             if exit_code != 0:
                 raise Exception(f"Failed to create remote temp directory: {temp_dir}")
         
@@ -1075,7 +1078,7 @@ Optimized File Transfer::
             
             channel = await client.open_channel('session')
             await channel.exec_command(command)
-            exit_code = await channel.recv_exit_status()
+            exit_code = await channel.get_exit_status()
             
             if exit_code != 0:
                 raise Exception("Failed to reassemble remote file")
@@ -1094,7 +1097,7 @@ Optimized File Transfer::
             
             channel = await client.open_channel('session')
             await channel.exec_command(command)
-            exit_code = await channel.recv_exit_status()
+            exit_code = await channel.get_exit_status()
             
             if exit_code != 0:
                 raise Exception("Failed to split remote file")

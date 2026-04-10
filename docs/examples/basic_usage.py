@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 from spindlex import SSHClient, AutoAddPolicy, RejectPolicy
-from spindlex.crypto.pkey import Ed25519Key
+from spindlex.crypto.pkey import PKey, load_key_from_file
 from spindlex.exceptions import AuthenticationException, SSHException
 
 
@@ -37,7 +37,7 @@ def basic_connection_example():
         # Read and display output
         output = stdout.read().decode('utf-8').strip()
         error = stderr.read().decode('utf-8').strip()
-        exit_code = stdout.channel.recv_exit_status()
+        exit_code = stdout._channel.get_exit_status()
         
         print(f"Command output: {output}")
         if error:
@@ -58,10 +58,10 @@ def key_based_authentication_example():
     print("\n=== Key-Based Authentication Example ===")
     
     # Generate a new key pair for demonstration
-    private_key = Ed25519Key.generate()
+    private_key = PKey.generate("ed25519")
     
     # In practice, you would load an existing key:
-    # private_key = Ed25519Key.from_private_key_file('/path/to/private_key')
+    # private_key = load_key_from_file('/path/to/private_key')
     
     client = SSHClient()
     client.set_missing_host_key_policy(AutoAddPolicy())
@@ -230,16 +230,16 @@ def connection_info_example():
         # Get transport information
         transport = client.get_transport()
         
-        print(f"Connected: {transport.is_active()}")
-        print(f"Server version: {transport.remote_version}")
-        print(f"Client version: {transport.local_version}")
+        print(f"Connected: {transport.active}")
+        print(f"Server version: {transport._server_version}")
+        print(f"Client version: {transport._client_version}")
         
         # Get security information
-        print(f"Cipher: {transport.get_cipher()}")
-        print(f"MAC: {transport.get_mac()}")
+        print(f"Cipher: {transport._cipher_c2s}")
+        print(f"MAC: {transport._mac_c2s}")
         
         # Get host key information
-        host_key = transport.get_remote_server_key()
+        host_key = transport.get_server_host_key()
         print(f"Host key type: {host_key.get_name()}")
         print(f"Host key fingerprint: {host_key.get_fingerprint()}")
         

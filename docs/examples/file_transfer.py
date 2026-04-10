@@ -99,27 +99,23 @@ def directory_operations_example():
         except SFTPError:
             print(f"Directory {test_dir} already exists or creation failed")
         
-        # Change to the directory and list contents
-        sftp.chdir(test_dir)
-        print(f"Changed to directory: {sftp.getcwd()}")
-        
-        dir_contents = sftp.listdir('.')
+        # List contents
+        dir_contents = sftp.listdir(test_dir)
         print(f"Directory contents: {dir_contents}")
         
         # Create a file in the directory
-        test_file = 'test_file.txt'
+        test_file = f"{test_dir}/test_file.txt"
         with sftp.open(test_file, 'w') as remote_file:
             remote_file.write("This is a test file created via SFTP")
         
         print(f"Created file: {test_file}")
         
         # List directory again
-        dir_contents = sftp.listdir('.')
+        dir_contents = sftp.listdir(test_dir)
         print(f"Directory contents after file creation: {dir_contents}")
         
         # Clean up
         sftp.remove(test_file)
-        sftp.chdir('..')
         sftp.rmdir(test_dir)
         print("Cleaned up test directory and file")
         
