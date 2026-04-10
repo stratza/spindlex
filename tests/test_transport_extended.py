@@ -80,10 +80,10 @@ def test_auth_password_success(mock_socket):
     transport = Transport(mock_socket)
     transport._active = True
 
-    # Mock _request_userauth_service and _recv_message
-    with patch.object(transport, "_recv_message") as mock_recv:
+    # Mock _expect_message
+    with patch.object(transport, "_expect_message") as mock_expect:
         # First call for ServiceRequest response
-        mock_recv.side_effect = [
+        mock_expect.side_effect = [
             ServiceAcceptMessage(SERVICE_USERAUTH),
             UserAuthSuccessMessage(),
         ]
@@ -98,8 +98,8 @@ def test_auth_password_failure(mock_socket):
     transport = Transport(mock_socket)
     transport._active = True
 
-    with patch.object(transport, "_recv_message") as mock_recv:
-        mock_recv.side_effect = [
+    with patch.object(transport, "_expect_message") as mock_expect:
+        mock_expect.side_effect = [
             ServiceAcceptMessage(SERVICE_USERAUTH),
             UserAuthFailureMessage(authentications=["password"]),
         ]
@@ -154,8 +154,8 @@ def test_open_channel_session_success(mock_socket):
     transport._active = True
     transport._authenticated = True
 
-    with patch.object(transport, "_recv_message") as mock_recv:
-        mock_recv.return_value = ChannelOpenConfirmationMessage(
+    with patch.object(transport, "_expect_message") as mock_expect:
+        mock_expect.return_value = ChannelOpenConfirmationMessage(
             recipient_channel=0,
             sender_channel=10,
             initial_window_size=1024,
@@ -174,8 +174,8 @@ def test_open_channel_failure(mock_socket):
     transport._active = True
     transport._authenticated = True
 
-    with patch.object(transport, "_recv_message") as mock_recv:
-        mock_recv.return_value = ChannelOpenFailureMessage(
+    with patch.object(transport, "_expect_message") as mock_expect:
+        mock_expect.return_value = ChannelOpenFailureMessage(
             recipient_channel=0,
             reason_code=SSH_OPEN_ADMINISTRATIVELY_PROHIBITED,
             description="No session for you",
@@ -189,8 +189,8 @@ def test_global_request_success(mock_socket):
     transport = Transport(mock_socket)
     transport._active = True
 
-    with patch.object(transport, "_recv_message") as mock_recv:
-        mock_recv.return_value = Message(MSG_REQUEST_SUCCESS)
+    with patch.object(transport, "_expect_message") as mock_expect:
+        mock_expect.return_value = Message(MSG_REQUEST_SUCCESS)
 
         result = transport._send_global_request("test-request", want_reply=True)
         assert result is True
