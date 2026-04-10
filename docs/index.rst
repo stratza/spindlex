@@ -1,7 +1,7 @@
 SpindleX Documentation
 ======================
 
-Welcome to SpindleX's documentation! SpindleX is a pure-Python SSHv2 client/server library that provides secure, high-performance SSH and SFTP operations without GPL/LGPL dependencies.
+Welcome to SpindleX's documentation! SpindleX is a pure-Python SSHv2 client/server library that provides secure, high-performance SSH and SFTP operations.
 
 .. toctree::
    :maxdepth: 2
@@ -19,11 +19,12 @@ Welcome to SpindleX's documentation! SpindleX is a pure-Python SSHv2 client/serv
 Features
 --------
 
-* **Pure Python**: No C extensions or system dependencies
+* **Pure Python**: Pure-Python core with zero dependencies (except `cryptography`)
 * **Modern Security**: Ed25519, ECDSA, ChaCha20-Poly1305, and other modern algorithms
-* **Full SSH Support**: Client and server implementations with all major features
-* **SFTP Support**: Complete SFTP client and server functionality
-* **Async Support**: Optional asyncio support for high-performance applications
+* **Full SSH Support**: Client and server implementations (`SSHClient`, `SSHServer`)
+* **SFTP Support**: Complete SFTP client and server functionality (`SFTPClient`, `SFTPServer`)
+* **Async Support**: Native `AsyncSSHClient` and `AsyncSFTPClient` for high-performance applications
+* **Performance**: Adaptive Buffering and TCP Fast-Path for minimal latency
 * **Comprehensive**: Port forwarding, authentication methods, host key policies
 * **Well-Tested**: Extensive test suite with high code coverage
 * **Type Hints**: Fully typed codebase for better development experience
@@ -49,9 +50,12 @@ Basic SSH client usage:
    client.set_missing_host_key_policy(AutoAddPolicy())
    client.connect('example.com', username='user', password='password')
 
-   # Execute a command
+   # Execute a command (returns stdin, stdout, stderr)
    stdin, stdout, stderr = client.exec_command('ls -la')
    print(stdout.read().decode())
+   
+   # Get exit status
+   exit_status = stdout._channel.get_exit_status()
 
    # Use SFTP
    with client.open_sftp() as sftp:

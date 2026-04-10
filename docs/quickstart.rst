@@ -18,12 +18,6 @@ For development features:
 
    pip install spindlex[dev]
 
-For async support:
-
-.. code-block:: bash
-
-   pip install spindlex[async]
-
 For GSSAPI authentication (Unix only):
 
 .. code-block:: bash
@@ -37,7 +31,8 @@ Here's a simple example of using the SSH client:
 
 .. code-block:: python
 
-   from spindlex import SSHClient, AutoAddPolicy
+   from spindlex import SSHClient
+   from spindlex.hostkeys.policy import AutoAddPolicy
 
    # Create and configure client
    client = SSHClient()
@@ -51,12 +46,16 @@ Here's a simple example of using the SSH client:
            password='mypassword'
        )
 
-       # Execute a command
+       # Execute a command (returns stdin, stdout, stderr)
        stdin, stdout, stderr = client.exec_command('uname -a')
        
        # Read the output
        output = stdout.read().decode('utf-8')
        print(f"Server info: {output}")
+       
+       # Get exit status
+       exit_status = stdout._channel.get_exit_status()
+       print(f"Exit status: {exit_status}")
 
    finally:
        # Always close the connection
@@ -65,7 +64,7 @@ Here's a simple example of using the SSH client:
 Using SSH Keys
 --------------
 
-For key-based authentication:
+For key-based authentication, you can use the `spindlex-keygen` tool or load existing keys:
 
 .. code-block:: python
 
@@ -110,27 +109,23 @@ Transfer files using SFTP:
    finally:
        client.close()
 
-Port Forwarding
----------------
+Async Support
+-------------
 
-Set up local port forwarding:
+SpindleX provides native async support through `AsyncSSHClient` and `AsyncSFTPClient`:
 
 .. code-block:: python
 
-   from spindlex import SSHClient
+   import asyncio
+   from spindlex import AsyncSSHClient
 
-   client = SSHClient()
-   client.connect('jump-server.com', username='user', password='pass')
+   async def run_command():
+       async with AsyncSSHClient() as client:
+           await client.connect('example.com', username='user')
+           stdin, stdout, stderr = await client.exec_command('ls -la')
+           print(await stdout.read())
 
-   # Forward local port 8080 to remote server port 80
-   tunnel_id = client.create_local_port_forward(8080, 'internal-server', 80)
-
-   print(f"Port forwarding active for tunnel {tunnel_id}")
-   
-   # Keep the connection alive
-   input("Press Enter to stop forwarding...")
-   
-   client.close()
+   asyncio.run(run_command())
 
 Context Manager
 ---------------
