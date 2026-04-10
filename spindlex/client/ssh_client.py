@@ -194,6 +194,9 @@ class SSHClient:
             self._logger.debug(f"Connecting to {hostname}:{port}")
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
+            # Enable TCP_NODELAY to reduce latency (Nagle's algorithm)
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+
             if timeout:
                 sock.settimeout(timeout)
 

@@ -143,7 +143,7 @@ def test_start_client_failure(mock_socket):
     # Trigger an exception during handshake
     mock_socket.recv.side_effect = Exception("Generic error")
 
-    with pytest.raises(TransportException, match="Handshake failed"):
+    with pytest.raises(TransportException, match="Error during version exchange"):
         transport.start_client()
 
     assert not transport.active
