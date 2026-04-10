@@ -704,7 +704,7 @@ class SSHServerManager:
                 self._connections[connection_id] = transport
 
             # Keep connection alive until it's closed
-            while transport.is_active():
+            while transport.active:
                 time.sleep(0.1)
 
         except Exception as e:

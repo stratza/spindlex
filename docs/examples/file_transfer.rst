@@ -1,46 +1,43 @@
-SFTP File Transfer Examples
-==========================
+File Transfer Example (SFTP)
+============================
 
-This page contains examples of how to perform file transfer operations using SpindleX's SFTP client.
+This example demonstrates how to transfer files securely using SFTP in SpindleX.
 
-Basic File Transfer
--------------------
+.. code-block:: python
 
-.. literalinclude:: file_transfer.py
-   :language: python
-   :pyobject: basic_file_transfer_example
+   from spindlex import SSHClient
+   from spindlex.hostkeys.policy import AutoAddPolicy
 
-Directory Operations
---------------------
+   # Initialize and connect the client
+   client = SSHClient()
+   client.set_missing_host_key_policy(AutoAddPolicy())
+   client.connect('example.com', username='user', password='password')
 
-.. literalinclude:: file_transfer.py
-   :language: python
-   :pyobject: directory_operations_example
-
-File Attributes
----------------
-
-.. literalinclude:: file_transfer.py
-   :language: python
-   :pyobject: file_attributes_example
-
-Bulk Transfer with Progress
----------------------------
-
-.. literalinclude:: file_transfer.py
-   :language: python
-   :pyobject: bulk_transfer_example
-
-Streaming Transfer for Large Files
-----------------------------------
-
-.. literalinclude:: file_transfer.py
-   :language: python
-   :pyobject: streaming_transfer_example
-
-Using Context Managers
-----------------------
-
-.. literalinclude:: file_transfer.py
-   :language: python
-   :pyobject: sftp_context_manager_example
+   try:
+       # Open an SFTP session
+       with client.open_sftp() as sftp:
+           # Upload a file
+           sftp.put('local_file.txt', 'remote_file.txt')
+           
+           # Get remote file attributes
+           attrs = sftp.stat('remote_file.txt')
+           print(f"Remote file size: {attrs.st_size} bytes")
+           
+           # Change remote file permissions
+           sftp.chmod('remote_file.txt', 0o644)
+           
+           # Download a file
+           sftp.get('remote_file.txt', 'local_backup.txt')
+           
+           # List remote directory
+           files = sftp.listdir('.')
+           print(f"Files in remote home: {files}")
+           
+           # Rename a remote file
+           sftp.rename('remote_file.txt', 'remote_file_v2.txt')
+           
+           # Delete a remote file
+           sftp.remove('remote_file_v2.txt')
+           
+   finally:
+       client.close()

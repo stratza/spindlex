@@ -73,7 +73,7 @@ Basic Server Management Script::
                 return {
                     'stdout': stdout.read().decode('utf-8'),
                     'stderr': stderr.read().decode('utf-8'),
-                    'exit_code': stdout.channel.recv_exit_status()
+                    'exit_code': stdout._channel.get_exit_status()
                 }
                 
             finally:
@@ -239,7 +239,7 @@ Configuration Deployment Script::
                 if 'post_deploy_commands' in server_config:
                     for command in server_config['post_deploy_commands']:
                         stdin, stdout, stderr = client.exec_command(command)
-                        exit_code = stdout.channel.recv_exit_status()
+                        exit_code = stdout._channel.get_exit_status()
                         if exit_code != 0:
                             raise Exception(f"Post-deploy command failed: {command}")
             
@@ -676,7 +676,7 @@ Database Backup Script::
                 
                 # Execute backup command
                 stdin, stdout, stderr = client.exec_command(backup_cmd)
-                exit_code = stdout.channel.recv_exit_status()
+                exit_code = stdout._channel.get_exit_status()
                 
                 if exit_code != 0:
                     error_output = stderr.read().decode('utf-8')
@@ -686,7 +686,7 @@ Database Backup Script::
                 if db_config.get('compress', True):
                     compress_cmd = f"gzip {remote_backup_path}"
                     stdin, stdout, stderr = client.exec_command(compress_cmd)
-                    exit_code = stdout.channel.recv_exit_status()
+                    exit_code = stdout._channel.get_exit_status()
                     
                     if exit_code == 0:
                         remote_backup_path += '.gz'

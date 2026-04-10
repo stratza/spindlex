@@ -57,23 +57,8 @@ Public Key Authentication
 Keyboard-Interactive Authentication
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. code-block:: python
-
-   def auth_handler(title, instructions, prompt_list):
-       """Handle interactive authentication prompts."""
-       responses = []
-       for prompt, echo in prompt_list:
-           if 'password' in prompt.lower():
-               responses.append('mypassword')
-           else:
-               responses.append(input(prompt))
-       return responses
-
-   client.connect(
-       hostname='example.com',
-       username='myuser',
-       auth_handler=auth_handler
-   )
+.. note::
+   Keyboard-Interactive authentication is currently not implemented in the synchronous `SSHClient` and will raise a `NotImplementedError` if attempted.
 
 Command Execution
 -----------------
@@ -89,7 +74,9 @@ Simple Commands
    # Read output
    output = stdout.read().decode('utf-8')
    error = stderr.read().decode('utf-8')
-   exit_status = stdout.channel.recv_exit_status()
+   
+   # Get exit status (use _channel as ChannelFile doesn't have a public channel attribute)
+   exit_status = stdout._channel.get_exit_status()
    
    print(f"Output: {output}")
    print(f"Error: {error}")
@@ -107,8 +94,8 @@ Commands with Input
    stdin.flush()
    stdin.close()
    
-   # Wait for command to complete
-   exit_status = stdout.channel.recv_exit_status()
+   # Wait for command to complete and get exit status
+   exit_status = stdout._channel.get_exit_status()
 
 Interactive Shell
 ~~~~~~~~~~~~~~~~~
@@ -179,7 +166,7 @@ Connection Persistence
            self.client = None
        
        def _ensure_connected(self):
-           if self.client is None or not self.client.get_transport().is_active():
+           if self.client is None or not self.client.get_transport().active:
                self.client = SSHClient()
                self.client.connect(**self.connect_kwargs)
        
@@ -229,7 +216,7 @@ Custom Host Key Policy
            # Example: Check against a database or external service
            if self.is_key_trusted(hostname, fingerprint):
                # Accept the key
-               client.get_host_keys().add(hostname, key.get_name(), key)
+               client.get_host_key_storage().add(hostname, key)
            else:
                # Reject the key
                raise Exception(f"Untrusted host key for {hostname}")
@@ -291,8 +278,8 @@ Best Practices
 
 1. **Always close connections**: Use try/finally or context managers
 2. **Use key-based authentication**: More secure than passwords
-3. **Implement proper host key verification**: Don't use AutoAddPolicy in production
+3. **Implement proper host key verification**: Don't use `AutoAddPolicy` in production
 4. **Handle timeouts appropriately**: Set reasonable timeout values
 5. **Use connection pooling**: For applications with many short-lived connections
 6. **Implement retry logic**: For unreliable network connections
-7. **Monitor connection health**: Check transport.is_active() periodically
+7. **Monitor connection health**: Check `transport.active` periodically
