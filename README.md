@@ -5,6 +5,7 @@
 ### *The Next-Generation Pure-Python SpindleX*
 
 [![PyPI version](https://badge.fury.io/py/spindlex.svg)](https://badge.fury.io/py/spindlex)
+[![Socket Badge](https://badge.socket.dev/pypi/package/spindlex/0.4.0?artifact_id=tar-gz)](https://badge.socket.dev/pypi/package/spindlex/0.4.0?artifact_id=tar-gz)
 [![Python Support](https://img.shields.io/pypi/pyversions/spindlex.svg)](https://pypi.org/project/spindlex/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![PyPI Downloads](https://static.pepy.tech/personalized-badge/spindlex?period=total&units=NONE&left_color=BLUE&right_color=GRAY&left_text=Downloads)](https://pepy.tech/projects/spindlex)

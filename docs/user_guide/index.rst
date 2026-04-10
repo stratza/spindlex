@@ -9,4 +9,3 @@ This guide provides comprehensive information on using SpindleX effectively.
    client
    authentication
    sftp
-   ../deployment
