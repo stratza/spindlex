@@ -279,9 +279,15 @@ class Ed25519Key(PKey):
             CryptoException: If key loading fails
         """
         try:
-            self._key = serialization.load_pem_private_key(
-                key_data, password=password, backend=default_backend()
-            )
+            if b"BEGIN OPENSSH PRIVATE KEY" in key_data:
+                self._key = serialization.load_ssh_private_key(
+                    key_data, password=password, backend=default_backend()
+                )
+            else:
+                self._key = serialization.load_pem_private_key(
+                    key_data, password=password, backend=default_backend()
+                )
+                
             if not isinstance(self._key, ed25519.Ed25519PrivateKey):
                 raise CryptoException("Key is not Ed25519 private key")
         except Exception as e:
@@ -943,6 +949,7 @@ def load_key_from_file(filename: str, password: Optional[str] = None) -> PKey:
             key_data = f.read()
 
         password_bytes = password.encode() if password else None
+        errors = []
 
         # Try different key types
         for key_class in [Ed25519Key, ECDSAKey, RSAKey]:
@@ -950,11 +957,15 @@ def load_key_from_file(filename: str, password: Optional[str] = None) -> PKey:
                 key = key_class()
                 key.load_private_key(key_data, password_bytes)
                 return key
-            except:
+            except Exception as e:
+                errors.append(f"{key_class.__name__}: {e}")
                 continue
 
-        raise CryptoException("Unable to load key - unsupported format or type")
+        error_details = "; ".join(errors)
+        raise CryptoException(f"Unable to load key - unsupported format or type. Details: {error_details}")
     except Exception as e:
+        if isinstance(e, CryptoException):
+            raise
         raise CryptoException(f"Failed to load key from file: {e}")
 
 

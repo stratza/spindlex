@@ -70,10 +70,13 @@ class AsyncSSHClient:
 
         try:
             # Create socket connection
-            sock = await self._create_connection(hostname, port, timeout)
+            sock, reader, writer = await self._create_connection(hostname, port, timeout)
 
             # Create async transport
             self._transport = AsyncTransport(sock)
+            
+            # Use connect_existing helper to set reader/writer safely
+            await self._transport.connect_existing(reader, writer)
 
             # Start client transport
             await self._transport.start_client(timeout)
@@ -121,7 +124,7 @@ class AsyncSSHClient:
 
     async def _create_connection(
         self, hostname: str, port: int, timeout: Optional[float]
-    ) -> socket.socket:
+    ) -> Tuple[socket.socket, asyncio.StreamReader, asyncio.StreamWriter]:
         """
         Create socket connection to SSH server.
 
@@ -131,7 +134,7 @@ class AsyncSSHClient:
             timeout: Connection timeout
 
         Returns:
-            Connected socket
+            Tuple of (socket, reader, writer)
         """
         try:
             # Use asyncio to create connection
@@ -142,11 +145,7 @@ class AsyncSSHClient:
             # Get the underlying socket
             sock = writer.get_extra_info("socket")
 
-            # Close the asyncio streams since we'll use the socket directly
-            writer.close()
-            await writer.wait_closed()
-
-            return sock
+            return sock, reader, writer
 
         except asyncio.TimeoutError:
             raise SSHException(f"Connection timeout to {hostname}:{port}")

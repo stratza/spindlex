@@ -109,3 +109,5 @@ config.ini
 # --- Test Artifacts ---
 test_results/
 test_output/
+test_spindlex_core.py
+test_spindlex.py
