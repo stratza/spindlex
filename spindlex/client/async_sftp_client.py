@@ -68,6 +68,40 @@ class AsyncSFTPClient:
 
         self._initialized = True
 
+    async def remove(self, path: str) -> None:
+        """
+        Remove remote file asynchronously.
+
+        Args:
+            path: Remote file path to remove
+
+        Raises:
+            SFTPError: If removal fails
+        """
+        try:
+            request_id = self._get_next_request_id()
+            from ..protocol.sftp_messages import SFTPRemoveMessage
+
+            # Send remove request
+            remove_msg = SFTPRemoveMessage(request_id=request_id, filename=path)
+            await self._send_message(remove_msg)
+
+            # Wait for response
+            response = await self._wait_for_response(request_id)
+
+            if isinstance(response, SFTPStatusMessage):
+                if response.status_code != SSH_FX_OK:
+                    raise SFTPError(
+                        f"File removal failed: {response.message}", response.status_code
+                    )
+            else:
+                raise SFTPError("Unexpected response to remove request")
+
+        except Exception as e:
+            if isinstance(e, SFTPError):
+                raise
+            raise SFTPError(f"File removal failed: {e}")
+
     async def get(self, remotepath: str, localpath: str) -> None:
         """
         Download file from remote server asynchronously.
@@ -337,6 +371,14 @@ class AsyncSFTPClient:
         self._initialized = False
         self._pending_requests.clear()
 
+    async def __aenter__(self) -> "AsyncSFTPClient":
+        """Async context manager entry."""
+        return self
+
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        """Async context manager exit."""
+        await self.close()
+
     def _get_next_request_id(self) -> int:
         """Get next request ID."""
         self._request_id += 1
@@ -365,19 +407,14 @@ class AsyncSFTPClient:
     async def _recv_message(self) -> Any:
         """Receive SFTP message from channel."""
         # Read message length
-        length_data = await self._channel.recv(4)
-        if len(length_data) != 4:
-            raise SFTPError("Incomplete message length")
-
+        length_data = await self._channel.recv_exactly(4)
         length = struct.unpack(">I", length_data)[0]
 
         # Read message data
-        data = await self._channel.recv(length)
-        if len(data) != length:
-            raise SFTPError("Incomplete message data")
+        data = await self._channel.recv_exactly(length)
 
         # Parse message
-        return SFTPMessage.unpack(data)
+        return SFTPMessage.unpack(length_data + data)
 
     async def _wait_for_response(self, request_id: int) -> Any:
         """Wait for response to specific request."""
@@ -602,3 +639,11 @@ class AsyncSFTPFile:
                 pass  # Ignore errors during close
             finally:
                 self._closed = True
+
+    async def __aenter__(self) -> "AsyncSFTPFile":
+        """Async context manager entry."""
+        return self
+
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        """Async context manager exit."""
+        await self.close()
