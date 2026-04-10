@@ -707,6 +707,9 @@ class Transport:
                         self._handle_channel_request(msg)
                     elif msg.msg_type == MSG_CHANNEL_OPEN:
                         self._handle_channel_open(msg)
+                else:
+                    pass
+                    # print(f"DEBUG: Channel {recipient_channel} not found in {list(self._channels.keys())}")
         
         # If it's a global request, handle it separately
         if msg.msg_type == MSG_GLOBAL_REQUEST:
@@ -830,10 +833,13 @@ class Transport:
     def _handle_channel_data(self, msg: Message) -> None:
         """Handle channel data message."""
         if isinstance(msg, ChannelDataMessage):
+            # print(f"DEBUG: Data for channel {msg.recipient_channel}: {len(msg.data)} bytes")
             with self._lock:
                 if msg.recipient_channel in self._channels:
                     channel = self._channels[msg.recipient_channel]
                     channel._handle_data(msg.data)
+                else:
+                    print(f"DEBUG: Data for UNKNOWN channel {msg.recipient_channel}")
 
     def _handle_channel_extended_data(self, msg: Message) -> None:
         """Handle channel extended data message."""

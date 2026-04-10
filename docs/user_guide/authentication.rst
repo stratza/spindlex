@@ -268,7 +268,7 @@ GSSAPI/Kerberos Authentication
 GSSAPI authentication provides single sign-on capabilities in Kerberos environments.
 
 .. note::
-   As of version 0.4.0, GSSAPI authentication is fully integrated into `AsyncSSHClient`. For the synchronous `SSHClient`, it can be performed by accessing the underlying `Transport`.
+   As of version 0.4.1, GSSAPI authentication is fully integrated into `AsyncSSHClient`. For the synchronous `SSHClient`, it can be performed by accessing the underlying `Transport`.
 
 Async GSSAPI Authentication
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~

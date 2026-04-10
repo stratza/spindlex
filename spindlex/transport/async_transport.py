@@ -7,6 +7,7 @@ Provides asynchronous SSH transport functionality for high-concurrency applicati
 import asyncio
 import socket
 import struct
+import os
 from typing import Any, Dict, Optional, List
 
 from ..exceptions import AuthenticationException, ProtocolException, TransportException
@@ -55,12 +56,13 @@ class AsyncTransport(Transport):
             self._server_mode = False
 
         try:
-            if not self._reader or not self._writer:
-                self._reader, self._writer = await asyncio.open_connection(sock=self._socket)
-
             # Handshake
-            await self._send_version_async()
-            await self._recv_version_async()
+            if self._server_mode:
+                await self._send_version_async()
+                await self._recv_version_async()
+            else:
+                await self._recv_version_async()
+                await self._send_version_async()
 
             # Key Exchange
             await self._start_kex_async()
@@ -76,96 +78,138 @@ class AsyncTransport(Transport):
 
     async def _start_kex_async(self) -> None:
         """Performs KEX by bridging sync KEX logic into a thread."""
-        if self._kex_in_progress:
-            raise TransportException("Key exchange already in progress")
+        async with self._state_lock:
+            if self._kex_in_progress:
+                raise TransportException("Key exchange already in progress")
+            self._kex_in_progress = True
 
-        self._kex_in_progress = True
         try:
-            # Exchange KEXINIT
-            await self._send_kexinit_async()
-            await self._recv_kexinit_async()
-
-            # Run sync KEX in thread. 
-            # It will call our overridden _send_message and _recv_message.
-            await asyncio.to_thread(self._kex.start_kex)
-
-            self._kex_in_progress = False
+            # We run the entire KEX initiation in a thread to avoid deadlocking the loop
+            # with sync-to-async bridge calls (.result() calls).
+            await asyncio.to_thread(self._run_kex_threadsafe)
         except Exception as e:
-            self._kex_in_progress = False
+            async with self._state_lock:
+                self._kex_in_progress = False
             raise
 
-    # --- Bridge Methods for Sync KEX ---
+    def _run_kex_threadsafe(self) -> None:
+        """Thread-safe KEX execution bridging."""
+        # This runs in a separate thread, safe to block on .result()
+        self._send_kexinit()
+        self._recv_kexinit()
+        self._kex.start_kex()
+        
+        # Reset progress flag
+        self._kex_in_progress = False
+
+    # --- Bridge Methods for Sync Logic ---
 
     def _send_message(self, message: Message) -> None:
-        """Bridge sync calls from KEX thread to async send."""
-        if self._loop and self._loop.is_running():
+        """Bridge sync calls to async send."""
+        if not self._loop:
+            return super()._send_message(message)
+            
+        try:
+            # If we're already on the loop thread, we can't block with .result()
+            # but we also shouldn't be here if we want synchronous behavior.
+            # However, for KEX and other sync-bridged parts, it's called from threads.
+            asyncio.get_running_loop()
+            
+            # On the loop: schedule it.
+            self._loop.call_soon_threadsafe(lambda: asyncio.create_task(self._send_message_async(message)))
+        except RuntimeError:
+            # Safe to block from other threads
             fut = asyncio.run_coroutine_threadsafe(self._send_message_async(message), self._loop)
             fut.result()
-        else:
-            super()._send_message(message)
 
     def _recv_message(self, allowed_types: Optional[List[int]] = None) -> Message:
-        """Bridge sync calls from KEX thread to async recv."""
-        if self._loop and self._loop.is_running():
+        """Bridge sync calls to async recv."""
+        if not self._loop:
+            return super()._recv_message()
+
+        try:
+            asyncio.get_running_loop()
+            raise TransportException("Synchronous receive called on event loop thread")
+        except RuntimeError:
+            # For debugging the 'bytes' error
+            # print(f"DEBUG: _recv_message from thread. Queue type: {type(self._message_queue)}")
             fut = asyncio.run_coroutine_threadsafe(self._recv_message_async(), self._loop)
             return fut.result()
-        else:
-            return super()._recv_message(allowed_types)
+
+    def _expect_message(self, *allowed_types: int) -> Message:
+        """Bridge sync expect_message."""
+        if not self._loop:
+            return super()._expect_message(*allowed_types)
+
+        try:
+            asyncio.get_running_loop()
+            raise TransportException("Synchronous expect_message called on event loop thread")
+        except RuntimeError:
+            fut = asyncio.run_coroutine_threadsafe(self._expect_message_async(*allowed_types), self._loop)
+            return fut.result()
 
     # --- Async Implementation of Packet I/O ---
 
+    def _recv_bytes(self, length: int) -> bytes:
+        """Bridge sync recv_bytes to async reader."""
+        # This is called via asyncio.to_thread in _recv_message_async
+        # so we must use run_coroutine_threadsafe.
+        fut = asyncio.run_coroutine_threadsafe(self._reader.readexactly(length), self._loop)
+        return fut.result()
+
     async def _send_message_async(self, message: Message) -> None:
-        """Async version of _send_message that handles encryption via base class."""
+        """Async version of _send_message."""
         async with self._send_lock:
-            # We use the base class's _build_packet because it handles encryption
             payload = message.pack()
             packet = self._build_packet(payload)
+            packet = self._encrypt_packet(packet)
             
             self._writer.write(packet)
             await self._writer.drain()
-            self._sequence_number_out += 1
+            
+            # If this was a NEWKEYS message, activate encryption AFTER sending it
+            if message.msg_type == MSG_NEWKEYS:
+                self._activate_outbound_encryption()
+                
+            self._sequence_number_out = (self._sequence_number_out + 1) & 0xFFFFFFFF
 
     async def _recv_message_async(self) -> Message:
-        """Async version of _recv_message that handles decryption."""
+        """Async version of _recv_message."""
         async with self._recv_lock:
-            # We must implement the decryption logic here because we can't 
-            # easily call the sync _recv_packet.
-            
-            # 1. Read the first block (or at least the length)
-            block_size = self._decipher.block_size if self._decipher else 8
-            if block_size < 4: block_size = 8
-            
-            first_block = await self._reader.readexactly(block_size)
-            
-            if self._decipher:
-                decrypted_first_block = self._decipher.decrypt(first_block)
-                packet_length = struct.unpack(">I", decrypted_first_block[:4])[0]
-                remaining_packet = decrypted_first_block[4:]
-            else:
-                packet_length = struct.unpack(">I", first_block[:4])[0]
-                remaining_packet = first_block[4:]
+            # We call the base _read_message which calls our overridden _recv_bytes
+            # to handle the actual reading from the asyncio reader.
+            msg = await asyncio.to_thread(super()._read_message)
+            return msg
 
-            # 2. Read the rest of the packet
-            total_to_read = packet_length + 4 - block_size
-            if total_to_read > 0:
-                rest = await self._reader.readexactly(total_to_read)
-                if self._decipher:
-                    remaining_packet += self._decipher.decrypt(rest)
-                else:
-                    remaining_packet += rest
+    async def _pump_async(self) -> None:
+        """
+        Pump the transport once to read and dispatch a message.
+        Used by channels to wait for data/window adjustments.
+        """
+        msg = await self._recv_message_async()
+        
+        # Always queue the message so it can be picked up by _expect_message_async
+        # even if it was already dispatched by _read_message.
+        async with self._state_lock:
+            self._message_queue.append(msg)
+
+    async def _expect_message_async(self, *allowed_types: int) -> Message:
+        """Async version of expect_message."""
+        while True:
+            # 1. Check queue
+            async with self._state_lock:
+                for i, msg in enumerate(self._message_queue):
+                    if msg.msg_type in allowed_types:
+                        return self._message_queue.pop(i)
             
-            # 3. Handle MAC if enabled
-            if self._mac_in:
-                mac_len = self._mac_in.digest_size
-                mac_data = await self._reader.readexactly(mac_len)
-                # In a full impl we'd verify MAC here
-                
-            # 4. Extract payload
-            padding_len = remaining_packet[0]
-            payload = remaining_packet[1 : packet_length - padding_len]
+            # 2. Read next
+            msg = await self._recv_message_async()
+            if msg.msg_type in allowed_types:
+                return msg
             
-            self._sequence_number_in += 1
-            return Message.unpack(payload)
+            # 3. Queue it
+            async with self._state_lock:
+                self._message_queue.append(msg)
 
     # --- Handshake Helpers ---
 
@@ -185,7 +229,7 @@ class AsyncTransport(Transport):
                 break
 
     async def _send_kexinit_async(self) -> None:
-        self._send_kexinit() # Uses bridged _send_message
+        self._send_kexinit() 
 
     async def _recv_kexinit_async(self) -> None:
         msg = await self._recv_message_async()
@@ -198,9 +242,7 @@ class AsyncTransport(Transport):
     async def auth_password(self, username: str, password: str) -> bool:
         if not self._userauth_service_requested:
             await self._send_message_async(ServiceRequestMessage(SERVICE_USERAUTH))
-            msg = await self._recv_message_async()
-            if not isinstance(msg, ServiceAcceptMessage):
-                raise AuthenticationException("Service request failed")
+            msg = await self._expect_message_async(MSG_SERVICE_ACCEPT)
             self._userauth_service_requested = True
             
         auth_msg = UserAuthRequestMessage(
@@ -208,7 +250,7 @@ class AsyncTransport(Transport):
             method_data=self._build_password_auth_data(password)
         )
         await self._send_message_async(auth_msg)
-        res = await self._recv_message_async()
+        res = await self._expect_message_async(MSG_USERAUTH_SUCCESS, MSG_USERAUTH_FAILURE)
         if isinstance(res, UserAuthSuccessMessage):
             self._authenticated = True
             return True
@@ -231,13 +273,56 @@ class AsyncTransport(Transport):
         await self._send_message_async(msg)
         
         # Wait for confirmation
-        res = await self._recv_message_async()
+        res = await self._expect_message_async(MSG_CHANNEL_OPEN_CONFIRMATION, MSG_CHANNEL_OPEN_FAILURE)
         if isinstance(res, ChannelOpenConfirmationMessage):
             chan._remote_channel_id = res.sender_channel
+            chan._remote_window_size = res.initial_window_size
+            chan._remote_max_packet_size = res.maximum_packet_size
+            
             async with self._state_lock:
                 self._channels[cid] = chan
             return chan
         raise TransportException("Failed to open channel")
+
+    async def _send_channel_request_async(self, channel_id: int, request_type: str, want_reply: bool, data: bytes) -> None:
+        """Send channel request message asynchronously."""
+        msg = ChannelRequestMessage(
+            recipient_channel=self._channels[channel_id]._remote_channel_id,
+            request_type=request_type,
+            want_reply=want_reply,
+            request_data=data
+        )
+        await self._send_message_async(msg)
+
+    async def _send_channel_data_async(self, channel_id: int, data: bytes) -> None:
+        """Send channel data message asynchronously."""
+        msg = ChannelDataMessage(
+            recipient_channel=self._channels[channel_id]._remote_channel_id,
+            data=data
+        )
+        await self._send_message_async(msg)
+
+    async def _send_channel_eof_async(self, channel_id: int) -> None:
+        """Send channel EOF message asynchronously."""
+        msg = ChannelEOFMessage(
+            recipient_channel=self._channels[channel_id]._remote_channel_id
+        )
+        await self._send_message_async(msg)
+
+    async def _send_channel_close_async(self, channel_id: int) -> None:
+        """Send channel close message asynchronously."""
+        msg = ChannelCloseMessage(
+            recipient_channel=self._channels[channel_id]._remote_channel_id
+        )
+        await self._send_message_async(msg)
+
+    async def _send_channel_window_adjust_async(self, channel_id: int, bytes_to_add: int) -> None:
+        """Send channel window adjust message asynchronously."""
+        msg = ChannelWindowAdjustMessage(
+            recipient_channel=self._channels[channel_id]._remote_channel_id,
+            bytes_to_add=bytes_to_add
+        )
+        await self._send_message_async(msg)
 
     async def close(self) -> None:
         async with self._state_lock:
