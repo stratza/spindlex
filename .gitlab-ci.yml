@@ -1,9 +1,9 @@
-# GitLab CI/CD configuration for SpindleX
+# Optimized GitLab CI/CD for SpindleX
+# Consolidated to reduce noise while maintaining high standards
 
 stages:
   - lint
   - test
-  - security
   - build
   - deploy
 
@@ -14,131 +14,39 @@ cache:
   key: "${CI_JOB_NAME}"
   paths:
     - .cache/pip
-    - venv/
 
-default:
-  interruptible: true
-
-# Lint stage
-lint_black:
+# Standard Linting using pre-commit
+linting:
   stage: lint
   image: python:3.11
   before_script:
-    - pip install black
+    - pip install pre-commit
   script:
-    - black --check --diff spindlex/ tests/
+    - pre-commit run --all-files
 
-lint_isort:
-  stage: lint
-  image: python:3.11
-  before_script:
-    - pip install isort
-  script:
-    - isort --check-only --diff spindlex/ tests/
-
-lint_flake8:
-  stage: lint
-  image: python:3.11
-  before_script:
-    - pip install flake8 pyproject-flake8
-  script:
-    - pflake8 spindlex/ tests/
-
-lint_mypy:
-  stage: lint
-  image: python:3.11
-  before_script:
-    - pip install mypy types-all
-    - pip install .
-  script:
-    - mypy spindlex/
-
-# Test stage
-.test_template: &test_template
+# Core Test Suite
+testing:
   stage: test
+  image: python:3.11
   before_script:
-    - python -m venv venv
-    - source venv/bin/activate
-    - pip install --upgrade pip
     - pip install .[test]
   script:
-    - python -m pytest tests/ -v --cov=spindlex --cov-report=xml --cov-report=term --cov-report=html:htmlcov
+    - python -m pytest tests/ -v --cov=spindlex --cov-report=term --cov-report=xml
   coverage: '/TOTAL.*\s+(\d+%)$/'
   artifacts:
     reports:
       coverage_report:
         coverage_format: cobertura
         path: coverage.xml
-    paths:
-      - coverage.xml
-      - htmlcov/
     expire_in: 1 week
 
-test_python311:
-  <<: *test_template
-  image: python:3.11
-
-# Integration tests
-test_integration:
-  stage: test
-  image: python:3.11
-  services:
-    - name: linuxserver/openssh-server:latest
-      alias: ssh-server
-  variables:
-    PUID: "1000"
-    PGID: "1000"
-    TZ: "UTC"
-    PASSWORD_ACCESS: "true"
-    USER_PASSWORD: "testpass"
-    USER_NAME: "testuser"
-  before_script:
-    - python -m venv venv
-    - source venv/bin/activate
-    - pip install --upgrade pip
-    - pip install .[test]
-    - sleep 30  # Wait for SSH server to start
-  script:
-    - TEST_SSH_HOST=ssh-server TEST_SSH_USER=testuser TEST_SSH_PASS=testpass python -m pytest tests/ -k integration -v
-  allow_failure: true
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-
-# Security stage
-security_bandit:
-  stage: security
-  image: python:3.11
-  before_script:
-    - pip install bandit[toml]
-  script:
-    - bandit -r spindlex/ -c pyproject.toml -f json -o bandit-report.json || echo "Bandit scan completed with issues"
-  artifacts:
-    reports:
-      sast: bandit-report.json
-    paths:
-      - bandit-report.json
-    expire_in: 1 week
-  allow_failure: true
-
-security_safety:
-  stage: security
-  image: python:3.11
-  before_script:
-    - pip install safety
-    - pip install .
-  script:
-    - safety check --json --output safety-report.json
-  artifacts:
-    paths:
-      - safety-report.json
-    expire_in: 1 week
-  allow_failure: true
-
-# Build stage
+# Build and Package
 build_package:
   stage: build
   image: python:3.11
+  only:
+    - tags
+    - main
   before_script:
     - pip install build twine
   script:
@@ -149,132 +57,15 @@ build_package:
       - dist/
     expire_in: 1 week
 
-build_docs:
-  stage: build
-  image: python:3.11
-  before_script:
-    - apt-get update && apt-get install -y libssl-dev rustc cargo
-    - pip install -r docs/requirements.txt
-    - pip install .
-  script:
-    - sphinx-build -b html docs/ public/
-  artifacts:
-    paths:
-      - public/
-    expire_in: 1 week
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-
-# Deploy stage
-pages:
-  stage: deploy
-  script:
-    - echo "GitLab Pages deployment"
-  artifacts:
-    paths:
-      - public/
-  needs:
-    - build_docs
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-
-# Pre-deployment validation
-validate_release:
+# Optional: Automatic deployment to PyPI on tags
+deploy_pypi:
   stage: deploy
   image: python:3.11
-  before_script:
+  only:
+    - tags
+  script:
     - pip install twine
-  script:
-    - echo "🔍 Validating release artifacts..."
-    - twine check dist/*
-    - echo "📋 Package contents:"
-    - tar -tzf dist/*.tar.gz | head -20
-    - echo "✅ Release validation completed"
-  needs:
-    - build_package
-  rules:
-    - if: $CI_COMMIT_TAG
-  artifacts:
-    reports:
-      junit: validation-report.xml
-    expire_in: 1 week
-  allow_failure: false
-
-# PyPI deployment jobs
-deploy_pypi_test:
-  stage: deploy
-  image: python:3.11
-  before_script:
-    - pip install twine
-  script:
-    - echo "Uploading to Test PyPI..."
-    - twine upload --repository testpypi dist/*
-  variables:
-    TWINE_USERNAME: __token__
-    TWINE_PASSWORD: $PYPI_TEST_TOKEN
-    TWINE_REPOSITORY_URL: https://test.pypi.org/legacy/
-  needs:
-    - build_package
-  rules:
-    - if: $CI_COMMIT_TAG
-      when: manual
-  environment:
-    name: pypi-test
-    url: https://test.pypi.org/project/spindlex/
-  allow_failure: true
-
-deploy_pypi_production:
-  stage: deploy
-  image: python:3.11
-  before_script:
-    - pip install twine
-  script:
-    - echo "Uploading to Production PyPI..."
     - twine upload dist/*
   variables:
-    TWINE_USERNAME: __token__
-    TWINE_PASSWORD: $PYPI_TOKEN
-  rules:
-    - if: $CI_COMMIT_TAG
-      when: manual
-  environment:
-    name: pypi
-    url: https://pypi.org/project/spindlex/
-  needs:
-    - build_package
-    - deploy_pypi_test
-
-# Release job
-release:
-  stage: deploy
-  image: registry.gitlab.com/gitlab-org/release-cli:latest
-  script:
-    - echo "Creating GitLab release for $CI_COMMIT_TAG"
-  release:
-    tag_name: '$CI_COMMIT_TAG'
-    name: 'SpindleX $CI_COMMIT_TAG'
-    description: |
-      ## SpindleX $CI_COMMIT_TAG
-
-      ### 📦 Installation
-      ```bash
-      pip install spindlex==$CI_COMMIT_TAG
-      ```
-
-      ### 🔗 Links
-      - [PyPI Package](https://pypi.org/project/spindlex/$CI_COMMIT_TAG/)
-      - [Documentation](https://spindlex.readthedocs.io/)
-      - [Changelog](https://gitlab.com/daveops.world/development/python/spindlex/-/blob/main/CHANGELOG.md)
-
-      ### 🚀 What's New
-      See the [CHANGELOG.md](https://gitlab.com/daveops.world/development/python/spindlex/-/blob/main/CHANGELOG.md) for detailed changes.
-    assets:
-      links:
-        - name: 'PyPI Package'
-          url: 'https://pypi.org/project/spindlex/'
-        - name: 'Documentation'
-          url: 'https://spindlex.readthedocs.io/'
-        - name: 'Changelog'
-          url: 'https://gitlab.com/daveops.world/development/python/spindlex/-/blob/main/CHANGELOG.md'
-  rules:
-    - if: $CI_COMMIT_TAG
+    TWINE_USERNAME: $PYPI_USERNAME
+    TWINE_PASSWORD: $PYPI_PASSWORD

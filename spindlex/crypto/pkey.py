@@ -46,6 +46,15 @@ class PKey:
         """Get SSH algorithm name for this key type."""
         raise NotImplementedError("Subclasses must implement algorithm_name")
 
+    def get_name(self) -> str:
+        """
+        Get the SSH algorithm name for this key.
+
+        Returns:
+            SSH algorithm name (e.g., 'ssh-rsa')
+        """
+        return self.algorithm_name
+
     def load_private_key(
         self, key_data: bytes, password: Optional[bytes] = None
     ) -> None:
@@ -642,7 +651,7 @@ class ECDSAKey(PKey):
 
             pem = self._key.private_bytes(
                 encoding=serialization.Encoding.PEM,
-                format=serialization.PrivateFormat.OpenSSH,
+                format=serialization.PrivateFormat.PKCS8,
                 encryption_algorithm=encryption_algorithm,
             )
 

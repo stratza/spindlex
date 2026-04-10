@@ -225,13 +225,10 @@ class Channel:
         request_data = write_string(command)
 
         # Send exec request
-        success = self.send_channel_request("exec", want_reply=True, data=request_data)
+        success = self.send_channel_request("exec", want_reply=False, data=request_data)
 
         if not success:
             raise ChannelException(f"Failed to execute command: {command}")
-            
-        # For non-interactive commands, we should send EOF to indicate we won't send more stdin
-        self.send_eof()
 
     def invoke_shell(self) -> None:
         """
@@ -240,6 +237,7 @@ class Channel:
         Raises:
             ChannelException: If shell invocation fails
         """
+
         # Send shell request (no additional data needed)
         success = self.send_channel_request("shell", want_reply=True)
 

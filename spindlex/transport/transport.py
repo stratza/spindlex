@@ -75,8 +75,8 @@ class Transport:
         self._sequence_number_out = 0
         self._packet_buffer = b""
         self._lock = threading.RLock()
-        self._read_lock = threading.Lock()
-        self._server_host_key_blob: Optional[bytes] = None
+        self._read_lock = threading.RLock()
+        self._server_host_key_blob = None
 
         # KEX state
         self._kex_in_progress = False
@@ -98,6 +98,15 @@ class Transport:
         # Message dispatching
         self._message_queue: List[Message] = []
         self._timeout = 10.0
+
+    def get_timeout(self) -> Optional[float]:
+        """
+        Get transport timeout.
+
+        Returns:
+            Current timeout in seconds, or None if no timeout
+        """
+        return self._socket.gettimeout()
 
     def set_timeout(self, timeout: float) -> None:
         """Set default timeout for transport operations."""
@@ -1263,7 +1272,8 @@ class Transport:
         # Read version line character by character
         while True:
             try:
-                char = self._socket.recv(1)
+                # Use _recv_bytes(1) to benefit from buffering
+                char = self._recv_bytes(1)
                 if not char:
                     raise TransportException(
                         "Connection closed during version exchange"
@@ -1283,10 +1293,12 @@ class Transport:
                 if len(version_line) > 255:
                     raise ProtocolException("Version line too long")
 
-            except socket.timeout:
-                raise TransportException("Timeout during version exchange")
-            except socket.error as e:
-                raise TransportException(f"Socket error during version exchange: {e}")
+            except TransportException as e:
+                if "Timeout" in str(e):
+                    raise TransportException("Timeout during version exchange")
+                raise
+            except Exception as e:
+                raise TransportException(f"Error during version exchange: {e}")
 
         try:
             version_string = version_line.decode(SSH_STRING_ENCODING)
@@ -1694,17 +1706,40 @@ class Transport:
         Raises:
             TransportException: If receive fails
         """
-        data = b""
+        # Check if we have enough in buffer
+        with self._lock:
+            if len(self._packet_buffer) >= length:
+                data = self._packet_buffer[:length]
+                self._packet_buffer = self._packet_buffer[length:]
+                return data
+
+            # Need more data, start with what we have
+            data = self._packet_buffer
+            self._packet_buffer = b""
+
         while len(data) < length:
             try:
-                chunk = self._socket.recv(length - len(data))
+                # If we need to read from socket, try to read more than requested to buffer it
+                # Read up to 32KB at a time to reduce syscalls and round-trips
+                to_read = max(32768, length - len(data))
+                chunk = self._socket.recv(to_read)
                 if not chunk:
                     raise TransportException("Connection closed unexpectedly")
+
                 data += chunk
             except socket.timeout:
+                # If we have some data, but not enough, keep it in buffer
+                with self._lock:
+                    self._packet_buffer = data
                 raise TransportException("Timeout receiving data")
             except socket.error as e:
                 raise TransportException(f"Socket error: {e}")
+
+        # If we read more than requested, store the rest in buffer
+        with self._lock:
+            if len(data) > length:
+                self._packet_buffer = data[length:]
+                return data[:length]
 
         return data
 
