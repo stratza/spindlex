@@ -35,8 +35,8 @@ SpindleX is a modern SSH protocol implementation engineered for **speed**, **sec
 
 ## ✨ Key Features
 
-*   🚀 **High Performance**: Optimized with **Adaptive Buffering** and **TCP Fast-Path**. Up to 60% faster SFTP transfers.
-*   📦 **Zero Dependencies**: Pure-Python core. No `gcc`, no `python-dev`. Perfect for minimal Docker images.
+*   🚀 **High Performance**: Optimized with **Adaptive Buffering** and **TCP Fast-Path**. Observed up to 60% faster SFTP transfers in internal benchmarks compared to traditional libraries.
+*   📦 **Lean Implementation**: Pure-Python protocol layer. Leverages `cryptography` for high-performance, secure cryptographic primitives.
 *   🔄 **Native Async**: First-class support for `asyncio` with `AsyncSSHClient` and `AsyncSFTPClient`.
 *   🛡️ **Modern Security**: Ed25519, ECDSA, ChaCha20-Poly1305 by default.
 *   🏷️ **Fully Typed**: 100% type-hinted codebase for robust IDE integration.
@@ -94,12 +94,15 @@ asyncio.run(run())
 
 ## ⚡ Performance
 
-SpindleX is designed for low-latency environments. In head-to-head comparisons, SpindleX demonstrates a commanding lead in protocol efficiency:
+SpindleX is designed for high-throughput, low-latency environments. In internal benchmarks comparing SpindleX 0.4.x with Paramiko 3.x, we observed significant improvements in protocol overhead and transfer speeds:
 
-| Operation | SpindleX (avg) | Traditional (avg) | Improvement |
+| Operation | SpindleX (avg) | traditional (avg) | Improvement |
 | :--- | :--- | :--- | :--- |
-| **Handshake & Connect** | **0.035s** | 0.077s | **54% Faster** |
-| **SFTP Transfer (10MB)** | **0.019s** | 0.061s | **69% Faster** |
+| **Handshake & Connect** | **0.035s** | 0.077s | **~50% Faster** |
+| **SFTP Transfer (10MB)** | **0.019s** | 0.061s | **~60% Faster** |
+
+> [!NOTE]
+> Performance varies based on network conditions, cryptographic backend, and hardware. Users are encouraged to run independent benchmarks using the included `spindlex-benchmark` tool.
 
 ---
 
