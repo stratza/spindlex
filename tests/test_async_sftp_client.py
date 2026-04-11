@@ -53,13 +53,13 @@ async def test_async_sftp_client_remove(async_sftp_client):
 
 @pytest.mark.asyncio
 async def test_async_sftp_client_get(async_sftp_client):
-    handle = b"h1"
     with patch.object(async_sftp_client, "open", new_callable=AsyncMock) as mock_open:
         mock_file = AsyncMock(spec=AsyncSFTPFile)
+
         mock_open.return_value = mock_file
         mock_file.read.side_effect = [b"hello", b""]
         
-        with patch("builtins.open", MagicMock()) as mock_local_open:
+        with patch("builtins.open", MagicMock()):
             await async_sftp_client.get("remote.txt", "local.txt")
             
             assert mock_open.called
@@ -69,7 +69,6 @@ async def test_async_sftp_client_get(async_sftp_client):
 
 @pytest.mark.asyncio
 async def test_async_sftp_client_put(async_sftp_client):
-    handle = b"h1"
     with patch.object(async_sftp_client, "open", new_callable=AsyncMock) as mock_open:
         mock_file = AsyncMock(spec=AsyncSFTPFile)
         mock_open.return_value = mock_file
@@ -77,6 +76,8 @@ async def test_async_sftp_client_put(async_sftp_client):
         with patch("builtins.open", MagicMock()) as mock_local_open:
             mock_local_open.return_value.__enter__.return_value.read.side_effect = [b"hello", b""]
             await async_sftp_client.put("local.txt", "remote.txt")
+
+
             
             assert mock_open.called
             assert mock_file.write.called
