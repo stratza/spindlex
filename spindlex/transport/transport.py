@@ -72,7 +72,9 @@ class Transport:
         self._mac_s2c: Optional[str] = None
 
         # Rekeying policy (configurable)
-        self._rekey_bytes_limit = rekey_bytes_limit or (1024 * 1024 * 1024)  # 1GB default
+        self._rekey_bytes_limit = rekey_bytes_limit or (
+            1024 * 1024 * 1024
+        )  # 1GB default
         self._rekey_time_limit = rekey_time_limit or 3600  # 1 hour default
 
         # Cipher instances
