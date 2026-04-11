@@ -9,7 +9,7 @@ import socket
 import struct
 import threading
 import time
-from typing import Any, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
     from .forwarding import PortForwardingManager
@@ -65,10 +65,10 @@ class Transport:
         self._mac_s2c: Optional[str] = None
 
         # Cipher instances
-        self._encryptor = None
-        self._decryptor = None
-        self._encryptor_instance = None
-        self._decryptor_instance = None
+        self._encryptor: Optional[Any] = None
+        self._decryptor: Optional[Any] = None
+        self._encryptor_instance: Optional[Any] = None
+        self._decryptor_instance: Optional[Any] = None
 
         # Packet handling
         self._sequence_number_in = 0
@@ -87,8 +87,8 @@ class Transport:
         self._last_rekey_time = time.time()
 
         # Timeouts
-        self._connect_timeout = DEFAULT_CONNECT_TIMEOUT
-        self._auth_timeout = DEFAULT_AUTH_TIMEOUT
+        self._connect_timeout: float = float(DEFAULT_CONNECT_TIMEOUT)
+        self._auth_timeout: float = float(DEFAULT_AUTH_TIMEOUT)
 
         # Authentication state
         self._userauth_service_requested = False
@@ -354,6 +354,8 @@ class Transport:
         # Add signature
         sig_blob = bytearray()
         sig_blob.extend(write_string(key.get_name()))
+        if signature is None:
+            raise TransportException("Failed to sign authentication data")
         sig_blob.extend(write_string(signature))
         data.extend(write_string(bytes(sig_blob)))
 
@@ -361,6 +363,9 @@ class Transport:
 
     def _build_signature_data(self, username: str, key: Any) -> bytes:
         """Build data to be signed for public key authentication."""
+        if self._session_id is None:
+            raise TransportException("Session ID not set")
+
         data = bytearray()
         data.extend(write_string(self._session_id))
         data.extend(write_byte(MSG_USERAUTH_REQUEST))
@@ -626,7 +631,7 @@ class Transport:
                 channel = self._channels[channel_id]
 
                 # Send channel close message if not already closed
-                if not channel.closed:
+                if not channel.closed and channel._remote_channel_id is not None:
                     try:
                         close_msg = ChannelCloseMessage(channel._remote_channel_id)
                         self._send_message(close_msg)
@@ -791,7 +796,7 @@ class Transport:
                 recipient_channel=sender_channel,
                 reason_code=SSH_OPEN_CONNECT_FAILED,
                 description=f"Forwarded connection failed: {e}",
-                language_tag="",
+                language="",
             )
             self._send_message(failure_msg)
 
@@ -894,8 +899,10 @@ class Transport:
                         reply_msg = Message(MSG_CHANNEL_SUCCESS)
                     else:
                         reply_msg = Message(MSG_CHANNEL_FAILURE)
-                    reply_msg.add_uint32(channel._remote_channel_id)
-                    self._send_message(reply_msg)
+
+                    if channel._remote_channel_id is not None:
+                        reply_msg.add_uint32(channel._remote_channel_id)
+                        self._send_message(reply_msg)
 
     def _handle_exit_signal_request(self, channel: Channel, data: bytes) -> None:
         """Handle exit signal request data."""
@@ -943,8 +950,9 @@ class Transport:
                 raise TransportException("Remote max packet size exceeded")
 
             # Send data message
-            data_msg = ChannelDataMessage(channel._remote_channel_id, data)
-            self._send_message(data_msg)
+            if channel._remote_channel_id is not None:
+                data_msg = ChannelDataMessage(channel._remote_channel_id, data)
+                self._send_message(data_msg)
 
             # Update remote window size
             channel._remote_window_size -= len(data)
@@ -964,11 +972,12 @@ class Transport:
             channel = self._channels[channel_id]
 
             # Build window adjust message
-            msg = Message(MSG_CHANNEL_WINDOW_ADJUST)
-            msg.add_uint32(channel._remote_channel_id)
-            msg.add_uint32(bytes_to_add)
+            if channel._remote_channel_id is not None:
+                msg = Message(MSG_CHANNEL_WINDOW_ADJUST)
+                msg.add_uint32(channel._remote_channel_id)
+                msg.add_uint32(bytes_to_add)
 
-            self._send_message(msg)
+                self._send_message(msg)
 
             # Update local window size
             channel._local_window_size += bytes_to_add
@@ -992,14 +1001,15 @@ class Transport:
             channel = self._channels[channel_id]
 
             # Build channel request message
-            msg = Message(MSG_CHANNEL_REQUEST)
-            msg.add_uint32(channel._remote_channel_id)
-            msg.add_string(request_type)
-            msg.add_boolean(want_reply)
-            if data:
-                msg._data.extend(data)
+            if channel._remote_channel_id is not None:
+                msg = Message(MSG_CHANNEL_REQUEST)
+                msg.add_uint32(channel._remote_channel_id)
+                msg.add_string(request_type)
+                msg.add_boolean(want_reply)
+                if data:
+                    msg._data.extend(data)
 
-            self._send_message(msg)
+                self._send_message(msg)
 
     def _send_channel_eof(self, channel_id: int) -> None:
         """
@@ -1015,10 +1025,11 @@ class Transport:
             channel = self._channels[channel_id]
 
             # Build EOF message
-            msg = Message(MSG_CHANNEL_EOF)
-            msg.add_uint32(channel._remote_channel_id)
+            if channel._remote_channel_id is not None:
+                msg = Message(MSG_CHANNEL_EOF)
+                msg.add_uint32(channel._remote_channel_id)
 
-            self._send_message(msg)
+                self._send_message(msg)
 
     def _send_global_request(
         self, request_name: str, want_reply: bool, data: bytes = b""
@@ -1139,8 +1150,10 @@ class Transport:
 
             # Delegate to server interface for validation
             if self._server_mode and self._server_interface:
-                return self._server_interface.check_port_forward_request(
-                    bind_address, bind_port
+                return bool(
+                    self._server_interface.check_port_forward_request(
+                        bind_address, bind_port
+                    )
                 )
 
             # Default to reject if no server interface
@@ -1168,8 +1181,10 @@ class Transport:
 
             # Delegate to server interface for validation
             if self._server_mode and self._server_interface:
-                return self._server_interface.check_port_forward_cancel_request(
-                    bind_address, bind_port
+                return bool(
+                    self._server_interface.check_port_forward_cancel_request(
+                        bind_address, bind_port
+                    )
                 )
 
             # Default to reject if no server interface
@@ -1456,9 +1471,12 @@ class Transport:
                         if msg.msg_type == MSG_DISCONNECT:
                             # Parse disconnect reason if possible
                             try:
-                                disconnect_msg = DisconnectMessage.unpack(payload)
+                                d_msg = DisconnectMessage.unpack(payload)
+                                # Type ignore because we know d_msg is a DisconnectMessage here
+                                reason = getattr(d_msg, "description", "Unknown")
+                                code = getattr(d_msg, "reason_code", 0)
                                 raise TransportException(
-                                    f"Disconnected: {disconnect_msg.description} (code: {disconnect_msg.reason_code})"
+                                    f"Disconnected: {reason} (code: {code})"
                                 )
                             except Exception as e:
                                 if isinstance(e, TransportException):
@@ -1533,7 +1551,7 @@ class Transport:
         if not hasattr(self, "_server_host_key_blob") or not self._server_host_key_blob:
             return None
 
-        from ..crypto.pkey import PKey
+        from ..crypto.pkey import PKey  # type: ignore[unreachable]
 
         try:
             return PKey.from_string(self._server_host_key_blob)
@@ -1544,6 +1562,13 @@ class Transport:
         """Activate outbound encryption using negotiated parameters."""
         if not self._cipher_c2s or not self._encryption_key_c2s:
             return
+
+        if (
+            self._cipher_c2s is None
+            or self._encryption_key_c2s is None
+            or self._iv_c2s is None
+        ):
+            raise TransportException("Encryption parameters not fully negotiated")
 
         self._encryptor = self._crypto_backend.create_cipher(
             self._cipher_c2s, self._encryption_key_c2s, self._iv_c2s
@@ -1560,6 +1585,13 @@ class Transport:
         """Activate inbound encryption using negotiated parameters."""
         if not self._cipher_s2c or not self._encryption_key_s2c:
             return
+
+        if (
+            self._cipher_s2c is None
+            or self._encryption_key_s2c is None
+            or self._iv_s2c is None
+        ):
+            raise TransportException("Encryption parameters not fully negotiated")
 
         self._decryptor = self._crypto_backend.create_cipher(
             self._cipher_s2c, self._encryption_key_s2c, self._iv_s2c
@@ -1593,8 +1625,8 @@ class Transport:
                 mac = self._crypto_backend.compute_mac(
                     self._mac_c2s, self._mac_key_c2s, mac_data
                 )
-                return encrypted + mac
-            return encrypted
+                return bytes(encrypted + mac)
+            return bytes(encrypted)
 
         return packet  # Fallback for AEAD which should be handled above
 
@@ -1679,7 +1711,7 @@ class Transport:
                 if received_mac != expected_mac:
                     raise TransportException("MAC verification failed")
 
-            return length_data + packet_payload
+            return bytes(length_data + packet_payload)
         else:
             # Unencrypted or AEAD (simplified unencrypted here for now to get connection working)
             # Read packet length

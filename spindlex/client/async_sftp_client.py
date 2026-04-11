@@ -88,6 +88,7 @@ class AsyncSFTPClient:
 
                     # SSH_FXP_VERSION doesn't have request_id in protocol but our class might handle it
                     # In SFTP protocol, VERSION is the only one without ID
+                    request_id: Optional[int]
                     if isinstance(response, SFTPVersionMessage):
                         request_id = -1
                     else:

@@ -8,7 +8,7 @@ A tool for benchmarking SSH operations and comparing performance (part of Spindl
 import argparse
 import statistics
 import time
-from typing import Any
+from typing import Any, Optional
 
 from ..client.ssh_client import SSHClient
 from ..crypto.backend import get_crypto_backend
@@ -17,8 +17,8 @@ from ..crypto.backend import get_crypto_backend
 def benchmark_connection(
     hostname: str,
     username: str,
-    password: str = None,
-    key_filename: str = None,
+    password: Optional[str] = None,
+    key_filename: Optional[str] = None,
     iterations: int = 10,
 ) -> dict[str, Any]:
     """Benchmark SSH connection establishment."""
@@ -125,7 +125,7 @@ def benchmark_crypto_operations(iterations: int = 1000) -> list[dict[str, Any]]:
     return results
 
 
-def print_benchmark_results(results: list[dict[str, Any]]):
+def print_benchmark_results(results: list[dict[str, Any]]) -> None:
     """Print benchmark results in a formatted table."""
     print("\nBenchmark Results")
     print("=" * 80)
@@ -141,7 +141,7 @@ def print_benchmark_results(results: list[dict[str, Any]]):
         )
 
 
-def main():
+def main() -> int:
     """Main entry point for ssh-benchmark tool."""
     parser = argparse.ArgumentParser(
         description="Benchmark SSH operations",

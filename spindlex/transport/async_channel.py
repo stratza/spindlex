@@ -5,7 +5,7 @@ Provides asynchronous SSH channel functionality for command execution and data t
 """
 
 import asyncio
-from typing import Any, BinaryIO
+from typing import Any
 
 from ..exceptions import ChannelException
 from ..protocol.constants import *
@@ -31,13 +31,13 @@ class AsyncChannel(Channel):
             channel_id: Local channel ID
         """
         super().__init__(transport, channel_id)
-        self._send_queue = asyncio.Queue()
-        self._recv_queue = asyncio.Queue()
+        self._send_queue: asyncio.Queue[Any] = asyncio.Queue()
+        self._recv_queue: asyncio.Queue[Any] = asyncio.Queue()
         self._closed_event = asyncio.Event()
 
         # Override parent's deque buffers with bytes for async
-        self._recv_buffer = b""
-        self._stderr_buffer = b""
+        self._recv_buffer: bytes = b""
+        self._stderr_buffer: bytes = b""
 
     def _handle_data(self, data: bytes) -> None:
         """Handle incoming channel data."""
@@ -52,7 +52,7 @@ class AsyncChannel(Channel):
         """Handle incoming channel EOF."""
         self._eof_received = True
 
-    async def send(self, data: bytes) -> int:
+    async def send(self, data: bytes) -> int:  # type: ignore[override]
         """
         Send data through channel asynchronously.
 
@@ -103,7 +103,7 @@ class AsyncChannel(Channel):
                 raise
             raise ChannelException(f"Send failed: {e}") from e
 
-    async def recv(self, nbytes: int) -> bytes:
+    async def recv(self, nbytes: int) -> bytes:  # type: ignore[override]
         """
         Receive data from channel asynchronously.
 
@@ -138,7 +138,7 @@ class AsyncChannel(Channel):
                     if len(data) > 0:
                         await self._adjust_window_async(len(data))
 
-                    return data
+                    return bytes(data)
 
                 # Wait for more data by pumping the transport
                 await self._transport._pump_async()
@@ -169,7 +169,7 @@ class AsyncChannel(Channel):
             data += chunk
         return data
 
-    async def recv_stderr(self, nbytes: int) -> bytes:
+    async def recv_stderr(self, nbytes: int) -> bytes:  # type: ignore[override]
         """
         Receive stderr data from channel asynchronously.
 
@@ -204,7 +204,7 @@ class AsyncChannel(Channel):
                     if len(data) > 0:
                         await self._adjust_window_async(len(data))
 
-                    return data
+                    return bytes(data)
 
                 # Wait for more data by pumping the transport
                 await self._transport._pump_async()
@@ -214,7 +214,7 @@ class AsyncChannel(Channel):
                 raise
             raise ChannelException(f"Receive failed: {e}") from e
 
-    async def exec_command(self, command: str) -> None:
+    async def exec_command(self, command: str) -> None:  # type: ignore[override]
         """
         Execute command on channel asynchronously.
 
@@ -249,7 +249,7 @@ class AsyncChannel(Channel):
                 raise
             raise ChannelException(f"Command execution failed: {e}") from e
 
-    async def invoke_shell(self) -> None:
+    async def invoke_shell(self) -> None:  # type: ignore[override]
         """
         Invoke shell on channel asynchronously.
 
@@ -277,7 +277,7 @@ class AsyncChannel(Channel):
                 raise
             raise ChannelException(f"Shell invocation failed: {e}") from e
 
-    async def invoke_subsystem(self, subsystem: str) -> None:
+    async def invoke_subsystem(self, subsystem: str) -> None:  # type: ignore[override]
         """
         Invoke subsystem on channel asynchronously.
 
@@ -312,7 +312,7 @@ class AsyncChannel(Channel):
                 raise
             raise ChannelException(f"Subsystem invocation failed: {e}") from e
 
-    async def close(self) -> None:
+    async def close(self) -> None:  # type: ignore[override]
         """Close channel asynchronously."""
         if not self._closed:
             try:
@@ -349,7 +349,7 @@ class AsyncChannel(Channel):
             )
             self._local_window_size += bytes_to_add
 
-    def makefile(self, mode: str = "r", bufsize: int = -1) -> BinaryIO:
+    def makefile(self, mode: str = "r", bufsize: int = -1) -> Any:
         """
         Create file-like object for channel.
 
@@ -362,7 +362,7 @@ class AsyncChannel(Channel):
         """
         return AsyncChannelFile(self, mode, bufsize)
 
-    def makefile_stderr(self, mode: str = "r", bufsize: int = -1) -> BinaryIO:
+    def makefile_stderr(self, mode: str = "r", bufsize: int = -1) -> Any:
         """
         Create file-like object for channel stderr.
 

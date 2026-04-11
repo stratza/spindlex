@@ -127,7 +127,8 @@ class Message:
             MSG_CHANNEL_FAILURE: ChannelFailureMessage,
         }
 
-        message_class = message_classes.get(msg_type, Message)
+        from typing import cast
+        message_class = cast(type["Message"], message_classes.get(msg_type, Message))
 
         if message_class == Message:
             # Generic message

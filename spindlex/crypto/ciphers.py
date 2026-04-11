@@ -190,4 +190,4 @@ class CipherSuite:
             True if algorithm is AEAD, False otherwise
         """
         info = self.get_cipher_info(algorithm)
-        return info.get("aead", False)
+        return bool(info.get("aead", False))

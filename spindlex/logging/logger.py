@@ -23,30 +23,30 @@ class SSHLogger:
         """
         self.name = name
         self.logger = logger or logging.getLogger(name)
-        self._security_logger = None
-        self._performance_logger = None
+        self._security_logger: Optional[logging.Logger] = None
+        self._performance_logger: Optional[logging.Logger] = None
 
-    def debug(self, msg: str, *args, **kwargs) -> None:
+    def debug(self, msg: str, *args: Any, **kwargs: Any) -> None:
         """Log debug message."""
         self.logger.debug(msg, *args, **kwargs)
 
-    def info(self, msg: str, *args, **kwargs) -> None:
+    def info(self, msg: str, *args: Any, **kwargs: Any) -> None:
         """Log info message."""
         self.logger.info(msg, *args, **kwargs)
 
-    def warning(self, msg: str, *args, **kwargs) -> None:
+    def warning(self, msg: str, *args: Any, **kwargs: Any) -> None:
         """Log warning message."""
         self.logger.warning(msg, *args, **kwargs)
 
-    def error(self, msg: str, *args, **kwargs) -> None:
+    def error(self, msg: str, *args: Any, **kwargs: Any) -> None:
         """Log error message."""
         self.logger.error(msg, *args, **kwargs)
 
-    def critical(self, msg: str, *args, **kwargs) -> None:
+    def critical(self, msg: str, *args: Any, **kwargs: Any) -> None:
         """Log critical message."""
         self.logger.critical(msg, *args, **kwargs)
 
-    def exception(self, msg: str, *args, **kwargs) -> None:
+    def exception(self, msg: str, *args: Any, **kwargs: Any) -> None:
         """Log exception with traceback."""
         self.logger.exception(msg, *args, **kwargs)
 
@@ -56,7 +56,7 @@ class SSHLogger:
         message: str,
         client_ip: str = "unknown",
         username: str = "unknown",
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         """
         Log security-related event.
@@ -80,7 +80,9 @@ class SSHLogger:
 
         self._security_logger.info(message, extra=extra)
 
-    def performance_metric(self, operation: str, duration: float, **kwargs) -> None:
+    def performance_metric(
+        self, operation: str, duration: float, **kwargs: Any
+    ) -> None:
         """
         Log performance metric.
 
@@ -98,7 +100,7 @@ class SSHLogger:
         self._performance_logger.info(message, extra=extra)
 
     def protocol_debug(
-        self, direction: str, message_type: str, data: dict[str, Any], **kwargs
+        self, direction: str, message_type: str, data: dict[str, Any], **kwargs: Any
     ) -> None:
         """
         Log protocol-level debugging information.
@@ -172,6 +174,7 @@ def configure_logging(
     root_logger.handlers.clear()
 
     # Choose formatter
+    formatter: logging.Formatter
     if json_format or format_type == "json":
         formatter = JSONFormatter(sanitize=sanitize)
     elif format_type == "debug":
@@ -180,6 +183,7 @@ def configure_logging(
         formatter = SSHFormatter(sanitize=sanitize)
 
     # Add main handler
+    handler: logging.Handler
     if output_file:
         import os
 

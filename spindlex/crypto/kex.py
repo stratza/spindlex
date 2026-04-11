@@ -85,9 +85,11 @@ class Curve25519KeyExchange(KeyExchange):
             self.public_key = self.private_key.public_key()
 
             # Return raw 32-byte public key
-            return self.public_key.public_bytes(
-                encoding=serialization.Encoding.Raw,
-                format=serialization.PublicFormat.Raw,
+            return bytes(
+                self.public_key.public_bytes(
+                    encoding=serialization.Encoding.Raw,
+                    format=serialization.PublicFormat.Raw,
+                )
             )
         except Exception as e:
             raise CryptoException(f"Curve25519 key generation failed: {e}") from e
@@ -117,7 +119,7 @@ class Curve25519KeyExchange(KeyExchange):
 
             # Perform key exchange
             shared_secret = self.private_key.exchange(peer_key)
-            return shared_secret
+            return bytes(shared_secret)
         except Exception as e:
             raise CryptoException(
                 f"Curve25519 shared secret computation failed: {e}"
@@ -152,9 +154,11 @@ class ECDHKeyExchange(KeyExchange):
             self.public_key = self.private_key.public_key()
 
             # Return uncompressed point format
-            return self.public_key.public_bytes(
-                encoding=serialization.Encoding.X962,
-                format=serialization.PublicFormat.UncompressedPoint,
+            return bytes(
+                self.public_key.public_bytes(
+                    encoding=serialization.Encoding.X962,
+                    format=serialization.PublicFormat.UncompressedPoint,
+                )
             )
         except Exception as e:
             raise CryptoException(f"ECDH key generation failed: {e}") from e
@@ -186,7 +190,7 @@ class ECDHKeyExchange(KeyExchange):
 
             # Perform ECDH
             shared_secret = self.private_key.exchange(ec.ECDH(), peer_key)
-            return shared_secret
+            return bytes(shared_secret)
         except Exception as e:
             raise CryptoException(f"ECDH shared secret computation failed: {e}") from e
 
@@ -244,7 +248,7 @@ class DHGroup14KeyExchange(KeyExchange):
 
             # Convert to big-endian bytes with proper padding
             byte_length = (self.GROUP14_P.bit_length() + 7) // 8
-            return public_int.to_bytes(byte_length, "big")
+            return bytes(public_int.to_bytes(byte_length, "big"))
         except Exception as e:
             raise CryptoException(f"DH Group 14 key generation failed: {e}") from e
 
@@ -280,7 +284,7 @@ class DHGroup14KeyExchange(KeyExchange):
 
             # Perform DH exchange
             shared_secret = self.private_key.exchange(peer_key)
-            return shared_secret
+            return bytes(shared_secret)
         except Exception as e:
             raise CryptoException(
                 f"DH Group 14 shared secret computation failed: {e}"

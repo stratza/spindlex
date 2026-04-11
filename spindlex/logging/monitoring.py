@@ -57,7 +57,7 @@ class PerformanceMonitor:
         self._lock = threading.RLock()
         self.logger = get_logger("spindlex.monitoring")
 
-    def record_metric(self, operation: str, duration: float, **metadata) -> None:
+    def record_metric(self, operation: str, duration: float, **metadata: Any) -> None:
         """
         Record a performance metric.
 
@@ -85,7 +85,7 @@ class PerformanceMonitor:
         self.logger.performance_metric(operation, duration, **metadata)
 
     @contextmanager
-    def time_operation(self, operation: str, **metadata):
+    def time_operation(self, operation: str, **metadata: Any) -> Any:
         """
         Context manager for timing operations.
 
@@ -227,7 +227,7 @@ def get_performance_monitor() -> PerformanceMonitor:
     return _performance_monitor
 
 
-def timed_operation(operation_name: str, **metadata):
+def timed_operation(operation_name: str, **metadata: Any) -> Callable:
     """
     Decorator for timing function execution.
 
@@ -238,7 +238,7 @@ def timed_operation(operation_name: str, **metadata):
 
     def decorator(func: Callable) -> Callable:
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             with _performance_monitor.time_operation(operation_name, **metadata):
                 return func(*args, **kwargs)
 
@@ -262,8 +262,12 @@ class CryptoTimer:
 
     @contextmanager
     def time_crypto_operation(
-        self, operation: str, algorithm: str, key_size: Optional[int] = None, **metadata
-    ):
+        self,
+        operation: str,
+        algorithm: str,
+        key_size: Optional[int] = None,
+        **metadata: Any,
+    ) -> Any:
         """
         Time a cryptographic operation.
 
@@ -281,27 +285,27 @@ class CryptoTimer:
         with self.monitor.time_operation(f"crypto_{operation}", **crypto_metadata):
             yield
 
-    def time_key_generation(self, algorithm: str, key_size: int):
+    def time_key_generation(self, algorithm: str, key_size: int) -> Any:
         """Time key generation operation."""
         return self.time_crypto_operation("keygen", algorithm, key_size)
 
-    def time_key_exchange(self, algorithm: str):
+    def time_key_exchange(self, algorithm: str) -> Any:
         """Time key exchange operation."""
         return self.time_crypto_operation("kex", algorithm)
 
-    def time_encryption(self, cipher: str, data_size: int):
+    def time_encryption(self, cipher: str, data_size: int) -> Any:
         """Time encryption operation."""
         return self.time_crypto_operation("encrypt", cipher, data_size=data_size)
 
-    def time_decryption(self, cipher: str, data_size: int):
+    def time_decryption(self, cipher: str, data_size: int) -> Any:
         """Time decryption operation."""
         return self.time_crypto_operation("decrypt", cipher, data_size=data_size)
 
-    def time_signature(self, algorithm: str, key_size: int):
+    def time_signature(self, algorithm: str, key_size: int) -> Any:
         """Time signature operation."""
         return self.time_crypto_operation("sign", algorithm, key_size)
 
-    def time_verification(self, algorithm: str, key_size: int):
+    def time_verification(self, algorithm: str, key_size: int) -> Any:
         """Time signature verification operation."""
         return self.time_crypto_operation("verify", algorithm, key_size)
 

@@ -26,35 +26,47 @@ try:
     from gssapi import Credentials, Name, SecurityContext
 
     GSSAPI_AVAILABLE = True
-except ImportError:
+except (ImportError, OSError):
     GSSAPI_AVAILABLE = False
 
     # Create mock classes for testing when gssapi is not available
-    class Credentials:
-        def __init__(self, usage=None):
+    class MockCredentials:
+        def __init__(self, usage: Optional[str] = None) -> None:
             pass
 
-    class Name:
+    class MockName:
         class NameType:
             hostbased_service = "hostbased_service"
             user = "user"
             anonymous = "anonymous"
 
-        def __init__(self, name, name_type=None):
+        def __init__(self, name: str, name_type: Optional[str] = None) -> None:
             self.name = name
             self.name_type = name_type
 
-    class SecurityContext:
-        def __init__(self, name=None, creds=None, usage=None, flags=None):
+    class MockSecurityContext:
+        def __init__(
+            self,
+            name: Any = None,
+            creds: Any = None,
+            usage: Any = None,
+            flags: Any = None,
+        ) -> None:
             self.complete = False
 
+        def step(self, token: Optional[bytes] = None) -> bytes:
+            return b""
+
     # Create a mock gssapi module with RequirementFlag
-    class MockGSSAPI:
+    class MockGSSAPIModule:
         class RequirementFlag:
             mutual_authentication = 1
             delegate_to_peer = 2
 
-    gssapi = MockGSSAPI()
+    gssapi = MockGSSAPIModule()  # type: ignore
+    Credentials = MockCredentials  # type: ignore
+    Name = MockName  # type: ignore
+    SecurityContext = MockSecurityContext  # type: ignore
 
 
 class GSSAPIAuth:
@@ -140,7 +152,12 @@ class GSSAPIAuth:
 
         # Create service principal name for SSH
         service_name = f"host@{hostname}"
-        return Name(service_name, name_type=Name.NameType.hostbased_service)
+        if GSSAPI_AVAILABLE:
+            from gssapi import NameType
+
+            return Name(service_name, name_type=NameType.hostbased_service)
+        else:
+            return Name(service_name, name_type=Name.NameType.hostbased_service)  # type: ignore
 
     def _init_gss_context(self, target_name: Name, delegate_creds: bool) -> None:
         """
@@ -155,7 +172,7 @@ class GSSAPIAuth:
             self._gss_credentials = Credentials(usage="initiate")
 
             # Create security context
-            flags = gssapi.RequirementFlag.mutual_authentication
+            flags: Any = gssapi.RequirementFlag.mutual_authentication
             if delegate_creds:
                 flags |= gssapi.RequirementFlag.delegate_to_peer
 
@@ -182,7 +199,7 @@ class GSSAPIAuth:
             # Start GSSAPI authentication
             token = None
 
-            while not self._gss_context.complete:
+            while self._gss_context and not self._gss_context.complete:
                 # Generate GSSAPI token
                 try:
                     token = self._gss_context.step(token)
@@ -197,7 +214,7 @@ class GSSAPIAuth:
                         return False
 
                     # Receive response if context not complete
-                    if not self._gss_context.complete:
+                    if self._gss_context and not self._gss_context.complete:
                         token = self._receive_gssapi_response()
                         if token is None:
                             return False
