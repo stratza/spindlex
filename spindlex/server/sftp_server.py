@@ -459,21 +459,29 @@ class SFTPServer:
             if message.pflags & (SSH_FXF_WRITE | SSH_FXF_APPEND | SSH_FXF_CREAT):
                 if not self.check_file_access(resolved_path, "w"):
                     error_msg = SFTPStatusMessage(
-                        message.request_id,
-                        SSH_FX_PERMISSION_DENIED,
-                        "Write access denied",
-                    )
-                    self._send_message(error_msg)
-                    return
-            else:
-                if not self.check_file_access(resolved_path, "r"):
-                    error_msg = SFTPStatusMessage(
-                        message.request_id,  # type: ignore
+                        int(message.request_id),  # type: ignore
                         int(SSH_FX_PERMISSION_DENIED),
                         "Read access denied",
                     )
                     self._send_message(error_msg)
                     return
+
+
+
+            else:
+                if not self.check_file_access(resolved_path, "r"):
+                    error_msg = SFTPStatusMessage(
+                        int(message.request_id),  # type: ignore
+                        int(SSH_FX_PERMISSION_DENIED),
+                        "Read access denied",
+                    )
+                    self._send_message(error_msg)
+                    return
+
+
+
+
+
             # Determine file mode
             mode = ""
             if message.pflags & SSH_FXF_READ and message.pflags & SSH_FXF_WRITE:
@@ -517,7 +525,7 @@ class SFTPServer:
 
             # Create handle
             handle_id = self._generate_handle()
-            handle = SFTPHandle(handle_id, resolved_path, message.pflags, file_obj)
+            handle = SFTPHandle(handle_id, resolved_path, message.pflags, file_obj=file_obj)
 
             with self._handle_lock:
                 self._handles[handle_id] = handle
@@ -795,12 +803,17 @@ class SFTPServer:
             # Check authorization
             if not self.check_directory_access(resolved_path, "r"):
                 error_msg = SFTPStatusMessage(
-                    message.request_id,
-                    SSH_FX_PERMISSION_DENIED,
-                    "Directory access denied",
+                    int(message.request_id),  # type: ignore
+                    int(SSH_FX_PERMISSION_DENIED),
+                    "Read access denied",
                 )
                 self._send_message(error_msg)
                 return
+
+
+
+
+
 
             # Check if path is a directory
             if not os.path.isdir(resolved_path):
@@ -826,12 +839,17 @@ class SFTPServer:
 
             except OSError as e:
                 error_msg = SFTPStatusMessage(
-                    message.request_id,
-                    SSH_FX_PERMISSION_DENIED,
-                    f"Cannot read directory: {e}",
+                    int(message.request_id),  # type: ignore
+                    int(SSH_FX_PERMISSION_DENIED),
+                    "Read access denied",
                 )
                 self._send_message(error_msg)
                 return
+
+
+
+
+
 
             # Create directory handle
             handle_id = self._generate_handle()
@@ -906,12 +924,17 @@ class SFTPServer:
             parent_dir = os.path.dirname(resolved_path)
             if not self.check_directory_access(parent_dir, "w"):
                 error_msg = SFTPStatusMessage(
-                    message.request_id,
-                    SSH_FX_PERMISSION_DENIED,
-                    "Directory write access denied",
+                    int(message.request_id),  # type: ignore
+                    int(SSH_FX_PERMISSION_DENIED),
+                    "Read access denied",
                 )
                 self._send_message(error_msg)
                 return
+
+
+
+
+
 
             # Get permissions from attributes or use default
             mode = self.get_directory_permissions(resolved_path)
@@ -963,12 +986,17 @@ class SFTPServer:
             parent_dir = os.path.dirname(resolved_path)
             if not self.check_directory_access(parent_dir, "w"):
                 error_msg = SFTPStatusMessage(
-                    message.request_id,
-                    SSH_FX_PERMISSION_DENIED,
-                    "Directory write access denied",
+                    int(message.request_id),  # type: ignore
+                    int(SSH_FX_PERMISSION_DENIED),
+                    "Read access denied",
                 )
                 self._send_message(error_msg)
                 return
+
+
+
+
+
 
             # Remove directory
             try:
@@ -1011,12 +1039,17 @@ class SFTPServer:
             # Check authorization
             if not self.check_file_access(resolved_path, "w"):
                 error_msg = SFTPStatusMessage(
-                    message.request_id,
-                    SSH_FX_PERMISSION_DENIED,
-                    "File write access denied",
+                    int(message.request_id),  # type: ignore
+                    int(SSH_FX_PERMISSION_DENIED),
+                    "Read access denied",
                 )
                 self._send_message(error_msg)
                 return
+
+
+
+
+
 
             # Remove file
             try:
@@ -1055,12 +1088,17 @@ class SFTPServer:
             # Check authorization for both paths
             if not self.check_file_access(old_path, "w"):
                 error_msg = SFTPStatusMessage(
-                    message.request_id,
-                    SSH_FX_PERMISSION_DENIED,
-                    "Source file write access denied",
+                    int(message.request_id),  # type: ignore
+                    int(SSH_FX_PERMISSION_DENIED),
+                    "Read access denied",
                 )
                 self._send_message(error_msg)
                 return
+
+
+
+
+
 
             new_parent = os.path.dirname(new_path)
             if not self.check_directory_access(new_parent, "w"):
