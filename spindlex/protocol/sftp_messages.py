@@ -219,6 +219,66 @@ class SFTPAttributes:
         if value is not None:
             self.flags |= SSH_FILEXFER_ATTR_PERMISSIONS
 
+    @property
+    def st_size(self) -> Optional[int]:
+        """Get file size."""
+        return self.size
+
+    @st_size.setter
+    def st_size(self, value: int) -> None:
+        """Set file size."""
+        self.size = value
+        if value is not None:
+            self.flags |= SSH_FILEXFER_ATTR_SIZE
+
+    @property
+    def st_uid(self) -> Optional[int]:
+        """Get user ID."""
+        return self.uid
+
+    @st_uid.setter
+    def st_uid(self, value: int) -> None:
+        """Set user ID."""
+        self.uid = value
+        if value is not None:
+            self.flags |= SSH_FILEXFER_ATTR_UIDGID
+
+    @property
+    def st_gid(self) -> Optional[int]:
+        """Get group ID."""
+        return self.gid
+
+    @st_gid.setter
+    def st_gid(self, value: int) -> None:
+        """Set group ID."""
+        self.gid = value
+        if value is not None:
+            self.flags |= SSH_FILEXFER_ATTR_UIDGID
+
+    @property
+    def st_atime(self) -> Optional[int]:
+        """Get access time."""
+        return self.atime
+
+    @st_atime.setter
+    def st_atime(self, value: int) -> None:
+        """Set access time."""
+        self.atime = value
+        if value is not None:
+            self.flags |= SSH_FILEXFER_ATTR_ACMODTIME
+
+    @property
+    def st_mtime(self) -> Optional[int]:
+        """Get modification time."""
+        return self.mtime
+
+    @st_mtime.setter
+    def st_mtime(self, value: int) -> None:
+        """Set modification time."""
+        self.mtime = value
+        if value is not None:
+            self.flags |= SSH_FILEXFER_ATTR_ACMODTIME
+
     def pack(self) -> bytes:
         """
         Serialize attributes to bytes.

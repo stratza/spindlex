@@ -1,6 +1,6 @@
 # SpindleX
 
-Welcome to SpindleX's documentation! SpindleX is a modern, high-performance, pure-Python SSHv2 and SFTP client/server library.
+Welcome to SpindleX's documentation! SpindleX is a modern, high-performance SSHv2 and SFTP client/server library.
 
 [![CI Status](https://img.shields.io/github/actions/workflow/status/Di3Z1E/spindlex/ci.yml?branch=main&style=flat-square)](https://github.com/Di3Z1E/spindlex/actions)
 [![Coverage](https://img.shields.io/codecov/c/github/Di3Z1E/spindlex?style=flat-square)](https://codecov.io/gh/Di3Z1E/spindlex)
@@ -10,12 +10,12 @@ Welcome to SpindleX's documentation! SpindleX is a modern, high-performance, pur
 
 ## Features
 
-*   **:zap: High Performance**: Optimized with Adaptive Buffering and TCP Fast-Path for minimal latency.
+*   **:zap: High Performance**: Optimized protocol implementation with internal read buffering.
 *   **:shield: Modern Security**: Supports Ed25519, ECDSA, ChaCha20-Poly1305, and other modern algorithms.
-*   **:package: Pure Python**: Zero-dependency core (except `cryptography`) - no GCC or system headers required.
+*   **:package: Lean Design**: Minimal dependencies, leveraging the industry-standard `cryptography` library.
 *   **:link: Full SSH & SFTP**: Both client and server implementations for SSHv2 and SFTP.
 *   **:asyncio: Native Async**: First-class support for `asyncio` with `AsyncSSHClient` and `AsyncSFTPClient`.
-*   **:test_tube: Well Tested**: Extensive test suite with >95% code coverage.
+*   **:test_tube: Well Tested**: Extensive test suite with >90% code coverage.
 *   **:type: Fully Typed**: Complete type hints for a better developer experience.
 
 ## Quick Start

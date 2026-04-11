@@ -1353,14 +1353,12 @@ class Transport:
             "curve25519-sha256@libssh.org",
             KEX_ECDH_SHA2_NISTP256,
             KEX_DH_GROUP14_SHA256,
-            KEX_DH_GROUP1_SHA1,
         ]
 
         host_key_algorithms = [
             HOSTKEY_ED25519,
             HOSTKEY_ECDSA_SHA2_NISTP256,
             HOSTKEY_RSA_SHA2_256,
-            "ssh-rsa",
         ]
 
         encryption_algorithms = [
@@ -1375,7 +1373,6 @@ class Transport:
         mac_algorithms = [
             MAC_HMAC_SHA2_256,
             MAC_HMAC_SHA2_512,
-            "hmac-sha1",
         ]
 
         compression_algorithms = [COMPRESS_NONE, "zlib@openssh.com"]

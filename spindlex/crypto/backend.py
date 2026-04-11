@@ -71,14 +71,12 @@ class CryptographyBackend:
 
     # Hash algorithm mapping
     HASH_ALGORITHMS = {
-        "sha1": hashes.SHA1,
         "sha256": hashes.SHA256,
         "sha512": hashes.SHA512,
     }
 
     # MAC algorithm mapping
     MAC_ALGORITHMS = {
-        "hmac-sha1": hashes.SHA1,
         "hmac-sha2-256": hashes.SHA256,
         "hmac-sha2-512": hashes.SHA512,
         "hmac-sha256": hashes.SHA256,  # Alias

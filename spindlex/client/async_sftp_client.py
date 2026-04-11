@@ -4,8 +4,9 @@ Async SFTP Client Implementation
 Provides asynchronous SFTP client functionality for file operations.
 """
 
+import asyncio
 import struct
-from typing import Any
+from typing import Any, Optional
 
 from ..exceptions import SFTPError
 from ..protocol.sftp_constants import *
@@ -48,24 +49,65 @@ class AsyncSFTPClient:
         """
         self._channel = channel
         self._request_id = 0
-        self._pending_requests = {}
+        self._pending_requests: dict[int, asyncio.Future] = {}
         self._initialized = False
+        self._dispatch_task: Optional[asyncio.Task] = None
+        self._lock = asyncio.Lock()
 
     async def _initialize(self) -> None:
         """Initialize SFTP subsystem."""
         if self._initialized:
             return
 
+        # Start dispatcher task
+        self._dispatch_task = asyncio.create_task(self._dispatch_loop())
+
         # Send SFTP init message
         init_msg = SFTPInitMessage(version=SFTP_VERSION)
         await self._send_message(init_msg)
 
-        # Wait for version response
-        response = await self._recv_message()
-        if not isinstance(response, SFTPVersionMessage):
-            raise SFTPError("Expected SFTP version message")
+        # Wait for version response (special case in dispatcher uses ID -1)
+        fut = asyncio.get_running_loop().create_future()
+        self._pending_requests[-1] = fut
+        
+        try:
+            response = await fut
+            if not isinstance(response, SFTPVersionMessage):
+                raise SFTPError("Expected SFTP version message")
+            self._initialized = True
+        except Exception as e:
+            await self.close()
+            raise SFTPError(f"SFTP initialization failed: {e}") from e
 
-        self._initialized = True
+    async def _dispatch_loop(self) -> None:
+        """Background loop to receive and dispatch SFTP messages."""
+        try:
+            while self._channel and not self._channel.closed:
+                try:
+                    response = await self._recv_message()
+                    
+                    # SSH_FXP_VERSION doesn't have request_id in protocol but our class might handle it
+                    # In SFTP protocol, VERSION is the only one without ID
+                    if isinstance(response, SFTPVersionMessage):
+                        request_id = -1
+                    else:
+                        request_id = getattr(response, "request_id", None)
+                    
+                    if request_id is not None and request_id in self._pending_requests:
+                        fut = self._pending_requests.pop(request_id)
+                        if not fut.done():
+                            fut.set_result(response)
+                except asyncio.CancelledError:
+                    break
+                except Exception as e:
+                    # Cancel all pending requests on error
+                    for fut in list(self._pending_requests.values()):
+                        if not fut.done():
+                            fut.set_exception(e)
+                    self._pending_requests.clear()
+                    break
+        finally:
+            self._initialized = False
 
     async def remove(self, path: str) -> None:
         """
@@ -189,8 +231,9 @@ class AsyncSFTPClient:
                         break
 
                     for entry in entries:
-                        if entry.filename not in (".", ".."):
-                            filenames.append(entry.filename)
+                        filename = entry[0]
+                        if filename not in (".", ".."):
+                            filenames.append(filename)
 
                 except SFTPError as e:
                     if e.status_code == SSH_FX_EOF:
@@ -363,6 +406,14 @@ class AsyncSFTPClient:
 
     async def close(self) -> None:
         """Close SFTP client and cleanup resources."""
+        if self._dispatch_task:
+            self._dispatch_task.cancel()
+            try:
+                await self._dispatch_task
+            except asyncio.CancelledError:
+                pass
+            self._dispatch_task = None
+
         if self._channel:
             await self._channel.close()
             self._channel = None
@@ -380,7 +431,7 @@ class AsyncSFTPClient:
 
     def _get_next_request_id(self) -> int:
         """Get next request ID."""
-        self._request_id += 1
+        self._request_id = (self._request_id + 1) & 0xFFFFFFFF
         return self._request_id
 
     def _mode_to_flags(self, mode: str) -> int:
@@ -399,9 +450,10 @@ class AsyncSFTPClient:
         return flags
 
     async def _send_message(self, message: Any) -> None:
-        """Send SFTP message through channel."""
+        """Send SFTP message through channel (with locking)."""
         data = message.pack()
-        await self._channel.send(data)
+        async with self._lock:
+            await self._channel.send(data)
 
     async def _recv_message(self) -> Any:
         """Receive SFTP message from channel."""
@@ -416,10 +468,10 @@ class AsyncSFTPClient:
         return SFTPMessage.unpack(length_data + data)
 
     async def _wait_for_response(self, request_id: int) -> Any:
-        """Wait for response to specific request."""
-        # For now, just receive the next message
-        # In a full implementation, this would handle multiple concurrent requests
-        return await self._recv_message()
+        """Wait for response to specific request using dispatcher."""
+        fut = asyncio.get_running_loop().create_future()
+        self._pending_requests[request_id] = fut
+        return await fut
 
     async def _opendir(self, path: str) -> bytes:
         """

@@ -186,7 +186,7 @@ class PKey:
                 key = Ed25519Key()
             elif algorithm.startswith("ecdsa-sha2-"):
                 key = ECDSAKey()
-            elif algorithm in ["ssh-rsa", "rsa-sha2-256", "rsa-sha2-512"]:
+            elif algorithm in ["rsa-sha2-256", "rsa-sha2-512"]:
                 key = RSAKey()
             else:
                 raise CryptoException(f"Unsupported key algorithm: {algorithm}")
@@ -774,7 +774,7 @@ class RSAKey(PKey):
             algorithm = key_data[offset : offset + algo_len].decode()
             offset += algo_len
 
-            if algorithm not in ["ssh-rsa", "rsa-sha2-256", "rsa-sha2-512", "rsa"]:
+            if algorithm not in ["rsa-sha2-256", "rsa-sha2-512"]:
                 raise CryptoException(f"Expected RSA algorithm, got {algorithm}")
 
             # Read public exponent
@@ -820,7 +820,7 @@ class RSAKey(PKey):
             numbers = public_key.public_numbers()
 
             # Format as SSH wire format
-            algorithm = b"ssh-rsa"
+            algorithm = b"rsa-sha2-256"
             result = struct.pack(">I", len(algorithm)) + algorithm
             result += write_mpint(numbers.e)
             result += write_mpint(numbers.n)
@@ -916,7 +916,7 @@ class RSAKey(PKey):
             algorithm = signature[offset : offset + algo_len].decode()
             offset += algo_len
 
-            if algorithm not in ["ssh-rsa", "rsa-sha2-256", "rsa-sha2-512"]:
+            if algorithm not in ["rsa-sha2-256", "rsa-sha2-512"]:
                 return False
 
             sig_len = struct.unpack(">I", signature[offset : offset + 4])[0]
@@ -926,11 +926,8 @@ class RSAKey(PKey):
             # Choose hash algorithm based on signature type
             if algorithm == "rsa-sha2-512":
                 hash_algo = hashes.SHA512()
-            elif algorithm == "rsa-sha2-256":
-                hash_algo = hashes.SHA256()
             else:
-                # Default to SHA-1 for ssh-rsa
-                hash_algo = hashes.SHA1()  # nosec B303
+                hash_algo = hashes.SHA256()
 
             # Verify signature
             public_key.verify(sig_bytes, data, padding.PKCS1v15(), hash_algo)
@@ -1007,7 +1004,7 @@ def load_public_key_from_string(key_string: str) -> PKey:
             key = Ed25519Key()
         elif algorithm == "ecdsa-sha2-nistp256":
             key = ECDSAKey()
-        elif algorithm in ["ssh-rsa", "rsa-sha2-256", "rsa-sha2-512"]:
+        elif algorithm in ["rsa-sha2-256", "rsa-sha2-512"]:
             key = RSAKey()
         else:
             raise CryptoException(f"Unsupported key algorithm: {algorithm}")
