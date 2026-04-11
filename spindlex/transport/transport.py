@@ -97,7 +97,7 @@ class Transport:
         self._server_interface: Optional[Any] = None
 
         # Port forwarding
-        self._port_forwarding_manager: Optional["PortForwardingManager"] = None
+        self._port_forwarding_manager: Optional[PortForwardingManager] = None
 
         # Message dispatching
         self._message_queue: list[Message] = []
