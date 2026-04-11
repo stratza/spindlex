@@ -1304,7 +1304,6 @@ class Transport:
         Start key exchange process in the background.
         Includes a 30-second watchdog to prevent hanging on stalled connections.
         """
-        start_time = time.time()
         timeout = 30.0
 
         # Set a temporary timeout for key exchange
