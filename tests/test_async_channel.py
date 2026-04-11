@@ -1,8 +1,6 @@
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
-from spindlex.exceptions import ChannelException
 from spindlex.protocol.constants import *
 from spindlex.transport.async_channel import AsyncChannel, AsyncChannelFile
 

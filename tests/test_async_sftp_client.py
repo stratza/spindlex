@@ -3,17 +3,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from spindlex.client.async_sftp_client import AsyncSFTPClient, AsyncSFTPFile
-from spindlex.exceptions import SFTPError
 from spindlex.protocol.sftp_constants import *
 from spindlex.protocol.sftp_messages import (
     SFTPAttributes,
     SFTPAttrsMessage,
-    SFTPCloseMessage,
     SFTPDataMessage,
-    SFTPHandleMessage,
-    SFTPInitMessage,
-    SFTPNameMessage,
-    SFTPOpenMessage,
     SFTPStatusMessage,
     SFTPVersionMessage,
 )

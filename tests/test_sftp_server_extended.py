@@ -6,13 +6,11 @@ import pytest
 from spindlex.protocol.sftp_constants import *
 from spindlex.protocol.sftp_messages import (
     SFTPAttributes,
-    SFTPInitMessage,
     SFTPOpenMessage,
     SFTPReadMessage,
     SFTPRealPathMessage,
     SFTPRemoveMessage,
     SFTPRenameMessage,
-    SFTPStatusMessage,
 )
 from spindlex.server.sftp_server import SFTPServer
 
@@ -35,7 +33,9 @@ def sftp_server(mock_channel, temp_root):
     with patch.object(SFTPServer, "_start_sftp_session"):
         server = SFTPServer(mock_channel, temp_root)
         server.check_file_access = MagicMock(return_value=True)
-        return server
+        yield server
+        server.close()
+
 
 
 def test_sftp_server_resolve_path(sftp_server, temp_root):

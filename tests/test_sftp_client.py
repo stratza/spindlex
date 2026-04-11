@@ -1,4 +1,3 @@
-import os
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -8,17 +7,12 @@ from spindlex.protocol.sftp_constants import *
 from spindlex.protocol.sftp_messages import (
     SFTPAttributes,
     SFTPAttrsMessage,
-    SFTPCloseMessage,
     SFTPDataMessage,
     SFTPHandleMessage,
     SFTPInitMessage,
     SFTPNameMessage,
-    SFTPReadMessage,
-    SFTPRealPathMessage,
     SFTPStatusMessage,
     SFTPVersionMessage,
-    SFTPWriteMessage,
-    SFTPOpenMessage,
 )
 
 

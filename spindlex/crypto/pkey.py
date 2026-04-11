@@ -41,6 +41,10 @@ class PKey:
         self.crypto_backend = crypto_backend or default_crypto_backend
         self._key: Any = None
 
+    def get_ssh_type(self) -> str:
+        """Get the SSH key type name (e.g., 'ssh-rsa', 'ssh-ed25519')."""
+        return self.algorithm_name
+
     @property
     def algorithm_name(self) -> str:
         """Get SSH algorithm name for this key type."""
@@ -393,12 +397,12 @@ class Ed25519Key(PKey):
 
             # Sign data
             signature = self._key.sign(data)
+            
+            # Format as SSH signature: string algorithm_name, string signature_blob
+            # Total size should be: 4(len) + 11("ssh-ed25519") + 4(len) + 64(sig)
+            from ..protocol.utils import write_string
+            return write_string("ssh-ed25519") + write_string(signature)
 
-            # Format as SSH signature
-            algorithm = b"ssh-ed25519"
-            result = struct.pack(">I", len(algorithm)) + algorithm
-            result += struct.pack(">I", len(signature)) + signature
-            return result
         except Exception as e:
             raise CryptoException(f"Ed25519 signing failed: {e}") from e
 
@@ -733,6 +737,11 @@ class RSAKey(PKey):
         """Get SSH algorithm name."""
         return "rsa-sha2-256"
 
+    def get_ssh_type(self) -> str:
+        """Get SSH key type."""
+        return "ssh-rsa"
+
+
     def load_private_key(
         self, key_data: bytes, password: Optional[bytes] = None
     ) -> None:
@@ -775,8 +784,9 @@ class RSAKey(PKey):
             algorithm = key_data[offset : offset + algo_len].decode()
             offset += algo_len
 
-            if algorithm not in ["rsa-sha2-256", "rsa-sha2-512"]:
+            if algorithm not in ["ssh-rsa", "rsa-sha2-256", "rsa-sha2-512"]:
                 raise CryptoException(f"Expected RSA algorithm, got {algorithm}")
+
 
             # Read public exponent
             e_len = struct.unpack(">I", key_data[offset : offset + 4])[0]
@@ -820,12 +830,13 @@ class RSAKey(PKey):
             # Get public numbers
             numbers = public_key.public_numbers()
 
-            # Format as SSH wire format
-            algorithm = b"rsa-sha2-256"
+            # Format as SSH wire format: string "ssh-rsa", mpint e, mpint n
+            algorithm = b"ssh-rsa"
             result = struct.pack(">I", len(algorithm)) + algorithm
             result += write_mpint(numbers.e)
             result += write_mpint(numbers.n)
             return result
+
         except Exception as e:
             raise CryptoException(f"Failed to get RSA public key bytes: {e}") from e
 

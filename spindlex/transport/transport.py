@@ -260,16 +260,6 @@ class Transport:
     def auth_publickey(self, username: str, key: Any) -> bool:
         """
         Authenticate using public key.
-
-        Args:
-            username: Username for authentication
-            key: Private key for authentication
-
-        Returns:
-            True if authentication successful
-
-        Raises:
-            AuthenticationException: If authentication fails
         """
         if not self._active:
             raise AuthenticationException("Transport not active")
@@ -282,12 +272,8 @@ class Transport:
             if not self._userauth_service_requested:
                 self._request_userauth_service()
 
-            # First, try public key without signature (query)
-            if self._try_publickey_query(username, key):
-                # Server accepts this key, now send with signature
-                return self._auth_publickey_with_signature(username, key)
-            else:
-                raise AuthenticationException("Public key not accepted by server")
+            # For maximum compatibility and performance, we proceed directly to signature-based auth
+            return self._auth_publickey_with_signature(username, key)
 
         except Exception as e:
             if isinstance(e, AuthenticationException):
@@ -295,29 +281,6 @@ class Transport:
             raise AuthenticationException(
                 f"Public key authentication failed: {e}"
             ) from e
-
-    def _try_publickey_query(self, username: str, key: Any) -> bool:
-        """Try public key authentication without signature (query)."""
-        auth_request = UserAuthRequestMessage(
-            username=username,
-            service=SERVICE_CONNECTION,
-            method=AUTH_PUBLICKEY,
-            method_data=self._build_publickey_query_data(key),
-        )
-
-        self._send_message(auth_request)
-
-        # Wait for response
-        msg = self._expect_message(MSG_USERAUTH_FAILURE, MSG_USERAUTH_PK_OK)
-
-        if isinstance(msg, UserAuthFailureMessage):
-            return False
-        elif msg.msg_type == MSG_USERAUTH_PK_OK:
-            return True
-        else:
-            raise AuthenticationException(
-                f"Unexpected response to public key query: {type(msg).__name__}"
-            )
 
     def _auth_publickey_with_signature(self, username: str, key: Any) -> bool:
         """Authenticate with public key signature."""
@@ -332,11 +295,31 @@ class Transport:
 
         return self._handle_auth_response()
 
+    def _try_publickey_query(self, username: str, key: Any) -> bool:
+        """Try public key authentication without signature (query)."""
+        auth_request = UserAuthRequestMessage(
+            username=username,
+            service=SERVICE_CONNECTION,
+            method=AUTH_PUBLICKEY,
+            method_data=self._build_publickey_query_data(key),
+        )
+
+        self._send_message(auth_request)
+
+        msg = self._expect_message(MSG_USERAUTH_FAILURE, MSG_USERAUTH_PK_OK)
+
+        if isinstance(msg, UserAuthFailureMessage):
+            return False
+        elif getattr(msg, 'msg_type', 0) == MSG_USERAUTH_PK_OK:
+            return True
+        else:
+            return False
+
     def _build_publickey_query_data(self, key: Any) -> bytes:
         """Build public key query method data."""
         data = bytearray()
         data.extend(write_boolean(False))  # no signature
-        data.extend(write_string(key.get_name()))  # algorithm name
+        data.extend(write_string(key.get_ssh_type()))  # algorithm name
         data.extend(write_string(key.get_public_key_bytes()))  # public key blob
         return bytes(data)
 
@@ -344,38 +327,38 @@ class Transport:
         """Build public key authentication method data with signature."""
         data = bytearray()
         data.extend(write_boolean(True))  # has signature
-        data.extend(write_string(key.get_name()))  # algorithm name
-        data.extend(write_string(key.get_public_key_bytes()))  # public key blob
+        data.extend(write_string(key.get_ssh_type()))
+        data.extend(write_string(key.get_public_key_bytes()))
 
         # Build signature data
         signature_data = self._build_signature_data(username, key)
-        signature = key.sign_data(signature_data)
+        signature = key.sign(signature_data)
 
-        # Add signature
-        sig_blob = bytearray()
-        sig_blob.extend(write_string(key.get_name()))
         if signature is None:
             raise TransportException("Failed to sign authentication data")
-        sig_blob.extend(write_string(signature))
-        data.extend(write_string(bytes(sig_blob)))
-
+        
+        # The signature includes its own length when wrapped by write_string
+        data.extend(write_string(signature))
         return bytes(data)
 
     def _build_signature_data(self, username: str, key: Any) -> bytes:
-        """Build data to be signed for public key authentication."""
+        """Build signature data for public key authentication."""
         if self._session_id is None:
             raise TransportException("Session ID not set")
 
         data = bytearray()
         data.extend(write_string(self._session_id))
+
         data.extend(write_byte(MSG_USERAUTH_REQUEST))
         data.extend(write_string(username))
         data.extend(write_string(SERVICE_CONNECTION))
         data.extend(write_string(AUTH_PUBLICKEY))
         data.extend(write_boolean(True))  # has signature
-        data.extend(write_string(key.get_name()))
+        data.extend(write_string(key.get_ssh_type()))
         data.extend(write_string(key.get_public_key_bytes()))
         return bytes(data)
+
+
 
     def auth_keyboard_interactive(self, username: str, handler: Any) -> bool:
         """
@@ -1464,9 +1447,11 @@ class Transport:
                             self._sequence_number_in + 1
                         ) & 0xFFFFFFFF
 
-                        # Handle internal messages
-                        if msg.msg_type in [MSG_IGNORE, MSG_DEBUG]:
+                        # Handle internal messages and extensions
+                        # 7 = MSG_EXT_INFO (RFC 8308)
+                        if msg.msg_type in [MSG_IGNORE, MSG_DEBUG, 7]:
                             continue
+
 
                         if msg.msg_type == MSG_DISCONNECT:
                             # Parse disconnect reason if possible
