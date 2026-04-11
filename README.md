@@ -4,12 +4,12 @@
   <p><strong>A modern, high-performance SSHv2 and SFTP library.</strong></p>
 
 [![CI Status](https://img.shields.io/github/actions/workflow/status/Di3Z1E/spindlex/ci.yml?branch=main&style=for-the-badge&logo=github)](https://github.com/Di3Z1E/spindlex/actions)
-[![Coverage](https://codecov.io/gh/Di3Z1E/spindlex/branch/main/graph/badge.svg)](https://codecov.io/gh/Di3Z1E/spindlex)
+[![Coverage](https://img.shields.io/codecov/c/github/Di3Z1E/spindlex?style=for-the-badge&logo=codecov)](https://codecov.io/gh/Di3Z1E/spindlex)
 [![PyPI Version](https://img.shields.io/pypi/v/spindlex?style=for-the-badge&logo=pypi&logoColor=white)](https://pypi.org/project/spindlex/)
 [![Python Support](https://img.shields.io/pypi/pyversions/spindlex?style=for-the-badge&logo=python&logoColor=white)](https://pypi.org/project/spindlex/)
 [![License](https://img.shields.io/pypi/l/spindlex?style=for-the-badge&color=blue)](https://github.com/Di3Z1E/spindlex/blob/main/LICENSE)
-[![PyPI Downloads](https://img.shields.io/pypi/dm/spindlex?style=for-the-badge&logo=pypi&logoColor=white&color=brightgreen)](https://pepy.tech/projects/spindlex)
-[![Socket Badge](https://badge.socket.dev/pypi/package/spindlex/0.4.1?artifact_id=tar-gz&style=for-the-badge)](https://badge.socket.dev/pypi/package/spindlex/0.4.1?artifact_id=tar-gz)
+[![PyPI Downloads](https://img.shields.io/pypi/dm/spindlex?style=for-the-badge&logo=pypi&logoColor=white&color=brightgreen)](https://pypi.org/project/spindlex/)
+[![Security Status](https://img.shields.io/badge/socket-security-brightgreen?style=for-the-badge&logo=socket.io)](https://badge.socket.dev/pypi/package/spindlex)
 
 <p align="center">
   <a href="https://spindlex.readthedocs.io/"><strong>Explore the Docs »</strong></a>
