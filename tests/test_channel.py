@@ -47,7 +47,7 @@ def test_channel_send_errors(channel):
     channel._closed = True
     with pytest.raises(ChannelException, match="closed"):
         channel.send(b"data")
-    
+
     channel._closed = False
     channel._remote_channel_id = None
     with pytest.raises(ChannelException, match="not properly opened"):
@@ -58,11 +58,11 @@ def test_channel_recv(channel, mock_transport):
     # Fill buffer
     channel._handle_data(b"chunk1")
     channel._handle_data(b"chunk2")
-    
+
     assert channel.recv(3) == b"chu"
     assert channel.recv(10) == b"nk1"
     assert channel.recv(10) == b"chunk2"
-    
+
     # Test EOF
     channel._handle_eof()
     assert channel.recv(10) == b""
@@ -101,7 +101,7 @@ def test_channel_send_eof_close(channel, mock_transport):
     channel.send_eof()
     mock_transport._send_channel_eof.assert_called_with(1)
     assert channel._eof_sent
-    
+
     channel.close()
     mock_transport._close_channel.assert_called_with(1)
     assert channel.closed
@@ -127,9 +127,9 @@ def test_channel_handle_request_server_mode(channel, mock_transport):
     mock_transport._server_mode = True
     mock_server = MagicMock()
     mock_transport._server_interface = mock_server
-    
+
     mock_server.check_channel_shell_request.return_value = True
     assert channel._handle_request("shell", b"") is True
-    
+
     mock_server.check_channel_exec_request.return_value = False
     assert channel._handle_request("exec", b"\x00\x00\x00\x02ls") is False

@@ -18,15 +18,14 @@ async def test_async_ssh_client_connect(async_ssh_client):
         mock_writer = AsyncMock()
         mock_open.return_value = (mock_reader, mock_writer)
 
-
-        
         with patch("spindlex.client.async_ssh_client.AsyncTransport") as mock_trans_cls:
             mock_trans = AsyncMock()
             mock_trans_cls.return_value = mock_trans
             mock_trans.start_client = AsyncMock()
 
-            
-            await async_ssh_client.connect("localhost", username="alice", password="password")
+            await async_ssh_client.connect(
+                "localhost", username="alice", password="password"
+            )
             assert mock_open.called
             assert mock_trans.start_client.called
 
@@ -39,7 +38,7 @@ async def test_async_ssh_client_exec_command(async_ssh_client):
 
     channel = AsyncMock()
     transport.open_channel = AsyncMock(return_value=channel)
-    
+
     stdin, stdout, stderr = await async_ssh_client.exec_command("ls")
     assert transport.open_channel.called
     assert channel.exec_command.called

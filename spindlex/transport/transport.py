@@ -310,7 +310,7 @@ class Transport:
 
         if isinstance(msg, UserAuthFailureMessage):
             return False
-        elif getattr(msg, 'msg_type', 0) == MSG_USERAUTH_PK_OK:
+        elif getattr(msg, "msg_type", 0) == MSG_USERAUTH_PK_OK:
             return True
         else:
             return False
@@ -336,7 +336,7 @@ class Transport:
 
         if signature is None:
             raise TransportException("Failed to sign authentication data")
-        
+
         # The signature includes its own length when wrapped by write_string
         data.extend(write_string(signature))
         return bytes(data)
@@ -357,8 +357,6 @@ class Transport:
         data.extend(write_string(key.get_ssh_type()))
         data.extend(write_string(key.get_public_key_bytes()))
         return bytes(data)
-
-
 
     def auth_keyboard_interactive(self, username: str, handler: Any) -> bool:
         """
@@ -1451,7 +1449,6 @@ class Transport:
                         # 7 = MSG_EXT_INFO (RFC 8308)
                         if msg.msg_type in [MSG_IGNORE, MSG_DEBUG, 7]:
                             continue
-
 
                         if msg.msg_type == MSG_DISCONNECT:
                             # Parse disconnect reason if possible
