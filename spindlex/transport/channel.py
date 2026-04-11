@@ -557,7 +557,7 @@ class Channel:
                 command_bytes, _ = read_string(data, 0)
                 return bool(server.check_channel_exec_request(self, command_bytes))
 
-                elif request_type == "subsystem":
+            elif request_type == "subsystem":
                 subsystem_bytes, _ = read_string(data, 0)
                 subsystem = subsystem_bytes.decode(SSH_STRING_ENCODING)
                 return bool(server.check_channel_subsystem_request(self, subsystem))

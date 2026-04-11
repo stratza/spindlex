@@ -468,13 +468,12 @@ class SFTPServer:
             else:
                 if not self.check_file_access(resolved_path, "r"):
                     error_msg = SFTPStatusMessage(
-                        message.request_id,
-                        SSH_FX_PERMISSION_DENIED,
+                        message.request_id,  # type: ignore
+                        int(SSH_FX_PERMISSION_DENIED),
                         "Read access denied",
                     )
                     self._send_message(error_msg)
                     return
-
             # Determine file mode
             mode = ""
             if message.pflags & SSH_FXF_READ and message.pflags & SSH_FXF_WRITE:
