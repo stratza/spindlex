@@ -88,6 +88,10 @@ class Message:
 
         msg_type, offset = read_byte(data, 0)
 
+        # If called on a specific subclass, unpack that subclass directly
+        if cls != Message:
+            return cls._unpack_data(data[offset:])
+
         # Create appropriate message class based on type
         message_classes = {
             MSG_DISCONNECT: DisconnectMessage,
@@ -105,6 +109,8 @@ class Message:
             MSG_USERAUTH_SUCCESS: UserAuthSuccessMessage,
             MSG_USERAUTH_BANNER: UserAuthBannerMessage,
             MSG_USERAUTH_PK_OK: UserAuthPKOKMessage,
+            MSG_USERAUTH_INFO_REQUEST: UserAuthInfoRequestMessage,
+            MSG_USERAUTH_INFO_RESPONSE: UserAuthInfoResponseMessage,
             MSG_GLOBAL_REQUEST: GlobalRequestMessage,
             MSG_REQUEST_SUCCESS: RequestSuccessMessage,
             MSG_REQUEST_FAILURE: RequestFailureMessage,
@@ -988,6 +994,90 @@ class UserAuthBannerMessage(Message):
         language = language_bytes.decode(SSH_STRING_ENCODING, errors="replace")
 
         return cls(message, language)
+
+
+class UserAuthInfoRequestMessage(Message):
+    """SSH user authentication info request message (MSG_USERAUTH_INFO_REQUEST)."""
+
+    def __init__(self, name: str, instruction: str, language: str, prompts: list) -> None:
+        """
+        Initialize user auth info request message.
+
+        Args:
+            name: Name of the authentication method
+            instruction: Instructions for the user
+            language: Language tag
+            prompts: List of (prompt, echo) tuples
+        """
+        super().__init__(MSG_USERAUTH_INFO_REQUEST)
+        self.name = name
+        self.instruction = instruction
+        self.language = language
+        self.prompts = prompts
+
+        # Build message data
+        self.add_string(name)
+        self.add_string(instruction)
+        self.add_string(language)
+        self.add_uint32(len(prompts))
+        for prompt, echo in prompts:
+            self.add_string(prompt)
+            self.add_boolean(echo)
+
+    @classmethod
+    def _unpack_data(cls, data: bytes) -> "UserAuthInfoRequestMessage":
+        """Unpack user auth info request message data."""
+        offset = 0
+        name_bytes, offset = read_string(data, offset)
+        instruction_bytes, offset = read_string(data, offset)
+        language_bytes, offset = read_string(data, offset)
+        num_prompts, offset = read_uint32(data, offset)
+
+        name = name_bytes.decode(SSH_STRING_ENCODING, errors="replace")
+        instruction = instruction_bytes.decode(SSH_STRING_ENCODING, errors="replace")
+        language = language_bytes.decode(SSH_STRING_ENCODING, errors="replace")
+
+        prompts = []
+        for _ in range(num_prompts):
+            prompt_bytes, offset = read_string(data, offset)
+            echo, offset = read_boolean(data, offset)
+            prompt_text = prompt_bytes.decode(SSH_STRING_ENCODING, errors="replace")
+            prompts.append((prompt_text, echo))
+
+        return cls(name, instruction, language, prompts)
+
+
+class UserAuthInfoResponseMessage(Message):
+    """SSH user authentication info response message (MSG_USERAUTH_INFO_RESPONSE)."""
+
+    def __init__(self, responses: list[str]) -> None:
+        """
+        Initialize user auth info response message.
+
+        Args:
+            responses: List of responses to prompts
+        """
+        super().__init__(MSG_USERAUTH_INFO_RESPONSE)
+        self.responses = responses
+
+        # Build message data
+        self.add_uint32(len(responses))
+        for response in responses:
+            self.add_string(response)
+
+    @classmethod
+    def _unpack_data(cls, data: bytes) -> "UserAuthInfoResponseMessage":
+        """Unpack user auth info response message data."""
+        offset = 0
+        num_responses, offset = read_uint32(data, offset)
+
+        responses = []
+        for _ in range(num_responses):
+            response_bytes, offset = read_string(data, offset)
+            response = response_bytes.decode(SSH_STRING_ENCODING, errors="replace")
+            responses.append(response)
+
+        return cls(responses)
 
 
 class UserAuthPKOKMessage(Message):
