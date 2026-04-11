@@ -1,0 +1,15 @@
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366f1;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#a855f7;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- Main Spindle Shape -->
+  <path d="M100 20 C60 20 40 60 40 100 C40 140 60 180 100 180 C140 180 160 140 160 100 C160 60 140 20 100 20Z" stroke="url(#grad1)" stroke-width="12" stroke-linecap="round" fill="none" />
+  <!-- Inner Performance Bolt -->
+  <path d="M100 50 L120 90 L90 90 L110 150" stroke="url(#grad1)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+  <!-- Decorative Dots -->
+  <circle cx="100" cy="20" r="6" fill="#6366f1" />
+  <circle cx="100" cy="180" r="6" fill="#a855f7" />
+</svg>

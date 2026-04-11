@@ -1,52 +1,60 @@
-# SpindleX
+<div align="center">
+  <img src="docs/_static/logo.svg" width="160" height="160" alt="SpindleX Logo">
+  <h1>SpindleX</h1>
+  <p><strong>A modern, high-performance, pure-Python SSHv2 and SFTP library.</strong></p>
 
-**A modern, high-performance, pure-Python SSHv2 and SFTP library.**
+[![CI Status](https://img.shields.io/github/actions/workflow/status/Di3Z1E/spindlex/ci.yml?branch=main&style=for-the-badge&logo=github)](https://github.com/Di3Z1E/spindlex/actions)
+[![Coverage](https://img.shields.io/badge/coverage-50%25-orange?style=for-the-badge&logo=codecov)](https://codecov.io/gh/Di3Z1E/spindlex)
+[![PyPI Version](https://img.shields.io/pypi/v/spindlex?style=for-the-badge&logo=pypi&logoColor=white)](https://pypi.org/project/spindlex/)
+[![Python Support](https://img.shields.io/pypi/pyversions/spindlex?style=for-the-badge&logo=python&logoColor=white)](https://pypi.org/project/spindlex/)
+[![License](https://img.shields.io/pypi/l/spindlex?style=for-the-badge&color=blue)](https://github.com/Di3Z1E/spindlex/blob/main/LICENSE)
 
-[![CI Status](https://img.shields.io/github/actions/workflow/status/Di3Z1E/spindlex/ci.yml?branch=main&style=flat-square)](https://github.com/Di3Z1E/spindlex/actions)
-[![Coverage](https://img.shields.io/badge/coverage-50%25-orange?style=flat-square)](https://codecov.io/gh/Di3Z1E/spindlex)
-[![PyPI Version](https://img.shields.io/pypi/v/spindlex?style=flat-square)](https://pypi.org/project/spindlex/)
-[![Python Support](https://img.shields.io/pypi/pyversions/spindlex?style=flat-square)](https://pypi.org/project/spindlex/)
-[![License](https://img.shields.io/pypi/l/spindlex?style=flat-square)](https://github.com/Di3Z1E/spindlex/blob/main/LICENSE)
-
-SpindleX is a modern SSH protocol implementation engineered for speed, security, and a seamless developer experience. It provides a significantly more performant and cleaner alternative to legacy Python SSH libraries like Paramiko.
+<p align="center">
+  <a href="https://spindlex.readthedocs.io/"><strong>Explore the Docs »</strong></a>
+  <br />
+  <br />
+  <a href="#-quick-start">Quick Start</a>
+  •
+  <a href="https://spindlex.readthedocs.io/migration/paramiko/">Migration Guide</a>
+  •
+  <a href="https://spindlex.readthedocs.io/cookbook/">Cookbook</a>
+  •
+  <a href="#-performance">Performance</a>
+  •
+  <a href="#-security">Security</a>
+</p>
+</div>
 
 ---
 
-## 🚀 Quick Start (with [uv](https://github.com/astral-sh/uv))
+SpindleX is a modern SSH protocol implementation engineered for **speed**, **security**, and a **seamless developer experience**. It provides a significantly more performant and cleaner alternative to legacy Python SSH libraries.
 
-```bash
-uv pip install spindlex
-```
+## ✨ Key Features
 
----
-
-[**Explore the Full Documentation »**](https://spindlex.readthedocs.io/)
-
-[Quick Start](#quick-start) • [Migration Guide](https://spindlex.readthedocs.io/migration/paramiko/) • [Cookbook](https://spindlex.readthedocs.io/cookbook/) • [Performance](#performance) • [Security](#security)
-
----
-
-## Why SpindleX?
-
-*   ⚡ **High Performance**: Optimized with **Adaptive Buffering** and **TCP Fast-Path** for minimal latency. Up to 60% faster SFTP transfers than traditional libraries.
-*   📦 **Zero Dependencies**: Pure-Python core. No `gcc`, no `python-dev`, no system headers. Perfect for minimal Docker images.
+*   🚀 **High Performance**: Optimized with **Adaptive Buffering** and **TCP Fast-Path**. Up to 60% faster SFTP transfers.
+*   📦 **Zero Dependencies**: Pure-Python core. No `gcc`, no `python-dev`. Perfect for minimal Docker images.
 *   🔄 **Native Async**: First-class support for `asyncio` with `AsyncSSHClient` and `AsyncSFTPClient`.
-*   🛡️ **Modern Security**: Supports Ed25519, ECDSA, ChaCha20-Poly1305, and other modern algorithms by default.
-*   🏷️ **Fully Typed**: 100% type-hinted codebase for robust IDE integration and static analysis.
+*   🛡️ **Modern Security**: Ed25519, ECDSA, ChaCha20-Poly1305 by default.
+*   🏷️ **Fully Typed**: 100% type-hinted codebase for robust IDE integration.
 
 ---
 
-## Quick Start
+## 🚀 Quick Start
 
 ### Installation
 
 ```bash
+# Using pip
 pip install spindlex
+
+# Using uv (recommended)
+uv pip install spindlex
 ```
 
 ### Basic Usage
 
-#### Synchronous Example
+<details>
+<summary><b>Synchronous Example</b></summary>
 
 ```python
 from spindlex import SSHClient
@@ -59,8 +67,10 @@ with SSHClient() as client:
     stdin, stdout, stderr = client.exec_command('uptime')
     print(f"Status: {stdout.read().decode().strip()}")
 ```
+</details>
 
-#### Asynchronous Example
+<details>
+<summary><b>Asynchronous Example</b></summary>
 
 ```python
 import asyncio
@@ -74,10 +84,11 @@ async def run():
 
 asyncio.run(run())
 ```
+</details>
 
 ---
 
-## Performance
+## ⚡ Performance
 
 SpindleX is designed for low-latency environments. In head-to-head comparisons, SpindleX demonstrates a commanding lead in protocol efficiency:
 
@@ -88,16 +99,22 @@ SpindleX is designed for low-latency environments. In head-to-head comparisons, 
 
 ---
 
-## Security
+## 🛡️ Security
 
 *   **Hardened Defaults**: Legacy SHA-1 and weak ciphers are disabled by design.
 *   **Mandatory Verification**: Host key verification is enforced unless explicitly overridden.
 *   **Privacy Aware**: Built-in log sanitizers ensure credentials never reach telemetry.
-*   **Vulnerability Reporting**: To report a security issue, please open a GitHub issue with the 'security' label.
+*   **Vulnerability Reporting**: See [SECURITY.md](SECURITY.md).
 
 ---
 
-## License
+## 🤝 Contributing
+
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) to get started.
+
+---
+
+## 📄 License
 
 SpindleX is released under the **MIT License**. See [LICENSE](LICENSE) for the full text.
 
@@ -105,4 +122,6 @@ SpindleX is released under the **MIT License**. See [LICENSE](LICENSE) for the f
 
 <div align="center">
   <sub>Developed with precision by <strong>Di3Z1E</strong>.</sub>
+  <br/>
+  <sub>&copy; 2024 SpindleX Project</sub>
 </div>
