@@ -139,7 +139,7 @@ class PKey:
             key_bytes = self.get_public_key_bytes()
 
             if hash_algorithm == "md5":
-                digest = hashlib.md5(key_bytes).digest()
+                digest = hashlib.md5(key_bytes, usedforsecurity=False).digest()
                 return "MD5:" + ":".join(f"{b:02x}" for b in digest)
             elif hash_algorithm == "sha256":
                 digest = hashlib.sha256(key_bytes).digest()
@@ -930,7 +930,7 @@ class RSAKey(PKey):
                 hash_algo = hashes.SHA256()
             else:
                 # Default to SHA-1 for ssh-rsa
-                hash_algo = hashes.SHA1()
+                hash_algo = hashes.SHA1()  # nosec B303
 
             # Verify signature
             public_key.verify(sig_bytes, data, padding.PKCS1v15(), hash_algo)

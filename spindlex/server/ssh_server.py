@@ -518,7 +518,7 @@ class SSHServerManager:
         self,
         server_interface: SSHServer,
         server_key: PKey,
-        bind_address: str = "0.0.0.0",
+        bind_address: str = "0.0.0.0",  # nosec B104
         port: int = 22,
     ) -> None:
         """
