@@ -10,6 +10,7 @@ sys.modules["gssapi.raw"] = MagicMock()
 
 from spindlex.auth.gssapi import GSSAPIAuth
 
+
 @pytest.fixture
 def mock_transport():
     transport = MagicMock()

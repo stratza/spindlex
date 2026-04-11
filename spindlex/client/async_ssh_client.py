@@ -85,29 +85,14 @@ class AsyncSSHClient:
 
             # Authenticate if credentials provided
             if username:
-                authenticated = False
+                # Authenticate
+                if password:
+                    await self.auth_password(username, password)
+                elif pkey:
+                    await self.auth_publickey(username, pkey)
+                else:
+                    raise AuthenticationException("No authentication credentials provided")
 
-                # Try GSSAPI authentication first if enabled
-                if gss_auth:
-                    try:
-                        authenticated = await self._transport.auth_gssapi(
-                            username, gss_host, gss_deleg_creds
-                        )
-                    except Exception:
-                        pass  # Fall back to other methods
-
-                # Try public key authentication
-                if not authenticated and pkey:
-                    authenticated = await self._transport.auth_publickey(username, pkey)
-
-                # Try password authentication
-                if not authenticated and password:
-                    authenticated = await self._transport.auth_password(
-                        username, password
-                    )
-
-                if not authenticated:
-                    raise AuthenticationException("Authentication failed")
 
             # Store connection info
             self._hostname = hostname
@@ -249,7 +234,42 @@ class AsyncSSHClient:
                 raise
             raise SSHException(f"SFTP open failed: {e}") from e
 
+    async def auth_password(self, username: str, password: str) -> None:
+        """
+        Authenticate using password asynchronously.
+
+        Args:
+            username: Username for authentication
+            password: Password for authentication
+
+        Raises:
+            AuthenticationException: If authentication fails
+        """
+        if not self._transport:
+            raise SSHException("No transport available")
+        
+        if not await self._transport.auth_password(username, password):
+            raise AuthenticationException("Password authentication failed")
+
+    async def auth_publickey(self, username: str, pkey: Any) -> None:
+        """
+        Authenticate using public key asynchronously.
+
+        Args:
+            username: Username for authentication
+            pkey: Private key instance
+
+        Raises:
+            AuthenticationException: If authentication fails
+        """
+        if not self._transport:
+            raise SSHException("No transport available")
+        
+        if not await self._transport.auth_publickey(username, pkey):
+            raise AuthenticationException("Public key authentication failed")
+
     def set_missing_host_key_policy(self, policy: MissingHostKeyPolicy) -> None:
+
         """
         Set policy for handling missing host keys.
 

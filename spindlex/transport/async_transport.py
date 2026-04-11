@@ -193,11 +193,17 @@ class AsyncTransport(Transport):
 
             self._sequence_number_out = (self._sequence_number_out + 1) & 0xFFFFFFFF
 
-    async def _recv_message_async(self) -> Message:
+    async def _recv_message_async(self, check_queue: bool = True) -> Message:
         """Async version of _recv_message."""
+        if check_queue:
+            async with self._state_lock:
+                if self._message_queue:
+                    return self._message_queue.pop(0)
+
         async with self._recv_lock:
             # We call the base _read_message which calls our overridden _recv_bytes
             # to handle the actual reading from the asyncio reader.
+            # Base _read_message also handles dispatching to channels.
             msg = await asyncio.to_thread(super()._read_message)
             return msg
 
@@ -206,26 +212,52 @@ class AsyncTransport(Transport):
         Pump the transport once to read and dispatch a message.
         Used by channels to wait for data/window adjustments.
         """
-        msg = await self._recv_message_async()
+        # We call with check_queue=False because we want to actually read from
+        # the socket to trigger dispatcher logic for data packets.
+        msg = await self._recv_message_async(check_queue=False)
 
         # Always queue the message so it can be picked up by _expect_message_async
         # even if it was already dispatched by _read_message.
         async with self._state_lock:
             self._message_queue.append(msg)
 
-    async def _expect_message_async(self, *allowed_types: int) -> Message:
+    async def _expect_message_async(
+        self, *allowed_types: int, channel_id: Optional[int] = None
+    ) -> Message:
         """Async version of expect_message."""
         while True:
             # 1. Check queue
             async with self._state_lock:
                 for i, msg in enumerate(self._message_queue):
                     if msg.msg_type in allowed_types:
+                        # If channel_id is specified, check if it matches
+                        if channel_id is not None:
+                            msg_channel_id = getattr(msg, "recipient_channel", None)
+                            if msg_channel_id is None and len(msg._data) >= 4:
+                                import struct
+
+                                msg_channel_id = struct.unpack(">I", msg._data[:4])[0]
+
+                            if msg_channel_id != channel_id:
+                                continue
+
                         return self._message_queue.pop(i)
 
             # 2. Read next
-            msg = await self._recv_message_async()
+            msg = await self._recv_message_async(check_queue=False)
             if msg.msg_type in allowed_types:
-                return msg
+                # If channel_id is specified, check if it matches
+                if channel_id is not None:
+                    msg_channel_id = getattr(msg, "recipient_channel", None)
+                    if msg_channel_id is None and len(msg._data) >= 4:
+                        import struct
+
+                        msg_channel_id = struct.unpack(">I", msg._data[:4])[0]
+
+                    if msg_channel_id == channel_id:
+                        return msg
+                else:
+                    return msg
 
             # 3. Queue it
             async with self._state_lock:
@@ -372,7 +404,7 @@ class AsyncTransport(Transport):
 
         # Wait for confirmation
         res = await self._expect_message_async(
-            MSG_CHANNEL_OPEN_CONFIRMATION, MSG_CHANNEL_OPEN_FAILURE
+            MSG_CHANNEL_OPEN_CONFIRMATION, MSG_CHANNEL_OPEN_FAILURE, channel_id=cid
         )
         if isinstance(res, ChannelOpenConfirmationMessage):
             chan._remote_channel_id = res.sender_channel
