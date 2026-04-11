@@ -10,6 +10,16 @@
 
 SpindleX is a modern SSH protocol implementation engineered for speed, security, and a seamless developer experience. It provides a significantly more performant and cleaner alternative to legacy Python SSH libraries like Paramiko.
 
+---
+
+## 🚀 Quick Start (with [uv](https://github.com/astral-sh/uv))
+
+```bash
+uv pip install spindlex
+```
+
+---
+
 [**Explore the Full Documentation »**](https://spindlex.readthedocs.io/)
 
 [Quick Start](#quick-start) • [Migration Guide](https://spindlex.readthedocs.io/migration/paramiko/) • [Cookbook](https://spindlex.readthedocs.io/cookbook/) • [Performance](#performance) • [Security](#security)
