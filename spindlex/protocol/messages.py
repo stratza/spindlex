@@ -999,7 +999,9 @@ class UserAuthBannerMessage(Message):
 class UserAuthInfoRequestMessage(Message):
     """SSH user authentication info request message (MSG_USERAUTH_INFO_REQUEST)."""
 
-    def __init__(self, name: str, instruction: str, language: str, prompts: list) -> None:
+    def __init__(
+        self, name: str, instruction: str, language: str, prompts: list
+    ) -> None:
         """
         Initialize user auth info request message.
 

@@ -69,7 +69,7 @@ class AsyncSFTPClient:
         # Wait for version response (special case in dispatcher uses ID -1)
         fut = asyncio.get_running_loop().create_future()
         self._pending_requests[-1] = fut
-        
+
         try:
             response = await fut
             if not isinstance(response, SFTPVersionMessage):
@@ -85,14 +85,14 @@ class AsyncSFTPClient:
             while self._channel and not self._channel.closed:
                 try:
                     response = await self._recv_message()
-                    
+
                     # SSH_FXP_VERSION doesn't have request_id in protocol but our class might handle it
                     # In SFTP protocol, VERSION is the only one without ID
                     if isinstance(response, SFTPVersionMessage):
                         request_id = -1
                     else:
                         request_id = getattr(response, "request_id", None)
-                    
+
                     if request_id is not None and request_id in self._pending_requests:
                         fut = self._pending_requests.pop(request_id)
                         if not fut.done():

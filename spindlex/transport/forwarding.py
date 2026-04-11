@@ -177,12 +177,8 @@ class LocalPortForwarder:
 
         while tunnel.active:
             try:
-                # Accept incoming connection
+                # Accepted incoming connection
                 client_socket, client_addr = server_socket.accept()
-
-                if not tunnel.active:
-                    client_socket.close()
-                    break
 
                 self._logger.debug(
                     f"Accepted connection from {client_addr} for tunnel {tunnel_id}"
@@ -309,7 +305,7 @@ class LocalPortForwarder:
                     # Assume it's a socket
                     destination.sendall(data)
 
-        except (socket.error, EOFError, SSHException) as e:
+        except (OSError, EOFError, SSHException) as e:
             self._logger.info(f"Data relay {relay_id} closed: {e}")
         except Exception as e:
             self._logger.error(f"Unexpected error in data relay {relay_id}: {e}")
@@ -452,8 +448,10 @@ class RemotePortForwarder:
             request_data.extend(write_uint32(bind_port))
 
             # Send global request through transport
-            return self._transport._send_global_request(
-                "tcpip-forward", True, bytes(request_data)
+            return bool(
+                self._transport._send_global_request(
+                    "tcpip-forward", True, bytes(request_data)
+                )
             )
 
         except Exception as e:
@@ -565,7 +563,7 @@ class RemotePortForwarder:
                     # Assume it's a socket
                     destination.sendall(data)
 
-        except (socket.error, EOFError, SSHException) as e:
+        except (OSError, EOFError, SSHException) as e:
             self._logger.info(f"Data relay {relay_id} closed: {e}")
         except Exception as e:
             self._logger.error(f"Unexpected error in data relay {relay_id}: {e}")
@@ -618,8 +616,10 @@ class RemotePortForwarder:
             request_data.extend(write_uint32(bind_port))
 
             # Send global request through transport
-            return self._transport._send_global_request(
-                "cancel-tcpip-forward", True, bytes(request_data)
+            return bool(
+                self._transport._send_global_request(
+                    "cancel-tcpip-forward", True, bytes(request_data)
+                )
             )
 
         except Exception as e:

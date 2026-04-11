@@ -5,6 +5,7 @@ Custom log formatters for SpindleX.
 import json
 import logging
 import time
+from typing import Any, Optional
 
 from .sanitizer import LogSanitizer
 
@@ -12,7 +13,12 @@ from .sanitizer import LogSanitizer
 class SSHFormatter(logging.Formatter):
     """Standard SpindleX log formatter with security sanitization."""
 
-    def __init__(self, fmt: str = None, datefmt: str = None, sanitize: bool = True):
+    def __init__(
+        self,
+        fmt: Optional[str] = None,
+        datefmt: Optional[str] = None,
+        sanitize: bool = True,
+    ):
         """
         Initialize SSH formatter.
 

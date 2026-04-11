@@ -17,9 +17,9 @@ from ..protocol.constants import (
     SSH_STRING_ENCODING,
 )
 from ..protocol.utils import (
+    read_boolean,
     read_string,
     read_uint32,
-    read_boolean,
 )
 
 
@@ -377,7 +377,7 @@ class Channel:
                 # Actually _expect_message gives next message of that type.
                 # If there are multiple channels, we might need a better way.
                 # For now, this is better than what we had.
-                return msg.msg_type == MSG_CHANNEL_SUCCESS
+                return bool(msg.msg_type == MSG_CHANNEL_SUCCESS)
             except Exception as e:
                 raise ChannelException(
                     f"Error waiting for channel request response: {e}"
@@ -532,11 +532,11 @@ class Channel:
     def _handle_request(self, request_type: str, data: bytes) -> bool:
         """
         Handle incoming channel request from remote side.
-        
+
         Args:
             request_type: Type of request (e.g., "shell", "exec")
             data: Request-specific data
-            
+
         Returns:
             True if request was accepted, False otherwise
         """
@@ -551,17 +551,17 @@ class Channel:
 
         try:
             if request_type == "shell":
-                return server.check_channel_shell_request(self)
-            
+                return bool(server.check_channel_shell_request(self))
+
             elif request_type == "exec":
-                command_bytes, _ = read_string(data)
-                return server.check_channel_exec_request(self, command_bytes)
-            
+                command_bytes, _ = read_string(data, 0)
+                return bool(server.check_channel_exec_request(self, command_bytes))
+
             elif request_type == "subsystem":
-                subsystem_bytes, _ = read_string(data)
+                subsystem_bytes, _ = read_string(data, 0)
                 subsystem = subsystem_bytes.decode(SSH_STRING_ENCODING)
-                return server.check_channel_subsystem_request(self, subsystem)
-            
+                return bool(server.check_channel_subsystem_request(self, subsystem))
+
             elif request_type == "pty-req":
                 offset = 0
                 term_bytes, offset = read_string(data, offset)
@@ -571,42 +571,52 @@ class Channel:
                 pixelwidth, offset = read_uint32(data, offset)
                 pixelheight, offset = read_uint32(data, offset)
                 modes, offset = read_string(data, offset)
-                
-                return server.check_channel_pty_request(
-                    self, term, width, height, pixelwidth, pixelheight, modes
+
+                return bool(
+                    server.check_channel_pty_request(
+                        self, term, width, height, pixelwidth, pixelheight, modes
+                    )
                 )
-            
+
             elif request_type == "window-change":
                 offset = 0
                 width, offset = read_uint32(data, offset)
                 height, offset = read_uint32(data, offset)
                 pixelwidth, offset = read_uint32(data, offset)
                 pixelheight, offset = read_uint32(data, offset)
-                
-                return server.check_channel_window_change_request(
-                    self, width, height, pixelwidth, pixelheight
+
+                return bool(
+                    server.check_channel_window_change_request(
+                        self, width, height, pixelwidth, pixelheight
+                    )
                 )
-            
+
             elif request_type == "env":
                 offset = 0
                 variable_name_bytes, offset = read_string(data, offset)
                 variable_value_bytes, offset = read_string(data, offset)
                 name = variable_name_bytes.decode(SSH_STRING_ENCODING)
                 value = variable_value_bytes.decode(SSH_STRING_ENCODING)
-                
-                return server.check_channel_env_request(self, name, value)
-            
+
+                return bool(server.check_channel_env_request(self, name, value))
+
             elif request_type == "x11-req":
                 offset = 0
                 single_connection, offset = read_boolean(data, offset)
                 auth_protocol_bytes, offset = read_string(data, offset)
                 auth_cookie_bytes, offset = read_string(data, offset)
                 screen_number, offset = read_uint32(data, offset)
-                
+
                 auth_protocol = auth_protocol_bytes.decode(SSH_STRING_ENCODING)
-                
-                return server.check_channel_x11_request(
-                    self, single_connection, auth_protocol, auth_cookie_bytes, screen_number
+
+                return bool(
+                    server.check_channel_x11_request(
+                        self,
+                        single_connection,
+                        auth_protocol,
+                        auth_cookie_bytes,
+                        screen_number,
+                    )
                 )
 
             # Unknown request type
