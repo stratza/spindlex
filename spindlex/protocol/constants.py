@@ -5,7 +5,7 @@ Defines SSH protocol constants, message types, and error codes
 according to RFC 4251-4254 specifications.
 """
 
-from typing import Optional, Tuple
+from typing import Optional
 
 from .._version import __version__
 
