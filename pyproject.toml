@@ -7,7 +7,8 @@ name = "spindlex"
 version = "0.4.1"
 description = "A modern, high-performance, pure-Python SSHv2 and SFTP client/server library"
 readme = "README.md"
-license = {text = "MIT"}
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
     {name = "Di3Z1E"}
 ]
@@ -19,7 +20,6 @@ classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Intended Audience :: System Administrators",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
