@@ -927,6 +927,9 @@ class RSAKey(PKey):
             algorithm = signature[offset : offset + algo_len].decode()
             offset += algo_len
 
+            if algorithm == "ssh-rsa":
+                raise CryptoException("Insecure ssh-rsa (SHA-1) signature rejected")
+
             if algorithm not in ["rsa-sha2-256", "rsa-sha2-512"]:
                 return False
 
