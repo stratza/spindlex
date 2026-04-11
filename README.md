@@ -3,7 +3,7 @@
 **A modern, high-performance, pure-Python SSHv2 and SFTP library.**
 
 [![CI Status](https://img.shields.io/github/actions/workflow/status/Di3Z1E/spindlex/ci.yml?branch=main&style=flat-square)](https://github.com/Di3Z1E/spindlex/actions)
-[![Coverage](https://img.shields.io/codecov/c/github/Di3Z1E/spindlex?style=flat-square)](https://codecov.io/gh/Di3Z1E/spindlex)
+[![Coverage](https://img.shields.io/badge/coverage-50%25-orange?style=flat-square)](https://codecov.io/gh/Di3Z1E/spindlex)
 [![PyPI Version](https://img.shields.io/pypi/v/spindlex?style=flat-square)](https://pypi.org/project/spindlex/)
 [![Python Support](https://img.shields.io/pypi/pyversions/spindlex?style=flat-square)](https://pypi.org/project/spindlex/)
 [![License](https://img.shields.io/pypi/l/spindlex?style=flat-square)](https://github.com/Di3Z1E/spindlex/blob/main/LICENSE)
