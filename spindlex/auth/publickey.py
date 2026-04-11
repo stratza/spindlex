@@ -70,7 +70,9 @@ class PublicKeyAuth:
         except Exception as e:
             if isinstance(e, AuthenticationException):
                 raise
-            raise AuthenticationException(f"Public key authentication failed: {e}") from e
+            raise AuthenticationException(
+                f"Public key authentication failed: {e}"
+            ) from e
 
     def get_method_data(self, key: Any, is_query: bool = False) -> bytes:
         """

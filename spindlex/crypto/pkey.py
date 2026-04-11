@@ -232,12 +232,14 @@ class PKey:
         # Parse out the algorithm name from the bytes (first string)
         algo_len = struct.unpack(">I", key_bytes[:4])[0]
         algo_name = key_bytes[4 : 4 + algo_len].decode()
-        
+
         key_base64 = base64.b64encode(key_bytes).decode()
         return f"{algo_name} {key_base64}"
 
     @classmethod
-    def from_private_key_file(cls, filename: str, password: Optional[str] = None) -> "PKey":
+    def from_private_key_file(
+        cls, filename: str, password: Optional[str] = None
+    ) -> "PKey":
         """
         Load private key from file.
 
@@ -296,7 +298,7 @@ class Ed25519Key(PKey):
                 self._key = serialization.load_pem_private_key(
                     key_data, password=password, backend=default_backend()
                 )
-                
+
             if not isinstance(self._key, ed25519.Ed25519PrivateKey):
                 raise CryptoException("Key is not Ed25519 private key")
         except Exception as e:
@@ -859,9 +861,7 @@ class RSAKey(PKey):
         """Generate a new RSA key pair."""
         key = cls()
         key._key = rsa.generate_private_key(
-            public_exponent=65537,
-            key_size=bits,
-            backend=default_backend()
+            public_exponent=65537, key_size=bits, backend=default_backend()
         )
         return key
 
@@ -971,7 +971,9 @@ def load_key_from_file(filename: str, password: Optional[str] = None) -> PKey:
                 continue
 
         error_details = "; ".join(errors)
-        raise CryptoException(f"Unable to load key - unsupported format or type. Details: {error_details}")
+        raise CryptoException(
+            f"Unable to load key - unsupported format or type. Details: {error_details}"
+        )
     except Exception as e:
         if isinstance(e, CryptoException):
             raise

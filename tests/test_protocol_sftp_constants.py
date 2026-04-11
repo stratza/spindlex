@@ -1,4 +1,3 @@
-
 from spindlex.protocol.sftp_constants import (
     get_message_name,
     get_status_message,
