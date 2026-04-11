@@ -251,3 +251,21 @@ commands =
 [tool.bandit]
 exclude_dirs = ["tests"]
 skips = ["B101"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py39"
+src = ["spindlex"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "S", "C4", "PT"]
+ignore = [
+    "S101", # Use of `assert` detected (common in tests/libraries)
+    "E501", # Line too long (already handled by black)
+    "UP035", # Use `typing` instead of `typing_extensions`
+    "UP007", # Use `X | Y` for type annotations
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401", "F403"]
+"tests/*" = ["S", "PT", "E501"]
