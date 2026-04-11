@@ -7,6 +7,8 @@ edit_uri: edit/main/docs/
 
 theme:
   name: material
+  logo: _static/logo.svg
+  favicon: _static/logo.svg
   palette:
     # Palette toggle for light mode
     - media: "(prefers-color-scheme: light)"
@@ -32,9 +34,12 @@ theme:
     - navigation.sections
     - navigation.expand
     - navigation.top
+    - navigation.footer
+    - navigation.tracking
     - search.suggest
     - search.highlight
     - search.share
+    - toc.follow
 
 markdown_extensions:
   - admonition
