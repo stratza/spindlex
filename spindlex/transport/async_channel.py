@@ -239,7 +239,7 @@ class AsyncChannel(Channel):
 
             # Wait for response
             res = await self._transport._expect_message_async(
-                MSG_CHANNEL_SUCCESS, MSG_CHANNEL_FAILURE
+                MSG_CHANNEL_SUCCESS, MSG_CHANNEL_FAILURE, channel_id=self._channel_id
             )
             if res.msg_type == MSG_CHANNEL_FAILURE:
                 raise ChannelException(f"Command execution failed: {command}")
@@ -267,7 +267,7 @@ class AsyncChannel(Channel):
 
             # Wait for response
             res = await self._transport._expect_message_async(
-                MSG_CHANNEL_SUCCESS, MSG_CHANNEL_FAILURE
+                MSG_CHANNEL_SUCCESS, MSG_CHANNEL_FAILURE, channel_id=self._channel_id
             )
             if res.msg_type == MSG_CHANNEL_FAILURE:
                 raise ChannelException("Shell invocation failed")
@@ -302,7 +302,7 @@ class AsyncChannel(Channel):
 
             # Wait for response
             res = await self._transport._expect_message_async(
-                MSG_CHANNEL_SUCCESS, MSG_CHANNEL_FAILURE
+                MSG_CHANNEL_SUCCESS, MSG_CHANNEL_FAILURE, channel_id=self._channel_id
             )
             if res.msg_type == MSG_CHANNEL_FAILURE:
                 raise ChannelException(f"Subsystem invocation failed: {subsystem}")

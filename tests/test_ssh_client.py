@@ -2,7 +2,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from spindlex.client.ssh_client import SSHClient
-from spindlex.exceptions import AuthenticationException
 
 
 @pytest.fixture
@@ -16,7 +15,11 @@ def ssh_client(mock_socket):
         client = SSHClient()
         # Mock transport to avoid real connection
         client._transport = MagicMock()
-        return client
+        client._transport.active = False
+        client._transport.authenticated = False
+        yield client
+
+
 
 
 def test_ssh_client_connect(ssh_client, mock_socket):
@@ -40,11 +43,14 @@ def test_ssh_client_exec_command(ssh_client):
 def test_ssh_client_open_sftp(ssh_client):
     transport = MagicMock()
     ssh_client._transport = transport
+    transport.active = True
+    transport.authenticated = True
     
     with patch("spindlex.client.sftp_client.SFTPClient") as mock_sftp:
         ssh_client.open_sftp()
-        assert transport.open_channel.called
         assert mock_sftp.called
+        assert mock_sftp.call_args[0][0] == transport
+
 
 
 def test_ssh_client_close(ssh_client):

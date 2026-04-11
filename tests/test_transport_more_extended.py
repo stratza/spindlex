@@ -2,18 +2,14 @@ import socket
 from unittest.mock import MagicMock, patch
 
 import pytest
-from spindlex.exceptions import AuthenticationException, TransportException
+from spindlex.exceptions import AuthenticationException
 from spindlex.protocol.constants import *
 from spindlex.protocol.messages import (
-    ChannelCloseMessage,
     ChannelDataMessage,
     ChannelOpenConfirmationMessage,
     ChannelOpenFailureMessage,
     ChannelOpenMessage,
     Message,
-    ServiceAcceptMessage,
-    UserAuthFailureMessage,
-    UserAuthSuccessMessage,
 )
 from spindlex.transport.transport import Transport
 
