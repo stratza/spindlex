@@ -5,7 +5,7 @@ Implements SSH protocol message parsing, serialization, and validation
 according to RFC 4251-4254 specifications.
 """
 
-from typing import Any, List, Optional, Type, TypeVar, Union
+from typing import Optional, Union
 
 from ..exceptions import ProtocolException
 from .constants import *
