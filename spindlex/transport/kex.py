@@ -64,7 +64,7 @@ class KeyExchange:
         self._client_kexinit: Optional[bytes] = None
         self._server_kexinit: Optional[bytes] = None
         self._dh_private_key: Optional[Any] = None
-        self._dh_public_key: Optional[bytes] = None
+        self._dh_public_key: Optional[int] = None
         self._dh_public_key_mpint: Optional[bytes] = None
         self._server_public_key: Optional[bytes] = None
 
@@ -263,6 +263,7 @@ class KeyExchange:
 
             # Send KEXDH_INIT message
             kexdh_init = Message(MSG_KEXDH_INIT)
+            assert self._dh_public_key is not None
             kexdh_init.add_mpint(self._dh_public_key)
             self._transport._send_message(kexdh_init)
 
@@ -322,6 +323,7 @@ class KeyExchange:
 
         try:
             server_key = PKey.from_string(server_host_key_blob)
+            assert self._exchange_hash is not None
             if not server_key.verify(signature_blob, self._exchange_hash):
                 raise CryptoException("Server host key signature verification failed")
         except Exception as e:
@@ -409,9 +411,11 @@ class KeyExchange:
         hash_data.extend(write_string(server_version))
 
         # Client KEXINIT
+        assert self._client_kexinit is not None
         hash_data.extend(write_string(self._client_kexinit))
 
         # Server KEXINIT
+        assert self._server_kexinit is not None
         hash_data.extend(write_string(self._server_kexinit))
 
         # Server host key
@@ -424,6 +428,7 @@ class KeyExchange:
         hash_data.extend(write_string(server_public_key))
 
         # Shared secret
+        assert self._shared_secret is not None
         hash_data.extend(self._shared_secret)
 
         # Compute SHA256 hash
@@ -510,9 +515,11 @@ class KeyExchange:
         hash_data.extend(write_string(server_version))
 
         # Client KEXINIT
+        assert self._client_kexinit is not None
         hash_data.extend(write_string(self._client_kexinit))
 
         # Server KEXINIT
+        assert self._server_kexinit is not None
         hash_data.extend(write_string(self._server_kexinit))
 
         # Server host key
@@ -525,6 +532,7 @@ class KeyExchange:
         hash_data.extend(write_string(server_public_key))
 
         # Shared secret
+        assert self._shared_secret is not None
         hash_data.extend(self._shared_secret)
 
         # Compute SHA256 hash
@@ -547,21 +555,25 @@ class KeyExchange:
         hash_data.extend(write_string(server_version))
 
         # Client KEXINIT
+        assert self._client_kexinit is not None
         hash_data.extend(write_string(self._client_kexinit))
 
         # Server KEXINIT
+        assert self._server_kexinit is not None
         hash_data.extend(write_string(self._server_kexinit))
 
         # Server host key
         hash_data.extend(write_string(server_host_key))
 
         # Client DH public key
+        assert self._dh_public_key_mpint is not None
         hash_data.extend(self._dh_public_key_mpint)
 
         # Server DH public key
         hash_data.extend(server_dh_public)
 
         # Shared secret
+        assert self._shared_secret is not None
         hash_data.extend(self._shared_secret)
 
         # Compute SHA256 hash
@@ -575,6 +587,8 @@ class KeyExchange:
             raise CryptoException("Missing key exchange data for key generation")
 
         # Get key lengths from negotiated ciphers
+        assert self._encryption_algorithm_c2s is not None
+        assert self._encryption_algorithm_s2c is not None
         c2s_cipher_info = self._cipher_suite.get_cipher_info(
             self._encryption_algorithm_c2s
         )
@@ -589,20 +603,20 @@ class KeyExchange:
 
         # Get MAC key lengths
         mac_key_len_c2s = 0
-        if self._mac_algorithm_c2s != "none":
+        if self._mac_algorithm_c2s != "none" and self._mac_algorithm_c2s is not None:
             mac_key_len_c2s = self._cipher_suite.get_mac_info(self._mac_algorithm_c2s)[
                 "key_len"
             ]
 
         mac_key_len_s2c = 0
-        if self._mac_algorithm_s2c != "none":
+        if self._mac_algorithm_s2c != "none" and self._mac_algorithm_s2c is not None:
             mac_key_len_s2c = self._cipher_suite.get_mac_info(self._mac_algorithm_s2c)[
                 "key_len"
             ]
 
         # Choose hash algorithm based on KEX algorithm
         hash_alg = "sha256"
-        if "sha512" in self._kex_algorithm:
+        if self._kex_algorithm and "sha512" in self._kex_algorithm:
             hash_alg = "sha512"
 
         # Generate keys using SSH key derivation

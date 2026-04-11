@@ -83,7 +83,7 @@ class PerformanceHandler(logging.Handler):
         if json_format:
             from .formatters import JSONFormatter
 
-            formatter = JSONFormatter(sanitize=False)
+            formatter: logging.Formatter = JSONFormatter(sanitize=False)
         else:
             from .formatters import SSHFormatter
 
