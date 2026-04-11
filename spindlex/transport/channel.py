@@ -365,7 +365,7 @@ class Channel:
                 msg = self._transport._expect_message(
                     MSG_CHANNEL_SUCCESS, MSG_CHANNEL_FAILURE
                 )
-                
+
                 # Check recipient channel matches (it should, _expect_message just gives us next msg)
                 # But MSG_CHANNEL_SUCCESS/FAILURE might be for another channel if we didn't filter.
                 # Actually _expect_message gives next message of that type.

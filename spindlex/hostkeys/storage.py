@@ -67,7 +67,9 @@ class HostKeyStorage:
                         )
 
         except Exception as e:
-            raise SSHException(f"Failed to load host keys from {self._filename}: {e}") from e
+            raise SSHException(
+                f"Failed to load host keys from {self._filename}: {e}"
+            ) from e
 
     def _parse_host_key_line(self, line: str) -> None:
         """
@@ -169,7 +171,9 @@ class HostKeyStorage:
                             )
 
         except Exception as e:
-            raise SSHException(f"Failed to save host keys to {self._filename}: {e}") from e
+            raise SSHException(
+                f"Failed to save host keys to {self._filename}: {e}"
+            ) from e
 
     def add(self, hostname: str, key: PKey) -> None:
         """

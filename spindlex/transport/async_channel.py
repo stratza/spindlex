@@ -83,13 +83,15 @@ class AsyncChannel(Channel):
                 chunk_size = min(
                     len(data), self._remote_window_size, self._remote_max_packet_size
                 )
-                if chunk_size == 0: # Should be handled by self._remote_window_size == 0 check above but just in case
+                if (
+                    chunk_size == 0
+                ):  # Should be handled by self._remote_window_size == 0 check above but just in case
                     await self._transport._pump_async()
                     continue
 
                 chunk = data[:chunk_size]
                 await self._transport._send_channel_data_async(self._channel_id, chunk)
-                
+
                 data = data[chunk_size:]
                 self._remote_window_size -= chunk_size
                 total_sent += chunk_size
@@ -383,7 +385,11 @@ class AsyncChannelFile:
     """
 
     def __init__(
-        self, channel: AsyncChannel, mode: str = "r", bufsize: int = -1, is_stderr: bool = False
+        self,
+        channel: AsyncChannel,
+        mode: str = "r",
+        bufsize: int = -1,
+        is_stderr: bool = False,
     ) -> None:
         """
         Initialize async channel file.

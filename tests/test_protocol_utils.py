@@ -115,7 +115,7 @@ def test_write_mpint():
     assert write_mpint(0) == b"\x00\x00\x00\x00"
     assert write_mpint(0x80) == b"\x00\x00\x00\x02\x00\x80"
     assert write_mpint(-128) == b"\x00\x00\x00\x01\x80"
-    
+
     # Large positive integer
     val = 0x1234567890ABCDEF
     data = write_mpint(val)
@@ -145,7 +145,8 @@ def test_read_uint64_insufficient_data():
 
 def test_read_string_too_long():
     from spindlex.protocol.constants import MAX_PACKET_SIZE
-    # We need to provide at least enough data to satisfy new_offset + length > len(data) check 
+
+    # We need to provide at least enough data to satisfy new_offset + length > len(data) check
     # but length must be > MAX_PACKET_SIZE.
     # Actually, the check 'if new_offset + length > len(data)' comes BEFORE 'if length > MAX_PACKET_SIZE'.
     # To hit "String too long", we need to provide enough data.
@@ -170,6 +171,7 @@ def test_write_uint64_out_of_range():
 
 def test_write_string_too_long():
     from spindlex.protocol.constants import MAX_PACKET_SIZE
+
     long_string = "a" * (MAX_PACKET_SIZE + 1)
     with pytest.raises(ProtocolException, match="String too long"):
         write_string(long_string)
@@ -177,7 +179,7 @@ def test_write_string_too_long():
 
 def test_validate_packet_structure_errors():
     from spindlex.protocol.constants import MAX_PACKET_SIZE
-    
+
     # Too small
     with pytest.raises(ProtocolException, match="Packet too small"):
         validate_packet_structure(b"abc")
@@ -206,10 +208,15 @@ def test_validate_packet_structure_errors():
 
     # Padding too small
     payload = b"msg_content_long_enough"
-    padding_len = 3 # Min is 4
+    padding_len = 3  # Min is 4
     packet_len = 1 + len(payload) + padding_len
     # Ensure packet_len >= 12
-    data = struct.pack(">I", packet_len) + bytes([padding_len]) + payload + b"\x00" * padding_len
+    data = (
+        struct.pack(">I", packet_len)
+        + bytes([padding_len])
+        + payload
+        + b"\x00" * padding_len
+    )
     with pytest.raises(ProtocolException, match="Padding too small"):
         validate_packet_structure(data)
 
@@ -218,9 +225,14 @@ def test_validate_packet_structure_errors():
     # we want payload_length < 1
     padding_len = 15
     payload = b""
-    packet_len = 1 + len(payload) + padding_len # 1 + 0 + 15 = 16
+    packet_len = 1 + len(payload) + padding_len  # 1 + 0 + 15 = 16
     # payload_length = 16 - 1 - 15 = 0
-    data = struct.pack(">I", packet_len) + bytes([padding_len]) + payload + b"\x00" * padding_len
+    data = (
+        struct.pack(">I", packet_len)
+        + bytes([padding_len])
+        + payload
+        + b"\x00" * padding_len
+    )
     with pytest.raises(ProtocolException, match="Invalid payload length"):
         validate_packet_structure(data)
     # packet_length = 12 (payload_size + 1 + padding_size)

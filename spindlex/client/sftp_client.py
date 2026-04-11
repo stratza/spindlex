@@ -84,9 +84,9 @@ class SFTPFile:
 
         request_id = self._client._get_next_request_id()
         read_msg = SFTPReadMessage(request_id, self._handle, self._offset, size)
-        
+
         response = self._client._send_request_and_wait_response(read_msg)
-        
+
         if isinstance(response, SFTPDataMessage):
             self._offset += len(response.data)
             return response.data
@@ -112,9 +112,9 @@ class SFTPFile:
 
         request_id = self._client._get_next_request_id()
         write_msg = SFTPWriteMessage(request_id, self._handle, self._offset, data)
-        
+
         response = self._client._send_request_and_wait_response(write_msg)
-        
+
         if isinstance(response, SFTPStatusMessage):
             if response.status_code == SSH_FX_OK:
                 self._offset += len(data)

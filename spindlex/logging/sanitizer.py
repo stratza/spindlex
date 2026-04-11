@@ -136,7 +136,9 @@ class LogSanitizer:
                     (
                         cls.sanitize_message(item)
                         if isinstance(item, str)
-                        else cls.sanitize_dict(item) if isinstance(item, dict) else item
+                        else cls.sanitize_dict(item)
+                        if isinstance(item, dict)
+                        else item
                     )
                     for item in value
                 ]

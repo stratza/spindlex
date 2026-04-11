@@ -5,7 +5,7 @@ Implements SSH protocol message parsing, serialization, and validation
 according to RFC 4251-4254 specifications.
 """
 
-from typing import Union
+from typing import Any, List, Optional, Type, TypeVar, Union
 
 from ..exceptions import ProtocolException
 from .constants import *
@@ -300,8 +300,8 @@ class KexInitMessage(Message):
         mac_algorithms_server_to_client: list[str],
         compression_algorithms_client_to_server: list[str],
         compression_algorithms_server_to_client: list[str],
-        languages_client_to_server: list[str] = None,
-        languages_server_to_client: list[str] = None,
+        languages_client_to_server: Optional[list[str]] = None,
+        languages_server_to_client: Optional[list[str]] = None,
         first_kex_packet_follows: bool = False,
     ) -> None:
         """

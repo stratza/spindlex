@@ -1,4 +1,3 @@
-
 from spindlex.exceptions import (
     AuthenticationException,
     BadHostKeyException,

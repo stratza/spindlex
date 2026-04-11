@@ -119,7 +119,9 @@ class Curve25519KeyExchange(KeyExchange):
             shared_secret = self.private_key.exchange(peer_key)
             return shared_secret
         except Exception as e:
-            raise CryptoException(f"Curve25519 shared secret computation failed: {e}") from e
+            raise CryptoException(
+                f"Curve25519 shared secret computation failed: {e}"
+            ) from e
 
 
 class ECDHKeyExchange(KeyExchange):
@@ -280,7 +282,9 @@ class DHGroup14KeyExchange(KeyExchange):
             shared_secret = self.private_key.exchange(peer_key)
             return shared_secret
         except Exception as e:
-            raise CryptoException(f"DH Group 14 shared secret computation failed: {e}") from e
+            raise CryptoException(
+                f"DH Group 14 shared secret computation failed: {e}"
+            ) from e
 
 
 class KeyExchangeManager:

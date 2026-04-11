@@ -70,11 +70,13 @@ class AsyncSSHClient:
 
         try:
             # Create socket connection
-            sock, reader, writer = await self._create_connection(hostname, port, timeout)
+            sock, reader, writer = await self._create_connection(
+                hostname, port, timeout
+            )
 
             # Create async transport
             self._transport = AsyncTransport(sock)
-            
+
             # Use connect_existing helper to set reader/writer safely
             await self._transport.connect_existing(reader, writer)
 

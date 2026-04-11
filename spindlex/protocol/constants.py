@@ -5,6 +5,8 @@ Defines SSH protocol constants, message types, and error codes
 according to RFC 4251-4254 specifications.
 """
 
+from typing import Optional, Tuple
+
 from .._version import __version__
 
 # SSH Protocol Version
@@ -225,7 +227,7 @@ def is_supported_version(protocol_version: str) -> bool:
 
 
 def create_version_string(
-    software_name: str = "spindlex", software_version: str = None
+    software_name: str = "spindlex", software_version: Optional[str] = None
 ) -> str:
     """
     Create SSH version string for this implementation.
