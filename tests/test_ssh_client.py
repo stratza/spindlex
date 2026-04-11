@@ -20,8 +20,6 @@ def ssh_client(mock_socket):
         yield client
 
 
-
-
 def test_ssh_client_connect(ssh_client, mock_socket):
     with patch("spindlex.transport.transport.Transport.start_client"):
         with patch.object(ssh_client, "auth_password", return_value=True):
@@ -34,7 +32,7 @@ def test_ssh_client_exec_command(ssh_client):
     ssh_client._transport = transport
     channel = MagicMock()
     transport.open_channel.return_value = channel
-    
+
     stdin, stdout, stderr = ssh_client.exec_command("ls")
     assert transport.open_channel.called
     assert channel.exec_command.called
@@ -45,12 +43,11 @@ def test_ssh_client_open_sftp(ssh_client):
     ssh_client._transport = transport
     transport.active = True
     transport.authenticated = True
-    
+
     with patch("spindlex.client.sftp_client.SFTPClient") as mock_sftp:
         ssh_client.open_sftp()
         assert mock_sftp.called
         assert mock_sftp.call_args[0][0] == transport
-
 
 
 def test_ssh_client_close(ssh_client):

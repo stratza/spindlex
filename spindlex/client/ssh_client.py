@@ -230,7 +230,6 @@ class SSHClient:
                 else:
                     self._authenticate(username, password, pkey, key_filename)
 
-
             self._logger.info(f"Successfully connected to {hostname}:{port}")
 
         except Exception as e:
@@ -310,7 +309,7 @@ class SSHClient:
         """
         if not self._transport:
             raise SSHException("No transport available")
-        
+
         if not self._transport.auth_password(username, password):
             raise AuthenticationException("Password authentication failed")
 
@@ -335,13 +334,13 @@ class SSHClient:
         """
         if not self._transport:
             raise SSHException("No transport available")
-        
+
         if key_filename:
             pkey = PKey.from_private_key_file(key_filename, password)
-            
+
         if pkey is None:
             raise AuthenticationException("No private key provided")
-            
+
         if not self._transport.auth_publickey(username, pkey):
             raise AuthenticationException("Public key authentication failed")
 
@@ -352,7 +351,6 @@ class SSHClient:
         pkey: Optional[PKey] = None,
         key_filename: Optional[str] = None,
     ) -> None:
-
         """
         Authenticate with the server.
 
