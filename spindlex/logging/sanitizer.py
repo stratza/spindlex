@@ -114,7 +114,7 @@ class LogSanitizer:
         Returns:
             Sanitized dictionary
         """
-        sanitized = {}
+        sanitized: dict[str, Any] = {}
         sensitive_keys = {
             "password",
             "secret",
