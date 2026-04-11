@@ -75,10 +75,10 @@ SpindleX was designed to be a modern, high-performance alternative to Paramiko. 
 === "SpindleX"
 
     ```python
-    from spindlex.crypto.pkey import load_key_from_file
+    from spindlex.crypto.pkey import PKey
 
     # Automatically detects key type (RSA, Ed25519, etc.)
-    key = load_key_from_file('/path/to/key')
+    key = PKey.from_private_key_file('/path/to/key')
     client.connect(..., pkey=key)
     ```
 
@@ -92,6 +92,6 @@ SpindleX was designed to be a modern, high-performance alternative to Paramiko. 
 ## Migration Checklist
 
 - [ ] Replace `import paramiko` with `from spindlex import SSHClient`.
-- [ ] Use `load_key_from_file` instead of specific key classes like `RSAKey`.
+- [ ] Use `PKey.from_private_key_file` instead of specific key classes like `RSAKey`.
 - [ ] Wrap your client usage in `with SSHClient() as client:`.
 - [ ] Check `spindlex.exceptions` if you were catching specific Paramiko errors.
