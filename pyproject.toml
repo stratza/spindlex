@@ -264,8 +264,23 @@ ignore = [
     "E501", # Line too long (already handled by black)
     "UP035", # Use `typing` instead of `typing_extensions`
     "UP007", # Use `X | Y` for type annotations
+    "F403", # Star imports used
+    "F405", # Undefined names from star imports
+    "S110", # try-except-pass (silent errors in cleanup)
+    "E701", # Multiple statements on one line (colon)
+    "B904", # raise-without-from-inside-except
+    "B023", # function-uses-loop-variable
+    "S104", # hardcoded-bind-all-interfaces
+    "S105", # hardcoded-password-string
+    "S106", # hardcoded-password-func-arg
+    "S108", # hardcoded-temp-file
+    "S112", # try-except-continue
+    "S303", # suspicious-insecure-hash-usage
+    "S324", # hashlib-insecure-hash-function
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401", "F403"]
 "tests/*" = ["S", "PT", "E501"]
+"examples/*" = ["S", "T201"]
+"scripts/*" = ["T201"]

@@ -1,7 +1,6 @@
 import struct
 
 import pytest
-
 from spindlex.exceptions import ProtocolException
 from spindlex.protocol.utils import (
     extract_message_from_packet,
@@ -177,7 +176,7 @@ def test_write_string_too_long():
 
 
 def test_validate_packet_structure_errors():
-    from spindlex.protocol.constants import MIN_PACKET_SIZE, MAX_PACKET_SIZE
+    from spindlex.protocol.constants import MAX_PACKET_SIZE
     
     # Too small
     with pytest.raises(ProtocolException, match="Packet too small"):
@@ -256,7 +255,7 @@ def test_extract_message_from_packet():
 
 
 def test_validate_message_type():
-    from spindlex.protocol.constants import MSG_KEXINIT
-    from spindlex.protocol.utils import validate_message_type
+    from spindlex.protocol.constants import MSG_KEXINIT, validate_message_type
+
     assert validate_message_type(MSG_KEXINIT) is True
     assert validate_message_type(256) is False

@@ -5,7 +5,7 @@ Implements SSH cipher suites with modern cryptographic algorithms
 and secure defaults according to current best practices.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from ..exceptions import CryptoException
 from .backend import CryptoBackend, default_crypto_backend
@@ -76,13 +76,13 @@ class CipherSuite:
             crypto_backend: Cryptographic backend to use (defaults to CryptographyBackend)
         """
         self.crypto_backend = crypto_backend or default_crypto_backend
-        self.negotiated_algorithms: Dict[str, str] = {}
+        self.negotiated_algorithms: dict[str, str] = {}
 
     def negotiate_algorithms(
         self,
-        client_algorithms: Dict[str, List[str]],
-        server_algorithms: Dict[str, List[str]],
-    ) -> Dict[str, str]:
+        client_algorithms: dict[str, list[str]],
+        server_algorithms: dict[str, list[str]],
+    ) -> dict[str, str]:
         """
         Negotiate algorithms between client and server.
 
@@ -148,7 +148,7 @@ class CipherSuite:
         self.negotiated_algorithms = negotiated
         return negotiated
 
-    def get_cipher_info(self, algorithm: str) -> Dict[str, Any]:
+    def get_cipher_info(self, algorithm: str) -> dict[str, Any]:
         """
         Get cipher information for specified algorithm.
 
@@ -165,7 +165,7 @@ class CipherSuite:
             raise CryptoException(f"Unsupported cipher algorithm: {algorithm}")
         return self.CIPHER_INFO[algorithm]
 
-    def get_mac_info(self, algorithm: str) -> Dict[str, int]:
+    def get_mac_info(self, algorithm: str) -> dict[str, int]:
         """
         Get MAC information for specified algorithm.
 

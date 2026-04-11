@@ -1,7 +1,5 @@
 import pytest
-
 from spindlex.protocol.constants import (
-    SSH_PROTOCOL_VERSION_2,
     create_version_string,
     is_supported_version,
     parse_version_string,

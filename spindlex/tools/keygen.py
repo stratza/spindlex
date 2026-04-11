@@ -115,7 +115,7 @@ Examples:
         # Show fingerprint
         fingerprint = public_key.get_fingerprint()
         print(f"Key fingerprint: {fingerprint}")
-        print(f"Generated with Spindle SSH key generator")
+        print("Generated with Spindle SSH key generator")
 
     except Exception as e:
         print(f"Error generating key: {e}")

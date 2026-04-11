@@ -69,7 +69,7 @@ class PasswordAuth:
         except Exception as e:
             if isinstance(e, AuthenticationException):
                 raise
-            raise AuthenticationException(f"Password authentication failed: {e}")
+            raise AuthenticationException(f"Password authentication failed: {e}") from e
 
     def _write_string(self, s: str) -> bytes:
         """Helper to write SSH string."""

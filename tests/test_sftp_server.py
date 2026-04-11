@@ -4,7 +4,6 @@ import tempfile
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from spindlex.exceptions import SFTPError
 from spindlex.protocol.sftp_constants import *
 from spindlex.protocol.sftp_messages import (
@@ -224,7 +223,7 @@ def test_sftp_server_write(mock_channel, temp_root):
     file_path = os.path.join(temp_root, "write_test.txt")
 
     with patch.object(SFTPServer, "_receive_message") as mock_recv:
-        with patch.object(SFTPServer, "_send_message") as mock_send:
+        with patch.object(SFTPServer, "_send_message") as _:
             attrs = SFTPAttributes()
             mock_recv.side_effect = [
                 SFTPInitMessage(3),
@@ -281,7 +280,7 @@ def test_sftp_server_remove_rename(mock_channel, temp_root):
         f.write("1")
 
     with patch.object(SFTPServer, "_receive_message") as mock_recv:
-        with patch.object(SFTPServer, "_send_message") as mock_send:
+        with patch.object(SFTPServer, "_send_message") as _:
             mock_recv.side_effect = [
                 SFTPInitMessage(3),
                 SFTPRenameMessage(1, "file1.txt", "file2.txt"),
@@ -305,7 +304,7 @@ def test_sftp_server_setstat(mock_channel, temp_root):
 
     try:
         with patch.object(SFTPServer, "_receive_message") as mock_recv:
-            with patch.object(SFTPServer, "_send_message") as mock_send:
+            with patch.object(SFTPServer, "_send_message") as _:
                 attrs = SFTPAttributes()
                 attrs.permissions = 0o444
                 attrs.flags = SSH_FILEXFER_ATTR_PERMISSIONS

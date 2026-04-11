@@ -1,4 +1,3 @@
-import pytest
 
 from spindlex.exceptions import (
     AuthenticationException,

@@ -8,21 +8,12 @@ with support for different channel types and operations.
 import threading
 import time
 from collections import deque
-from typing import Any, Deque, Optional
+from typing import Any, Optional
 
 from ..exceptions import ChannelException
 from ..protocol.constants import (
-    CHANNEL_DIRECT_TCPIP,
-    CHANNEL_FORWARDED_TCPIP,
-    MSG_CHANNEL_CLOSE,
-    MSG_CHANNEL_DATA,
-    MSG_CHANNEL_EOF,
-    MSG_CHANNEL_EXTENDED_DATA,
     MSG_CHANNEL_FAILURE,
-    MSG_CHANNEL_OPEN,
-    MSG_CHANNEL_REQUEST,
     MSG_CHANNEL_SUCCESS,
-    MSG_CHANNEL_WINDOW_ADJUST,
 )
 
 
@@ -57,8 +48,8 @@ class Channel:
         self._local_max_packet_size = 0
 
         # Data buffers
-        self._recv_buffer: Deque[bytes] = deque()
-        self._stderr_buffer: Deque[bytes] = deque()
+        self._recv_buffer: deque[bytes] = deque()
+        self._stderr_buffer: deque[bytes] = deque()
 
         # Flow control
         self._eof_received = False
@@ -139,7 +130,7 @@ class Channel:
                 return len(data)
 
             except Exception as e:
-                raise ChannelException(f"Failed to send data: {e}")
+                raise ChannelException(f"Failed to send data: {e}") from e
 
     def recv(self, nbytes: int) -> bytes:
         """
@@ -366,7 +357,7 @@ class Channel:
                 pass
 
             except Exception as e:
-                raise ChannelException(f"Failed to send channel request: {e}")
+                raise ChannelException(f"Failed to send channel request: {e}") from e
 
         if want_reply:
             try:
@@ -409,7 +400,7 @@ class Channel:
                 self._transport._send_channel_eof(self._channel_id)
                 self._eof_sent = True
             except Exception as e:
-                raise ChannelException(f"Failed to send EOF: {e}")
+                raise ChannelException(f"Failed to send EOF: {e}") from e
 
     def recv_stderr(self, nbytes: int) -> bytes:
         """

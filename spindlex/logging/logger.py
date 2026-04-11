@@ -4,7 +4,7 @@ Main logging interface for SpindleX.
 
 import logging
 import logging.config
-from typing import Any, Dict, Optional, Union
+from typing import Any, Optional, Union
 
 from .formatters import DebugFormatter, JSONFormatter, SSHFormatter
 from .handlers import PerformanceHandler, SecurityHandler
@@ -98,7 +98,7 @@ class SSHLogger:
         self._performance_logger.info(message, extra=extra)
 
     def protocol_debug(
-        self, direction: str, message_type: str, data: Dict[str, Any], **kwargs
+        self, direction: str, message_type: str, data: dict[str, Any], **kwargs
     ) -> None:
         """
         Log protocol-level debugging information.
@@ -121,7 +121,7 @@ class SSHLogger:
 
 
 # Global logger registry
-_loggers: Dict[str, SSHLogger] = {}
+_loggers: dict[str, SSHLogger] = {}
 
 
 def get_logger(name: str) -> SSHLogger:

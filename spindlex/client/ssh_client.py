@@ -5,17 +5,18 @@ High-level SSH client for establishing connections, executing commands,
 and managing SSH sessions with comprehensive authentication support.
 """
 
-import io
 import logging
 import socket
-from typing import IO, Any, Dict, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
+
+if TYPE_CHECKING:
+    from .sftp_client import SFTPClient
 
 from ..crypto.pkey import PKey
 from ..exceptions import (
     AuthenticationException,
     BadHostKeyException,
     SSHException,
-    TransportException,
 )
 from ..hostkeys.policy import MissingHostKeyPolicy, RejectPolicy
 from ..hostkeys.storage import HostKeyStorage
@@ -202,9 +203,9 @@ class SSHClient:
 
             try:
                 sock.connect((hostname, port))
-            except socket.error as e:
+            except OSError as e:
                 sock.close()
-                raise SSHException(f"Connection failed: {e}")
+                raise SSHException(f"Connection failed: {e}") from e
 
             # Create transport
             self._transport = Transport(sock)
@@ -235,7 +236,7 @@ class SSHClient:
                 e, (SSHException, AuthenticationException, BadHostKeyException)
             ):
                 raise
-            raise SSHException(f"Connection failed: {e}")
+            raise SSHException(f"Connection failed: {e}") from e
 
     def _verify_host_key(self) -> None:
         """
@@ -351,7 +352,7 @@ class SSHClient:
 
     def exec_command(
         self, command: str, bufsize: int = -1
-    ) -> Tuple[ChannelFile, ChannelFile, ChannelFile]:
+    ) -> tuple[ChannelFile, ChannelFile, ChannelFile]:
         """
         Execute command on remote server.
 
@@ -390,7 +391,7 @@ class SSHClient:
         except Exception as e:
             if isinstance(e, SSHException):
                 raise
-            raise SSHException(f"Failed to execute command '{command}': {e}")
+            raise SSHException(f"Failed to execute command '{command}': {e}") from e
 
     def invoke_shell(self) -> Channel:
         """
@@ -422,7 +423,7 @@ class SSHClient:
         except Exception as e:
             if isinstance(e, SSHException):
                 raise
-            raise SSHException(f"Failed to invoke shell: {e}")
+            raise SSHException(f"Failed to invoke shell: {e}") from e
 
     def open_sftp(self) -> "SFTPClient":
         """
@@ -444,7 +445,7 @@ class SSHClient:
         except Exception as e:
             if isinstance(e, SSHException):
                 raise
-            raise SSHException(f"Failed to open SFTP session: {e}")
+            raise SSHException(f"Failed to open SFTP session: {e}") from e
 
     def close(self) -> None:
         """Close SSH connection and cleanup resources."""
@@ -526,7 +527,7 @@ class SSHClient:
         except Exception as e:
             if isinstance(e, SSHException):
                 raise
-            raise SSHException(f"Failed to create local port forwarding: {e}")
+            raise SSHException(f"Failed to create local port forwarding: {e}") from e
 
     def create_remote_port_forward(
         self, remote_port: int, local_host: str, local_port: int, remote_host: str = ""
@@ -557,7 +558,7 @@ class SSHClient:
         except Exception as e:
             if isinstance(e, SSHException):
                 raise
-            raise SSHException(f"Failed to create remote port forwarding: {e}")
+            raise SSHException(f"Failed to create remote port forwarding: {e}") from e
 
     def close_port_forward(self, tunnel_id: str) -> None:
         """
@@ -578,9 +579,9 @@ class SSHClient:
         except Exception as e:
             if isinstance(e, SSHException):
                 raise
-            raise SSHException(f"Failed to close port forwarding tunnel: {e}")
+            raise SSHException(f"Failed to close port forwarding tunnel: {e}") from e
 
-    def get_port_forwards(self) -> Dict[str, Any]:
+    def get_port_forwards(self) -> dict[str, Any]:
         """
         Get all active port forwarding tunnels.
 
@@ -612,7 +613,7 @@ class SSHClient:
         except Exception as e:
             if isinstance(e, SSHException):
                 raise
-            raise SSHException(f"Failed to get port forwarding tunnels: {e}")
+            raise SSHException(f"Failed to get port forwarding tunnels: {e}") from e
 
     def __enter__(self) -> "SSHClient":
         """Context manager entry."""

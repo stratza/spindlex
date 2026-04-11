@@ -4,9 +4,10 @@ Example: Rotating SSH keys across multiple servers.
 This script demonstrates how to automate key rotation and test connectivity.
 """
 import asyncio
-import os
+
 from spindlex import AsyncSSHClient
 from spindlex.crypto.pkey import load_key_from_file
+
 
 async def rotate_key(hostname, old_key, new_public_key):
     """
@@ -35,7 +36,7 @@ async def main():
     
     # Normally you'd generate a new key here
     # os.system('spindlex-keygen -t ed25519 -f ./new_id_ed25519')
-    with open('./new_id_ed25519.pub', 'r') as f:
+    with open('./new_id_ed25519.pub') as f:
         new_public_key = f.read().strip()
 
     tasks = [rotate_key(s, old_key, new_public_key) for s in servers]

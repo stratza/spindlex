@@ -5,8 +5,7 @@ Implements SSH protocol message parsing, serialization, and validation
 according to RFC 4251-4254 specifications.
 """
 
-import struct
-from typing import Any, Dict, List, Optional, Union
+from typing import Union
 
 from ..exceptions import ProtocolException
 from .constants import *
@@ -16,8 +15,6 @@ from .utils import (
     read_mpint,
     read_string,
     read_uint32,
-    read_uint64,
-    validate_message_type,
     write_boolean,
     write_byte,
     write_mpint,
@@ -70,7 +67,7 @@ class Message:
 
             return result
         except Exception as e:
-            raise ProtocolException(f"Failed to pack message: {e}")
+            raise ProtocolException(f"Failed to pack message: {e}") from e
 
     @classmethod
     def unpack(cls, data: bytes) -> "Message":
@@ -295,16 +292,16 @@ class KexInitMessage(Message):
     def __init__(
         self,
         cookie: bytes,
-        kex_algorithms: List[str],
-        server_host_key_algorithms: List[str],
-        encryption_algorithms_client_to_server: List[str],
-        encryption_algorithms_server_to_client: List[str],
-        mac_algorithms_client_to_server: List[str],
-        mac_algorithms_server_to_client: List[str],
-        compression_algorithms_client_to_server: List[str],
-        compression_algorithms_server_to_client: List[str],
-        languages_client_to_server: List[str] = None,
-        languages_server_to_client: List[str] = None,
+        kex_algorithms: list[str],
+        server_host_key_algorithms: list[str],
+        encryption_algorithms_client_to_server: list[str],
+        encryption_algorithms_server_to_client: list[str],
+        mac_algorithms_client_to_server: list[str],
+        mac_algorithms_server_to_client: list[str],
+        compression_algorithms_client_to_server: list[str],
+        compression_algorithms_server_to_client: list[str],
+        languages_client_to_server: list[str] = None,
+        languages_server_to_client: list[str] = None,
         first_kex_packet_follows: bool = False,
     ) -> None:
         """
@@ -392,7 +389,7 @@ class KexInitMessage(Message):
         reserved, offset = read_uint32(data, offset)
 
         # Parse algorithm lists
-        def parse_list(data: bytes) -> List[str]:
+        def parse_list(data: bytes) -> list[str]:
             s = data.decode(SSH_STRING_ENCODING)
             return [alg.strip() for alg in s.split(",") if alg.strip()]
 
@@ -524,7 +521,7 @@ class UserAuthFailureMessage(Message):
     """SSH user authentication failure message (MSG_USERAUTH_FAILURE)."""
 
     def __init__(
-        self, authentications: List[str], partial_success: bool = False
+        self, authentications: list[str], partial_success: bool = False
     ) -> None:
         """
         Initialize user auth failure message.

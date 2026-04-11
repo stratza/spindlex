@@ -1,7 +1,7 @@
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
+
 from spindlex.client.ssh_client import SSHClient
-from spindlex.exceptions import TransportException
+
 
 def test_client_init_defaults():
     client = SSHClient()
@@ -10,12 +10,12 @@ def test_client_init_defaults():
     assert client._host_key_policy is not None
 
 def test_client_context_manager():
-    with patch('socket.socket') as mock_sock:
+    with patch('socket.socket') as _:
         # Mock connect to not fail immediately
         with SSHClient() as client:
             assert isinstance(client, SSHClient)
             # Should call close on exit
-            with patch.object(client, 'close') as mock_close:
+            with patch.object(client, 'close') as _:
                 pass
             # Manual check because __exit__ calls self.close()
     

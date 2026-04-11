@@ -5,16 +5,12 @@ Core SSH transport functionality including protocol handshake, key exchange,
 authentication, and secure packet transmission.
 """
 
-import collections
-import os
 import socket
 import struct
 import threading
-import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 from ..crypto.backend import default_crypto_backend
-from ..crypto.ciphers import CipherSuite
 from ..exceptions import AuthenticationException, ProtocolException, TransportException
 from ..protocol.constants import *
 from ..protocol.constants import create_version_string
@@ -42,7 +38,7 @@ class Transport:
         self._socket = sock
         self._active = False
         self._server_mode = False
-        self._channels: Dict[int, Channel] = {}
+        self._channels: dict[int, Channel] = {}
         self._next_channel_id = 0
 
         # Connection state
@@ -96,7 +92,7 @@ class Transport:
         self._port_forwarding_manager = None
 
         # Message dispatching
-        self._message_queue: List[Message] = []
+        self._message_queue: list[Message] = []
         self._timeout = 10.0
 
     def get_timeout(self) -> Optional[float]:
@@ -155,7 +151,7 @@ class Transport:
             self.close()
             if isinstance(e, (TransportException, ProtocolException)):
                 raise
-            raise TransportException(f"Client start failed: {e}")
+            raise TransportException(f"Client start failed: {e}") from e
 
     def start_server(self, server_key: Any, timeout: Optional[float] = None) -> None:
         """
@@ -200,7 +196,7 @@ class Transport:
             self.close()
             if isinstance(e, (TransportException, ProtocolException)):
                 raise
-            raise TransportException(f"Server start failed: {e}")
+            raise TransportException(f"Server start failed: {e}") from e
 
     def auth_password(self, username: str, password: str) -> bool:
         """
@@ -244,7 +240,7 @@ class Transport:
         except Exception as e:
             if isinstance(e, AuthenticationException):
                 raise
-            raise AuthenticationException(f"Password authentication failed: {e}")
+            raise AuthenticationException(f"Password authentication failed: {e}") from e
 
     def _build_password_auth_data(self, password: str) -> bytes:
         """Build password authentication method data."""
@@ -288,7 +284,7 @@ class Transport:
         except Exception as e:
             if isinstance(e, AuthenticationException):
                 raise
-            raise AuthenticationException(f"Public key authentication failed: {e}")
+            raise AuthenticationException(f"Public key authentication failed: {e}") from e
 
     def _try_publickey_query(self, username: str, key: Any) -> bool:
         """Try public key authentication without signature (query)."""
@@ -444,7 +440,7 @@ class Transport:
                     f"Unexpected message during keyboard-interactive auth: {type(msg).__name__}"
                 )
 
-    def _handle_info_request(self, msg: Message, handler: Any) -> List[str]:
+    def _handle_info_request(self, msg: Message, handler: Any) -> list[str]:
         """Handle keyboard-interactive info request."""
         # Parse info request message
         data = msg._data
@@ -468,7 +464,7 @@ class Transport:
         # Call handler to get responses
         return handler(name, instruction, prompts)
 
-    def _build_info_response(self, responses: List[str]) -> Message:
+    def _build_info_response(self, responses: list[str]) -> Message:
         """Build keyboard-interactive info response message."""
         msg = Message(MSG_USERAUTH_INFO_RESPONSE)
         msg.add_uint32(len(responses))
@@ -521,7 +517,7 @@ class Transport:
         except Exception as e:
             if isinstance(e, AuthenticationException):
                 raise
-            raise AuthenticationException(f"GSSAPI authentication failed: {e}")
+            raise AuthenticationException(f"GSSAPI authentication failed: {e}") from e
 
     def _request_userauth_service(self) -> None:
         """Request ssh-userauth service."""
@@ -565,7 +561,7 @@ class Transport:
             )
 
     def open_channel(
-        self, kind: str, dest_addr: Optional[Tuple[str, int]] = None
+        self, kind: str, dest_addr: Optional[tuple[str, int]] = None
     ) -> Channel:
         """
         Open new SSH channel.
@@ -647,9 +643,9 @@ class Transport:
             except Exception as e:
                 if isinstance(e, TransportException):
                     raise
-                raise TransportException(f"Failed to open channel: {e}")
+                raise TransportException(f"Failed to open channel: {e}") from e
 
-    def _build_direct_tcpip_data(self, dest_addr: Tuple[str, int]) -> bytes:
+    def _build_direct_tcpip_data(self, dest_addr: tuple[str, int]) -> bytes:
         """Build type-specific data for direct-tcpip channel."""
         data = bytearray()
         data.extend(write_string(dest_addr[0]))  # destination host
@@ -674,7 +670,7 @@ class Transport:
                     try:
                         close_msg = ChannelCloseMessage(channel._remote_channel_id)
                         self._send_message(close_msg)
-                    except:
+                    except Exception:
                         pass  # Ignore errors during close
 
                 # Remove from channels dict
@@ -767,7 +763,7 @@ class Transport:
                     language_tag="",
                 )
                 self._send_message(failure_msg)
-            except:
+            except Exception:
                 pass
 
     def _handle_forwarded_tcpip_open(
@@ -1119,7 +1115,7 @@ class Transport:
         except Exception as e:
             if isinstance(e, TransportException):
                 raise
-            raise TransportException(f"Failed to send global request: {e}")
+            raise TransportException(f"Failed to send global request: {e}") from e
 
     def _handle_global_request(self, msg: Message) -> None:
         """
@@ -1159,13 +1155,13 @@ class Transport:
 
                 self._send_message(reply_msg)
 
-        except Exception as e:
+        except Exception:
             # Send failure reply if requested
             if want_reply:
                 try:
                     reply_msg = Message(MSG_REQUEST_FAILURE)
                     self._send_message(reply_msg)
-                except:
+                except Exception:
                     pass
 
     def _handle_tcpip_forward_request(self, data: bytes) -> bool:
@@ -1183,7 +1179,7 @@ class Transport:
             bind_address_bytes, offset = read_string(data, offset)
             bind_port, offset = read_uint32(data, offset)
 
-            bind_address = bind_address_bytes.decode(SSH_STRING_ENCODING)
+            bind_address_bytes.decode(SSH_STRING_ENCODING)
 
             # For now, accept all tcpip-forward requests
             # Server implementations can override this behavior
@@ -1207,7 +1203,7 @@ class Transport:
             bind_address_bytes, offset = read_string(data, offset)
             bind_port, offset = read_uint32(data, offset)
 
-            bind_address = bind_address_bytes.decode(SSH_STRING_ENCODING)
+            bind_address_bytes.decode(SSH_STRING_ENCODING)
 
             # For now, accept all cancel requests
             # Server implementations can override this behavior
@@ -1223,14 +1219,14 @@ class Transport:
             if self._socket:
                 try:
                     self._socket.close()
-                except:
+                except Exception:
                     pass
 
             # Close all channels
             for channel in list(self._channels.values()):
                 try:
                     channel.close()
-                except:
+                except Exception:
                     pass
             self._channels.clear()
 
@@ -1255,7 +1251,7 @@ class Transport:
         except Exception as e:
             if isinstance(e, (TransportException, ProtocolException)):
                 raise
-            raise TransportException(f"Handshake failed: {e}")
+            raise TransportException(f"Handshake failed: {e}") from e
 
     def _send_version(self) -> None:
         """Send SSH version string."""
@@ -1298,7 +1294,7 @@ class Transport:
                     raise TransportException("Timeout during version exchange")
                 raise
             except Exception as e:
-                raise TransportException(f"Error during version exchange: {e}")
+                raise TransportException(f"Error during version exchange: {e}") from e
 
         try:
             version_string = version_line.decode(SSH_STRING_ENCODING)
@@ -1309,7 +1305,7 @@ class Transport:
         try:
             protocol_version, software_version = parse_version_string(version_string)
         except ValueError as e:
-            raise ProtocolException(f"Invalid version string: {e}")
+            raise ProtocolException(f"Invalid version string: {e}") from e
 
         if not is_supported_version(protocol_version):
             raise ProtocolException(f"Unsupported protocol version: {protocol_version}")
@@ -1341,7 +1337,7 @@ class Transport:
                 self._kex_in_progress = False
                 if isinstance(e, (TransportException, ProtocolException)):
                     raise
-                raise TransportException(f"Key exchange failed: {e}")
+                raise TransportException(f"Key exchange failed: {e}") from e
 
     def _send_kexinit(self) -> None:
         """Send KEXINIT message with supported algorithms."""
@@ -1433,7 +1429,7 @@ class Transport:
                 self._sequence_number_out = (self._sequence_number_out + 1) & 0xFFFFFFFF
 
         except Exception as e:
-            raise TransportException(f"Failed to send message: {e}")
+            raise TransportException(f"Failed to send message: {e}") from e
 
     def _read_message(self) -> Message:
         """
@@ -1484,7 +1480,7 @@ class Transport:
             except Exception as e:
                 if isinstance(e, (TransportException, ProtocolException)):
                     raise
-                raise TransportException(f"Failed to receive message: {e}")
+                raise TransportException(f"Failed to receive message: {e}") from e
 
     def _recv_message(self) -> Message:
         """
@@ -1732,8 +1728,8 @@ class Transport:
                 with self._lock:
                     self._packet_buffer = data
                 raise TransportException("Timeout receiving data")
-            except socket.error as e:
-                raise TransportException(f"Socket error: {e}")
+            except OSError as e:
+                raise TransportException(f"Socket error: {e}") from e
 
         # If we read more than requested, store the rest in buffer
         with self._lock:

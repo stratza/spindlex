@@ -7,7 +7,7 @@ and protection against man-in-the-middle attacks.
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Optional
+from typing import Any
 
 from ..exceptions import BadHostKeyException
 

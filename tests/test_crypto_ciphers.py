@@ -1,5 +1,4 @@
 import pytest
-
 from spindlex.crypto.ciphers import CipherSuite
 from spindlex.exceptions import CryptoException
 

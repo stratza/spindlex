@@ -4,8 +4,10 @@ Example: Backing up Proxmox configuration files recursively.
 This script demonstrates using SFTP for downloading configuration directories.
 """
 import os
+
 from spindlex import SSHClient
 from spindlex.hostkeys.policy import AutoAddPolicy
+
 
 def download_recursive(sftp, remote_path, local_path):
     """

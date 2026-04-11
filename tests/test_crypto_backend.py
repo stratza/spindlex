@@ -1,4 +1,3 @@
-import pytest
 
 from spindlex.crypto.backend import CryptographyBackend
 
