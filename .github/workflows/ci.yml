@@ -31,7 +31,7 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          uv pip install --system ".[dev,test]"
+          uv pip install --system ".[dev,test]" build twine
 
       - name: Static Analysis (Ruff & Bandit)
         run: |
@@ -52,6 +52,7 @@ jobs:
       - name: Build Distribution
         if: github.event_name == 'push' || github.event_name == 'release'
         run: |
+          rm -rf build/
           python -m build
           twine check dist/*
 
