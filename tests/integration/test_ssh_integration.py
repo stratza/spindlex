@@ -3,7 +3,6 @@ import pytest
 import time
 from spindlex import SSHClient
 from spindlex.hostkeys.policy import AutoAddPolicy
-from spindlex.exceptions import AuthenticationException
 
 # Skip tests if docker is not available
 pytestmark = pytest.mark.integration
@@ -16,7 +15,6 @@ def docker_compose_file(pytestconfig):
 def ssh_server(docker_ip, docker_services):
     """Ensure that SSH server is up and responsive."""
     port = docker_services.port_for("openssh-server", 22)
-    url = f"http://{docker_ip}:{port}/"
     
     # Wait for SSH banner
     docker_services.wait_until_responsive(

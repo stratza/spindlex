@@ -823,7 +823,9 @@ class SFTPServer:
             if attrs.flags & SSH_FILEXFER_ATTR_UIDGID:
                 try:
                     if hasattr(os, "chown"):
-                        os.chown(resolved_path, attrs.uid, attrs.gid)
+                        uid = attrs.uid if attrs.uid is not None else -1
+                        gid = attrs.gid if attrs.gid is not None else -1
+                        os.chown(resolved_path, uid, gid)
                 except (OSError, AttributeError):
                     # chown may not be supported on all platforms
                     # or user may not have permission
@@ -1007,7 +1009,9 @@ class SFTPServer:
             if message.attrs.flags & SSH_FILEXFER_ATTR_UIDGID:
                 try:
                     if hasattr(os, "chown"):
-                        os.chown(resolved_path, message.attrs.uid, message.attrs.gid)
+                        uid = message.attrs.uid if message.attrs.uid is not None else -1
+                        gid = message.attrs.gid if message.attrs.gid is not None else -1
+                        os.chown(resolved_path, uid, gid)
                 except (OSError, AttributeError):
                     # chown may not be supported or user may not have permission
                     pass
