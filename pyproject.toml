@@ -15,7 +15,7 @@ authors = [
 maintainers = [
     {name = "Di3Z1E"}
 ]
-keywords = ["ssh", "sftp", "client", "server", "cryptography", "security", "automation", "devops", "pure-python"]
+keywords = ["ssh", "sftp", "client", "server", "cryptography", "security", "automation", "devops", "pure-python", "asyncio", "high-performance", "paramiko-alternative", "remote-execution", "file-transfer", "modern-ssh", "secure-shell"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
