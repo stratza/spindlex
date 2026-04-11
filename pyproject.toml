@@ -171,6 +171,12 @@ omit = [
     "setup.py",
 ]
 
+[tool.coverage.paths]
+source = [
+    "spindlex",
+    "**/spindlex",
+]
+
 [tool.coverage.report]
 exclude_lines = [
     'pragma: no cover',
