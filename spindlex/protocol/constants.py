@@ -115,7 +115,6 @@ DEFAULT_PORT = 22
 KEX_CURVE25519_SHA256 = "curve25519-sha256"
 KEX_ECDH_SHA2_NISTP256 = "ecdh-sha2-nistp256"
 KEX_DH_GROUP14_SHA256 = "diffie-hellman-group14-sha256"
-KEX_DH_GROUP1_SHA1 = "diffie-hellman-group1-sha1"
 
 HOSTKEY_ED25519 = "ssh-ed25519"
 HOSTKEY_ECDSA_SHA2_NISTP256 = "ecdsa-sha2-nistp256"
@@ -130,7 +129,6 @@ CIPHER_AES128_CTR = "aes128-ctr"
 
 MAC_HMAC_SHA2_256 = "hmac-sha2-256"
 MAC_HMAC_SHA2_512 = "hmac-sha2-512"
-MAC_HMAC_SHA1 = "hmac-sha1"
 
 COMPRESS_NONE = "none"
 COMPRESS_ZLIB = "zlib@openssh.com"

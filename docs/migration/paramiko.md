@@ -4,8 +4,8 @@ SpindleX was designed to be a modern, high-performance alternative to Paramiko. 
 
 ## Why Switch?
 
-*   **:zap: Performance**: SpindleX is significantly faster than Paramiko, especially for SFTP transfers, thanks to its adaptive buffering and TCP fast-path.
-*   **:package: Zero Dependencies**: SpindleX doesn't require GCC or system-level headers to install (except for `cryptography`).
+*   **:zap: Performance**: SpindleX offers a highly efficient protocol implementation with optimized internal read buffering.
+*   **:package: Lean Design**: SpindleX is a modern library that leverages the standard `cryptography` package for secure primitives.
 *   **:asyncio: Native Async**: SpindleX has first-class `asyncio` support.
 *   **:shield: Modern Security**: SpindleX prioritizes modern, secure algorithms by default.
 *   **:type: Better DX**: Full type hints and a cleaner API.
