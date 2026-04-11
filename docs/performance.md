@@ -1,24 +1,24 @@
 # Performance Guide
 
-This guide covers performance optimization techniques, benchmarking, and the internal architecture that makes SpindleX one of the fastest pure-Python SSH libraries.
+This guide covers performance optimization techniques, benchmarking, and the internal architecture that makes SpindleX a highly efficient SSH library.
 
 ## Performance Overview
 
 SpindleX is engineered for speed, security, and protocol efficiency. Key performance features include:
 
-*   **:zap: Adaptive Buffering**: Intelligent 32KB read buffering architecture that minimizes syscall overhead by chunking protocol data.
-*   **:rocket: TCP Fast-Path**: Automatic management of `TCP_NODELAY` to bypass Nagle's algorithm, reducing latency for small packets.
-*   **:package: Zero Dependencies**: Pure-Python core with zero dependencies (except `cryptography`), ensuring minimal overhead and broad compatibility.
-*   **:link: Optimized KEX**: Streamlined Version Exchange and Key (Re-)Exchange logic.
-*   **:shield: Modern Cryptography**: Native support for Ed25519, Curve25519, and ChaCha20-Poly1305.
+*   **:zap: Internal Read Buffering**: 32KB read buffering architecture that minimizes syscall overhead by chunking protocol data.
+*   **:rocket: Low Latency I/O**: Native management of `TCP_NODELAY` to bypass Nagle's algorithm, reducing latency for small packets.
+*   **:package: Lean Design**: Optimized protocol layer leveraging the industry-standard `cryptography` library.
+*   **:link: Streamlined Handshake**: Efficient version exchange and key negotiation logic.
+*   **:shield: Modern Cryptography**: Optimized support for Ed25519, Curve25519, and ChaCha20-Poly1305.
 
 ## Benchmarking and Profiling
 
-### Built-in Performance Monitoring
+### Built-in Benchmark Tool
 
-SpindleX includes built-in performance monitoring tools to help you identify bottlenecks in your application.
+SpindleX includes a `spindlex-benchmark` CLI tool to help you evaluate performance in your specific environment.
 
-### Custom Benchmarking
+### Performance Metrics
 
 When benchmarking SpindleX, focus on these metrics:
 
@@ -28,11 +28,11 @@ When benchmarking SpindleX, focus on these metrics:
 
 ## Data Transfer Optimization
 
-### Adaptive Buffering
+### Read Buffering
 
-SpindleX uses an adaptive buffering strategy for I/O operations. This reduces the number of `socket.recv()` calls, which is often a bottleneck in high-throughput network applications.
+SpindleX uses an internal buffering strategy for I/O operations. By reading data in larger chunks (default 32KB), it reduces the number of `socket.recv()` calls, which is often a bottleneck in high-throughput network applications.
 
-### TCP Fast-Path
+### TCP_NODELAY
 
 By default, SpindleX enables `TCP_NODELAY` on the underlying transport socket. This ensures that packets are sent immediately without waiting for the buffer to fill up, which is critical for interactive shells and low-latency command execution.
 

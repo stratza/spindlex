@@ -1,7 +1,7 @@
 <div align="center">
   <img src="docs/_static/figure.png" width="160" height="160" alt="SpindleX Logo">
   <h1>SpindleX</h1>
-  <p><strong>A modern, high-performance, pure-Python SSHv2 and SFTP library.</strong></p>
+  <p><strong>A modern, high-performance SSHv2 and SFTP library.</strong></p>
 
 [![CI Status](https://img.shields.io/github/actions/workflow/status/Di3Z1E/spindlex/ci.yml?branch=main&style=for-the-badge&logo=github)](https://github.com/Di3Z1E/spindlex/actions)
 [![Coverage](https://codecov.io/gh/Di3Z1E/spindlex/branch/main/graph/badge.svg)](https://codecov.io/gh/Di3Z1E/spindlex)
@@ -35,10 +35,10 @@ SpindleX is a modern SSH protocol implementation engineered for **speed**, **sec
 
 ## ✨ Key Features
 
-*   🚀 **High Performance**: Optimized with **Adaptive Buffering** and **TCP Fast-Path**. Observed up to 60% faster SFTP transfers in internal benchmarks compared to traditional libraries.
-*   📦 **Lean Implementation**: Pure-Python protocol layer. Leverages `cryptography` for high-performance, secure cryptographic primitives.
+*   🚀 **High Performance**: Optimized protocol implementation with internal buffering designed for high-throughput SFTP and command execution.
+*   📦 **Modern Architecture**: Clean, modular codebase built from the ground up for maintainability. Leverages the industry-standard `cryptography` library for robust, hardware-accelerated security.
 *   🔄 **Native Async**: First-class support for `asyncio` with `AsyncSSHClient` and `AsyncSFTPClient`.
-*   🛡️ **Modern Security**: Ed25519, ECDSA, ChaCha20-Poly1305 by default.
+*   🛡️ **Secure by Default**: Modern algorithms like Ed25519, ECDSA, and ChaCha20-Poly1305 are prioritized. Legacy SHA-1 and weak ciphers are disabled in the default configuration.
 *   🏷️ **Fully Typed**: 100% type-hinted codebase for robust IDE integration.
 
 ---
@@ -94,21 +94,18 @@ asyncio.run(run())
 
 ## ⚡ Performance
 
-SpindleX is designed for high-throughput, low-latency environments. In internal benchmarks comparing SpindleX 0.4.x with Paramiko 3.x, we observed significant improvements in protocol overhead and transfer speeds:
+SpindleX is designed for high-throughput, low-latency environments. It utilizes internal read buffering (32KB chunks) and optimized packet handling to reduce system call overhead and improve protocol efficiency.
 
-| Operation | SpindleX (avg) | traditional (avg) | Improvement |
-| :--- | :--- | :--- | :--- |
-| **Handshake & Connect** | **0.035s** | 0.077s | **~50% Faster** |
-| **SFTP Transfer (10MB)** | **0.019s** | 0.061s | **~60% Faster** |
+While performance varies significantly based on network conditions and hardware, SpindleX aims to provide a modern, efficient alternative to legacy Python SSH implementations.
 
-> [!NOTE]
-> Performance varies based on network conditions, cryptographic backend, and hardware. Users are encouraged to run independent benchmarks using the included `spindlex-benchmark` tool.
+> [!TIP]
+> Use the included `spindlex-benchmark` tool to evaluate performance in your specific environment.
 
 ---
 
 ## 🛡️ Security
 
-*   **Hardened Defaults**: Legacy SHA-1 and weak ciphers are disabled by design.
+*   **Hardened Defaults**: Modern cryptographic primitives are used by default. Legacy algorithms are disabled unless explicitly configured.
 *   **Mandatory Verification**: Host key verification is enforced unless explicitly overridden.
 *   **Privacy Aware**: Built-in log sanitizers ensure credentials never reach telemetry.
 *   **Vulnerability Reporting**: See [meta/SECURITY.md](meta/SECURITY.md).

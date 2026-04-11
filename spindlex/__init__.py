@@ -1,7 +1,7 @@
 """
-SpindleX - A pure-Python SSH client/server library.
+SpindleX - A modern, high-performance SSH client/server library.
 
-A secure, high-performance SSH and SFTP implementation without GPL/LGPL dependencies.
+A secure, high-performance SSH and SFTP implementation.
 Provides modern cryptographic standards and comprehensive RFC 4251-4254 compliance.
 """
 

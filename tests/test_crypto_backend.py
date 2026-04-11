@@ -7,9 +7,6 @@ def test_backend_hash():
     h = backend.hash_data("sha256", data)
     assert len(h) == 32
 
-    h1 = backend.hash_data("sha1", data)
-    assert len(h1) == 20
-
 
 def test_backend_random():
     backend = CryptographyBackend()

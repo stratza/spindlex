@@ -87,10 +87,10 @@ def test_userauth_banner_message():
 
 
 def test_userauth_pkok_message():
-    msg = UserAuthPKOKMessage("ssh-rsa", b"keyblob")
+    msg = UserAuthPKOKMessage("ssh-ed25519", b"keyblob")
     data = msg.pack()
     msg2 = UserAuthPKOKMessage.unpack(data)
-    assert msg2.algorithm == "ssh-rsa"
+    assert msg2.algorithm == "ssh-ed25519"
     assert msg2.public_key == b"keyblob"
 
 
@@ -251,12 +251,12 @@ def test_message_str_repr():
 def test_kexinit_validation():
     msg = KexInitMessage(
         cookie=b"0" * 16,
-        kex_algorithms=["diffie-hellman-group14-sha1"],
-        server_host_key_algorithms=["ssh-rsa"],
-        encryption_algorithms_client_to_server=["aes128-ctr"],
-        encryption_algorithms_server_to_client=["aes128-ctr"],
-        mac_algorithms_client_to_server=["hmac-sha1"],
-        mac_algorithms_server_to_client=["hmac-sha1"],
+        kex_algorithms=["curve25519-sha256"],
+        server_host_key_algorithms=["ssh-ed25519"],
+        encryption_algorithms_client_to_server=["aes256-ctr"],
+        encryption_algorithms_server_to_client=["aes256-ctr"],
+        mac_algorithms_client_to_server=["hmac-sha2-256"],
+        mac_algorithms_server_to_client=["hmac-sha2-256"],
         compression_algorithms_client_to_server=["none"],
         compression_algorithms_server_to_client=["none"],
     )

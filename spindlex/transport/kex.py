@@ -44,23 +44,6 @@ class KeyExchange:
     )
     DH_GROUP14_G = 2
 
-    # Diffie-Hellman Group 2 (1024-bit) parameters (RFC 2409) - used for Group 1 SHA1
-    DH_GROUP2_P = int(
-        "FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD1"
-        "29024E088A67CC74020BBEA63B139B22514A08798E3404DD"
-        "EF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245"
-        "E485B576625E7EC6F44C42E9A637ED6B0BFF5CB6F406B7ED"
-        "EE386BFB5A899FA5AE9F24117C4B1FE649286651ECE45B3D"
-        "C2007CB8A163BF0598DA48361C55D39A69163FA8FD24CF5F"
-        "83655D23DCA3AD961C62F356208552BB9ED529077096966D"
-        "670C354E4ABC9804F1746C08CA18217C32905E462E36CE3B"
-        "E39E772C180E86039B2783A2EC07A28FB5C55DF06F4C52C9"
-        "DE2BCBF6955817183995497CEA956AE515D2261898FA0510"
-        "15728E5A8AACAA68FFFFFFFFFFFFFFFF",
-        16,
-    )
-    DH_GROUP2_G = 2
-
     def __init__(self, transport: Any) -> None:
         """
         Initialize key exchange with transport.
@@ -129,9 +112,7 @@ class KeyExchange:
             self._negotiate_algorithms()
 
             # Perform key exchange based on negotiated algorithm
-            if self._kex_algorithm == KEX_DH_GROUP1_SHA1:
-                self._perform_dh_group1_sha1()
-            elif self._kex_algorithm in [
+            if self._kex_algorithm in [
                 KEX_CURVE25519_SHA256,
                 "curve25519-sha256@libssh.org",
             ]:
@@ -450,80 +431,6 @@ class KeyExchange:
             "sha256", bytes(hash_data)
         )
 
-    def _perform_dh_group1_sha1(self) -> None:
-        """Perform Diffie-Hellman Group 1 SHA1 key exchange."""
-        try:
-            # Generate DH parameters for Group 1 (Oakley Group 2, 1024-bit)
-            parameters = dh.DHParameterNumbers(
-                self.DH_GROUP2_P, self.DH_GROUP2_G
-            ).parameters(default_backend())
-
-            # Generate private key
-            self._dh_private_key = parameters.generate_private_key()
-
-            # Get public key
-            dh_public_key = self._dh_private_key.public_key()
-            public_numbers = dh_public_key.public_numbers()
-
-            # Store public key value
-            self._dh_public_key = public_numbers.y
-            self._dh_public_key_mpint = write_mpint(
-                public_numbers.y
-            )  # Store mpint for hash calculation
-
-            # Ensure the public key is positive (SSH requirement)
-            if self._dh_public_key <= 0:
-                raise CryptoException("Invalid DH public key: must be positive")
-
-            # Send KEXDH_INIT message
-            kexdh_init = Message(MSG_KEXDH_INIT)
-            kexdh_init.add_mpint(self._dh_public_key)
-            self._transport._send_message(kexdh_init)
-
-            # Receive KEXDH_REPLY message
-            reply_msg = self._transport._recv_message()
-
-            if reply_msg.msg_type != MSG_KEXDH_REPLY:
-                raise ProtocolException(
-                    f"Expected KEXDH_REPLY, got {reply_msg.msg_type}"
-                )
-
-            # Parse KEXDH_REPLY
-            offset = 0
-            server_host_key_blob, offset = read_string(reply_msg._data, offset)
-            server_dh_public, offset = read_string(reply_msg._data, offset)
-            signature_blob, offset = read_string(reply_msg._data, offset)
-
-            # Store server host key for verification
-            self._transport._server_host_key_blob = server_host_key_blob
-
-            # Extract server's DH public key
-            server_public_int, _ = read_mpint(server_dh_public, 0)
-
-            # Compute shared secret
-            server_public_numbers = dh.DHPublicNumbers(
-                server_public_int, parameters.parameter_numbers()
-            )
-            server_public_key = server_public_numbers.public_key(default_backend())
-
-            shared_secret_int = self._dh_private_key.exchange(server_public_key)
-            self._shared_secret = write_mpint(int.from_bytes(shared_secret_int, "big"))
-
-            # Compute exchange hash using SHA1
-            self._compute_exchange_hash_sha1(
-                server_host_key_blob, server_dh_public, signature_blob
-            )
-
-            # Set session ID (first exchange hash)
-            if self._session_id is None:
-                self._session_id = self._exchange_hash
-
-            # Verify server signature
-            self._verify_server_signature(server_host_key_blob, signature_blob)
-
-        except Exception:
-            raise
-
     def _perform_curve25519_sha256(self) -> None:
         """Perform Curve25519 SHA256 key exchange (modern, preferred)."""
         try:
@@ -625,74 +532,6 @@ class KeyExchange:
             "sha256", bytes(hash_data)
         )
 
-    def _perform_dh_group14_sha1(self) -> None:
-        """Perform Diffie-Hellman Group 14 SHA1 key exchange (more compatible)."""
-        try:
-            # Generate DH parameters
-            parameters = dh.DHParameterNumbers(
-                self.DH_GROUP14_P, self.DH_GROUP14_G
-            ).parameters(default_backend())
-
-            # Generate private key
-            self._dh_private_key = parameters.generate_private_key()
-
-            # Get public key
-            dh_public_key = self._dh_private_key.public_key()
-            public_numbers = dh_public_key.public_numbers()
-
-            # Store public key value
-            self._dh_public_key = public_numbers.y
-            self._dh_public_key_mpint = write_mpint(public_numbers.y)
-
-            # Send KEXDH_INIT message
-            kexdh_init = Message(MSG_KEXDH_INIT)
-            kexdh_init.add_mpint(self._dh_public_key)
-            self._transport._send_message(kexdh_init)
-
-            # Receive KEXDH_REPLY message
-            reply_msg = self._transport._recv_message()
-
-            if reply_msg.msg_type != MSG_KEXDH_REPLY:
-                raise ProtocolException(
-                    f"Expected KEXDH_REPLY, got {reply_msg.msg_type}"
-                )
-
-            # Parse KEXDH_REPLY
-            offset = 0
-            server_host_key_blob, offset = read_string(reply_msg._data, offset)
-            server_dh_public, offset = read_string(reply_msg._data, offset)
-            signature_blob, offset = read_string(reply_msg._data, offset)
-
-            # Store server host key for verification
-            self._transport._server_host_key_blob = server_host_key_blob
-
-            # Extract server's DH public key
-            server_public_int, _ = read_mpint(server_dh_public, 0)
-
-            # Compute shared secret
-            server_public_numbers = dh.DHPublicNumbers(
-                server_public_int, parameters.parameter_numbers()
-            )
-            server_public_key = server_public_numbers.public_key(default_backend())
-
-            shared_secret_int = self._dh_private_key.exchange(server_public_key)
-            self._shared_secret = write_mpint(int.from_bytes(shared_secret_int, "big"))
-
-            # Compute exchange hash using SHA1
-            self._compute_exchange_hash_sha1(
-                server_host_key_blob, server_dh_public, signature_blob
-            )
-
-            # Set session ID (first exchange hash)
-            if self._session_id is None:
-                self._session_id = self._exchange_hash
-
-            # Verify server signature
-            self._verify_server_signature(server_host_key_blob, signature_blob)
-
-        except Exception:
-            raise
-
     def _compute_exchange_hash(
         self, server_host_key: bytes, server_dh_public: bytes, signature: bytes
     ) -> None:
@@ -730,41 +569,6 @@ class KeyExchange:
             "sha256", bytes(hash_data)
         )
 
-    def _compute_exchange_hash_sha1(
-        self, server_host_key: bytes, server_dh_public: bytes, signature: bytes
-    ) -> None:
-        """Compute the exchange hash H using SHA1."""
-        hash_data = bytearray()
-
-        # Client version string
-        client_version = self._transport._client_version or "SSH-2.0-SpindleX_1.0"
-        hash_data.extend(write_string(client_version))
-
-        # Server version string
-        server_version = self._transport._server_version or "SSH-2.0-Unknown"
-        hash_data.extend(write_string(server_version))
-
-        # Client KEXINIT
-        hash_data.extend(write_string(self._client_kexinit))
-
-        # Server KEXINIT
-        hash_data.extend(write_string(self._server_kexinit))
-
-        # Server host key
-        hash_data.extend(write_string(server_host_key))
-
-        # Client DH public key
-        hash_data.extend(self._dh_public_key_mpint)
-
-        # Server DH public key
-        hash_data.extend(server_dh_public)
-
-        # Shared secret
-        hash_data.extend(self._shared_secret)
-
-        # Compute SHA1 hash
-        self._exchange_hash = default_crypto_backend.hash_data("sha1", bytes(hash_data))
-
     def _generate_session_keys(self) -> None:
         """Generate session keys from shared secret and exchange hash."""
         if not self._shared_secret or not self._exchange_hash or not self._session_id:
@@ -800,8 +604,6 @@ class KeyExchange:
         hash_alg = "sha256"
         if "sha512" in self._kex_algorithm:
             hash_alg = "sha512"
-        elif "sha1" in self._kex_algorithm:
-            hash_alg = "sha1"
 
         # Generate keys using SSH key derivation
         # A: IV client to server

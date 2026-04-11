@@ -1,16 +1,10 @@
 # Deployment Guide
 
-SpindleX is designed for modern cloud environments where speed and minimal footprint are critical. Its "Zero-Dependency" architecture makes it ideal for Dockerized deployments.
+SpindleX is designed for modern cloud environments where speed and minimal footprint are critical. Its lean architecture makes it ideal for Dockerized deployments.
 
-## The "Zero-Dependency" Advantage
+## Lean Dependency Tree
 
-SpindleX is a pure-Python library. Unlike other SSH libraries, it does not require:
-
-*   `gcc`
-*   `python-dev` or `python3-dev`
-*   System-level headers (`libssl-dev`, `libffi-dev`)
-
-This results in **faster build times** and **smaller images**.
+SpindleX leverages the standard `cryptography` library for robust, secure cryptographic primitives. While it is not "zero-dependency," it carefully selects its dependencies to maintain a small footprint.
 
 ## Minimal Dockerfile
 
@@ -20,13 +14,19 @@ Here's how to create a production-ready Docker image with SpindleX:
 # Use a slim Python image
 FROM python:3.11-slim-bookworm
 
+# Install basic build dependencies for cryptography if binary wheels aren't available
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libssl-dev \
+    libffi-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 # Create a non-root user for security
 RUN groupadd -r appuser && useradd -r -g appuser appuser
 
 WORKDIR /app
 
-# Install SpindleX - No system dependencies needed!
-# This step is extremely fast because it's just pure Python
+# Install SpindleX
 RUN pip install --no-cache-dir spindlex
 
 # Copy your application code
