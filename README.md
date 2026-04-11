@@ -24,6 +24,8 @@
   <a href="#-performance">Performance</a>
   •
   <a href="#-security">Security</a>
+  •
+  <a href="meta/CONTRIBUTING.md">Contributing</a>
 </p>
 </div>
 
@@ -106,13 +108,13 @@ SpindleX is designed for low-latency environments. In head-to-head comparisons, 
 *   **Hardened Defaults**: Legacy SHA-1 and weak ciphers are disabled by design.
 *   **Mandatory Verification**: Host key verification is enforced unless explicitly overridden.
 *   **Privacy Aware**: Built-in log sanitizers ensure credentials never reach telemetry.
-*   **Vulnerability Reporting**: See [SECURITY.md](SECURITY.md).
+*   **Vulnerability Reporting**: See [meta/SECURITY.md](meta/SECURITY.md).
 
 ---
 
 ## 🤝 Contributing
 
-Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) to get started.
+Contributions are welcome! See [meta/CONTRIBUTING.md](meta/CONTRIBUTING.md) to get started.
 
 ---
 
