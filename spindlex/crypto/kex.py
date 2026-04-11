@@ -5,16 +5,11 @@ Implements SSH key exchange algorithms including Curve25519, ECDH, and
 Diffie-Hellman with algorithm negotiation logic.
 """
 
-import struct
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Optional
 
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import dh, ec, x25519
-from cryptography.hazmat.primitives.asymmetric.utils import (
-    decode_dss_signature,
-    encode_dss_signature,
-)
 
 from ..exceptions import CryptoException
 from .backend import CryptoBackend, default_crypto_backend
@@ -95,7 +90,7 @@ class Curve25519KeyExchange(KeyExchange):
                 format=serialization.PublicFormat.Raw,
             )
         except Exception as e:
-            raise CryptoException(f"Curve25519 key generation failed: {e}")
+            raise CryptoException(f"Curve25519 key generation failed: {e}") from e
 
     def compute_shared_secret(self, peer_public_key: bytes) -> bytes:
         """
@@ -124,7 +119,7 @@ class Curve25519KeyExchange(KeyExchange):
             shared_secret = self.private_key.exchange(peer_key)
             return shared_secret
         except Exception as e:
-            raise CryptoException(f"Curve25519 shared secret computation failed: {e}")
+            raise CryptoException(f"Curve25519 shared secret computation failed: {e}") from e
 
 
 class ECDHKeyExchange(KeyExchange):
@@ -160,7 +155,7 @@ class ECDHKeyExchange(KeyExchange):
                 format=serialization.PublicFormat.UncompressedPoint,
             )
         except Exception as e:
-            raise CryptoException(f"ECDH key generation failed: {e}")
+            raise CryptoException(f"ECDH key generation failed: {e}") from e
 
     def compute_shared_secret(self, peer_public_key: bytes) -> bytes:
         """
@@ -191,7 +186,7 @@ class ECDHKeyExchange(KeyExchange):
             shared_secret = self.private_key.exchange(ec.ECDH(), peer_key)
             return shared_secret
         except Exception as e:
-            raise CryptoException(f"ECDH shared secret computation failed: {e}")
+            raise CryptoException(f"ECDH shared secret computation failed: {e}") from e
 
 
 class DHGroup14KeyExchange(KeyExchange):
@@ -249,7 +244,7 @@ class DHGroup14KeyExchange(KeyExchange):
             byte_length = (self.GROUP14_P.bit_length() + 7) // 8
             return public_int.to_bytes(byte_length, "big")
         except Exception as e:
-            raise CryptoException(f"DH Group 14 key generation failed: {e}")
+            raise CryptoException(f"DH Group 14 key generation failed: {e}") from e
 
     def compute_shared_secret(self, peer_public_key: bytes) -> bytes:
         """
@@ -285,7 +280,7 @@ class DHGroup14KeyExchange(KeyExchange):
             shared_secret = self.private_key.exchange(peer_key)
             return shared_secret
         except Exception as e:
-            raise CryptoException(f"DH Group 14 shared secret computation failed: {e}")
+            raise CryptoException(f"DH Group 14 shared secret computation failed: {e}") from e
 
 
 class KeyExchangeManager:

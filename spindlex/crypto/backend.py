@@ -6,13 +6,12 @@ cryptography library implementation.
 """
 
 import os
-from typing import Any, Optional, Protocol, Tuple
+from typing import Any, Protocol
 
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import hashes, hmac, serialization
+from cryptography.hazmat.primitives import hashes, hmac
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM, ChaCha20Poly1305
-from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 from ..exceptions import CryptoException
 
@@ -106,7 +105,7 @@ class CryptographyBackend:
         try:
             return os.urandom(length)
         except Exception as e:
-            raise CryptoException(f"Failed to generate random bytes: {e}")
+            raise CryptoException(f"Failed to generate random bytes: {e}") from e
 
     def hash_data(self, algorithm: str, data: bytes) -> bytes:
         """
@@ -134,7 +133,7 @@ class CryptographyBackend:
             digest.update(data_bytes)
             return digest.finalize()
         except Exception as e:
-            raise CryptoException(f"Hash operation failed: {e}")
+            raise CryptoException(f"Hash operation failed: {e}") from e
 
     def encrypt(self, algorithm: str, key: bytes, iv: bytes, data: bytes) -> bytes:
         """
@@ -173,7 +172,7 @@ class CryptographyBackend:
             else:
                 raise CryptoException(f"Unsupported cipher algorithm: {algorithm}")
         except Exception as e:
-            raise CryptoException(f"Encryption failed: {e}")
+            raise CryptoException(f"Encryption failed: {e}") from e
 
     def decrypt(self, algorithm: str, key: bytes, iv: bytes, data: bytes) -> bytes:
         """
@@ -212,7 +211,7 @@ class CryptographyBackend:
             else:
                 raise CryptoException(f"Unsupported cipher algorithm: {algorithm}")
         except Exception as e:
-            raise CryptoException(f"Decryption failed: {e}")
+            raise CryptoException(f"Decryption failed: {e}") from e
 
     def create_cipher(self, algorithm: str, key: bytes, iv: bytes) -> Any:
         """
@@ -247,7 +246,7 @@ class CryptographyBackend:
                     f"Streaming cipher not supported for: {algorithm}"
                 )
         except Exception as e:
-            raise CryptoException(f"Cipher creation failed: {e}")
+            raise CryptoException(f"Cipher creation failed: {e}") from e
 
     def compute_mac(self, algorithm: str, key: bytes, data: bytes) -> bytes:
         """
@@ -277,7 +276,7 @@ class CryptographyBackend:
             h.update(data_bytes)
             return h.finalize()
         except Exception as e:
-            raise CryptoException(f"MAC computation failed: {e}")
+            raise CryptoException(f"MAC computation failed: {e}") from e
 
     def derive_key(
         self,
@@ -338,7 +337,7 @@ class CryptographyBackend:
 
             return key_material[:key_length]
         except Exception as e:
-            raise CryptoException(f"Key derivation failed: {e}")
+            raise CryptoException(f"Key derivation failed: {e}") from e
 
 
 # Default backend instance

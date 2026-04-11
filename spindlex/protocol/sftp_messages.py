@@ -6,10 +6,9 @@ according to RFC 4254 and draft-ietf-secsh-filexfer specifications.
 """
 
 import stat
-import struct
-from typing import Any, Dict, List, Optional, Union
+from typing import Optional, Union
 
-from ..exceptions import ProtocolException, SFTPError
+from ..exceptions import ProtocolException
 from .sftp_constants import *
 from .utils import (
     read_byte,
@@ -73,7 +72,7 @@ class SFTPMessage:
             # Prepend length
             return write_uint32(len(content)) + content
         except Exception as e:
-            raise ProtocolException(f"Failed to pack SFTP message: {e}")
+            raise ProtocolException(f"Failed to pack SFTP message: {e}") from e
 
     @classmethod
     def unpack(cls, data: bytes) -> "SFTPMessage":
@@ -206,7 +205,7 @@ class SFTPAttributes:
         self.permissions: Optional[int] = None
         self.atime: Optional[int] = None
         self.mtime: Optional[int] = None
-        self.extended: Dict[str, str] = {}
+        self.extended: dict[str, str] = {}
 
     @property
     def st_mode(self) -> Optional[int]:
@@ -338,7 +337,7 @@ class SFTPVersionMessage(SFTPMessage):
     """SFTP version message (SSH_FXP_VERSION)."""
 
     def __init__(
-        self, version: int = SFTP_VERSION, extensions: Optional[Dict[str, str]] = None
+        self, version: int = SFTP_VERSION, extensions: Optional[dict[str, str]] = None
     ) -> None:
         """
         Initialize SFTP version message.
@@ -842,7 +841,7 @@ class SFTPNameMessage(SFTPMessage):
     """SFTP name message (SSH_FXP_NAME)."""
 
     def __init__(
-        self, request_id: int, names: List[tuple[str, str, SFTPAttributes]]
+        self, request_id: int, names: list[tuple[str, str, SFTPAttributes]]
     ) -> None:
         """
         Initialize SFTP name message.

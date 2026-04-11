@@ -8,16 +8,13 @@ channel management, and server-side SSH operations.
 import socket
 import threading
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from ..crypto.pkey import PKey
-from ..exceptions import AuthenticationException, SSHException, TransportException
+from ..exceptions import TransportException
 from ..protocol.constants import (
     AUTH_FAILED,
-    AUTH_PARTIAL,
-    AUTH_SUCCESSFUL,
     CHANNEL_SESSION,
-    SSH_OPEN_ADMINISTRATIVELY_PROHIBITED,
     SSH_OPEN_UNKNOWN_CHANNEL_TYPE,
 )
 from ..transport.channel import Channel
@@ -36,7 +33,7 @@ class SSHServer:
         """Initialize SSH server with default settings."""
         self._server_key: Optional[PKey] = None
         self._transport: Optional[Transport] = None
-        self._authenticated_users: Dict[str, bool] = {}
+        self._authenticated_users: dict[str, bool] = {}
         self._lock = threading.Lock()
 
     def set_server_key(self, server_key: PKey) -> None:
@@ -148,7 +145,7 @@ class SSHServer:
         # Default implementation rejects all keyboard-interactive authentication
         return AUTH_FAILED
 
-    def get_allowed_auths(self, username: str) -> List[str]:
+    def get_allowed_auths(self, username: str) -> list[str]:
         """
         Get list of allowed authentication methods for a user.
 
@@ -394,7 +391,7 @@ class SSHServer:
 
     # Server-side channel management methods
 
-    def get_active_channels(self) -> List[Channel]:
+    def get_active_channels(self) -> list[Channel]:
         """
         Get list of active channels.
 
@@ -540,8 +537,8 @@ class SSHServerManager:
 
         self._server_socket: Optional[socket.socket] = None
         self._running = False
-        self._connections: Dict[str, Transport] = {}  # connection_id -> transport
-        self._connection_threads: Dict[str, threading.Thread] = {}
+        self._connections: dict[str, Transport] = {}  # connection_id -> transport
+        self._connection_threads: dict[str, threading.Thread] = {}
         self._lock = threading.RLock()
         self._accept_thread: Optional[threading.Thread] = None
 
@@ -614,7 +611,7 @@ class SSHServerManager:
 
             except Exception as e:
                 self._cleanup_server_socket()
-                raise TransportException(f"Failed to start SSH server: {e}")
+                raise TransportException(f"Failed to start SSH server: {e}") from e
 
     def stop_server(self) -> None:
         """
@@ -668,7 +665,7 @@ class SSHServerManager:
 
                 connection_thread.start()
 
-            except Exception as e:
+            except Exception:
                 if self._running:
                     # Log error but continue accepting connections
                     pass
@@ -707,7 +704,7 @@ class SSHServerManager:
             while transport.active:
                 time.sleep(0.1)
 
-        except Exception as e:
+        except Exception:
             with self._lock:
                 self._failed_connections += 1
 
@@ -756,7 +753,7 @@ class SSHServerManager:
             connections_to_close = list(self._connections.items())
 
         # Close connections outside of lock to avoid deadlock
-        for connection_id, transport in connections_to_close:
+        for _connection_id, transport in connections_to_close:
             try:
                 transport.close()
             except Exception:
@@ -805,7 +802,7 @@ class SSHServerManager:
         with self._lock:
             return len(self._connections)
 
-    def get_connection_stats(self) -> Dict[str, int]:
+    def get_connection_stats(self) -> dict[str, int]:
         """
         Get connection statistics.
 
@@ -820,7 +817,7 @@ class SSHServerManager:
                 "max_connections": self._max_connections,
             }
 
-    def get_active_connections(self) -> List[str]:
+    def get_active_connections(self) -> list[str]:
         """
         Get list of active connection IDs.
 

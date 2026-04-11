@@ -5,7 +5,7 @@ Provides asynchronous SSH channel functionality for command execution and data t
 """
 
 import asyncio
-from typing import Any, BinaryIO, Optional
+from typing import Any, BinaryIO
 
 from ..exceptions import ChannelException
 from ..protocol.constants import *
@@ -69,7 +69,7 @@ class AsyncChannel(Channel):
             raise ChannelException("Channel is closed")
 
         total_sent = 0
-        original_len = len(data)
+        len(data)
 
         try:
             # Check if we have enough window space
@@ -99,7 +99,7 @@ class AsyncChannel(Channel):
         except Exception as e:
             if isinstance(e, ChannelException):
                 raise
-            raise ChannelException(f"Send failed: {e}")
+            raise ChannelException(f"Send failed: {e}") from e
 
     async def recv(self, nbytes: int) -> bytes:
         """
@@ -144,7 +144,7 @@ class AsyncChannel(Channel):
         except Exception as e:
             if isinstance(e, ChannelException):
                 raise
-            raise ChannelException(f"Receive failed: {e}")
+            raise ChannelException(f"Receive failed: {e}") from e
 
     async def recv_exactly(self, nbytes: int) -> bytes:
         """
@@ -210,7 +210,7 @@ class AsyncChannel(Channel):
         except Exception as e:
             if isinstance(e, ChannelException):
                 raise
-            raise ChannelException(f"Receive failed: {e}")
+            raise ChannelException(f"Receive failed: {e}") from e
 
     async def exec_command(self, command: str) -> None:
         """
@@ -245,7 +245,7 @@ class AsyncChannel(Channel):
         except Exception as e:
             if isinstance(e, ChannelException):
                 raise
-            raise ChannelException(f"Command execution failed: {e}")
+            raise ChannelException(f"Command execution failed: {e}") from e
 
     async def invoke_shell(self) -> None:
         """
@@ -273,7 +273,7 @@ class AsyncChannel(Channel):
         except Exception as e:
             if isinstance(e, ChannelException):
                 raise
-            raise ChannelException(f"Shell invocation failed: {e}")
+            raise ChannelException(f"Shell invocation failed: {e}") from e
 
     async def invoke_subsystem(self, subsystem: str) -> None:
         """
@@ -308,7 +308,7 @@ class AsyncChannel(Channel):
         except Exception as e:
             if isinstance(e, ChannelException):
                 raise
-            raise ChannelException(f"Subsystem invocation failed: {e}")
+            raise ChannelException(f"Subsystem invocation failed: {e}") from e
 
     async def close(self) -> None:
         """Close channel asynchronously."""
@@ -320,7 +320,7 @@ class AsyncChannel(Channel):
                 # Send close
                 await self._transport._send_channel_close_async(self._channel_id)
 
-            except:
+            except Exception:
                 pass  # Ignore errors during close
             finally:
                 self._closed = True

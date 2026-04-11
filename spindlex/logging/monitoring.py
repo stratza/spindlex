@@ -8,7 +8,7 @@ from collections import defaultdict, deque
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from functools import wraps
-from typing import Any, Callable, Deque, Dict, List, Optional
+from typing import Any, Callable, Optional
 
 from .logger import get_logger
 
@@ -20,7 +20,7 @@ class PerformanceMetric:
     operation: str
     duration: float
     timestamp: float
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -51,9 +51,9 @@ class PerformanceMonitor:
             max_metrics: Maximum number of metrics to keep in memory
         """
         self.max_metrics = max_metrics
-        self.metrics: Deque[PerformanceMetric] = deque(maxlen=max_metrics)
-        self.connection_metrics: Dict[str, ConnectionMetrics] = {}
-        self.operation_stats: Dict[str, List[float]] = defaultdict(list)
+        self.metrics: deque[PerformanceMetric] = deque(maxlen=max_metrics)
+        self.connection_metrics: dict[str, ConnectionMetrics] = {}
+        self.operation_stats: dict[str, list[float]] = defaultdict(list)
         self._lock = threading.RLock()
         self.logger = get_logger("spindlex.monitoring")
 
@@ -144,7 +144,7 @@ class PerformanceMonitor:
         current_value = getattr(metrics, counter_name, 0)
         setattr(metrics, counter_name, current_value + amount)
 
-    def get_operation_stats(self, operation: str) -> Dict[str, float]:
+    def get_operation_stats(self, operation: str) -> dict[str, float]:
         """
         Get statistical summary for an operation.
 
@@ -183,7 +183,7 @@ class PerformanceMonitor:
 
     def get_recent_metrics(
         self, operation: Optional[str] = None, limit: int = 100
-    ) -> List[PerformanceMetric]:
+    ) -> list[PerformanceMetric]:
         """
         Get recent performance metrics.
 
@@ -318,8 +318,8 @@ class ProtocolAnalyzer:
         """
         self.monitor = monitor or get_performance_monitor()
         self.logger = get_logger("spindlex.protocol.analyzer")
-        self.message_counts: Dict[str, int] = defaultdict(int)
-        self.message_sizes: Dict[str, List[int]] = defaultdict(list)
+        self.message_counts: dict[str, int] = defaultdict(int)
+        self.message_sizes: dict[str, list[int]] = defaultdict(list)
         self._lock = threading.RLock()
 
     def record_message(
@@ -360,7 +360,7 @@ class ProtocolAnalyzer:
             data={"size": size, "connection_id": connection_id},
         )
 
-    def get_message_stats(self) -> Dict[str, Dict[str, Any]]:
+    def get_message_stats(self) -> dict[str, dict[str, Any]]:
         """
         Get statistics for protocol messages.
 

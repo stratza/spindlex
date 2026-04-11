@@ -15,6 +15,7 @@ Usage:
 
 import argparse
 import re
+import shlex
 import subprocess
 import sys
 from datetime import datetime
@@ -24,7 +25,9 @@ from pathlib import Path
 def run_command(cmd, check=True):
     """Run a shell command and return the result."""
     print(f"Running: {cmd}")
-    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    if isinstance(cmd, str):
+        cmd = shlex.split(cmd)
+    result = subprocess.run(cmd, shell=False, capture_output=True, text=True)  # noqa: S603
     if check and result.returncode != 0:
         print(f"Error running command: {cmd}")
         print(f"stdout: {result.stdout}")

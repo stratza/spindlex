@@ -9,9 +9,9 @@ import logging
 import os
 import stat
 import threading
-from typing import Any, BinaryIO, Dict, List, Optional, Union
+from typing import BinaryIO, Optional
 
-from ..exceptions import SFTPError, SSHException
+from ..exceptions import SFTPError
 from ..protocol.sftp_constants import (
     SFTP_MAX_READ_SIZE,
     SFTP_VERSION,
@@ -32,8 +32,6 @@ from ..protocol.sftp_constants import (
     SSH_FXF_READ,
     SSH_FXF_TRUNC,
     SSH_FXF_WRITE,
-    SSH_FXP_INIT,
-    SSH_FXP_VERSION,
 )
 from ..protocol.sftp_messages import (
     SFTPAttributes,
@@ -93,7 +91,7 @@ class SFTPHandle:
         self.file_obj = file_obj
         self.is_directory = file_obj is None
         self.position = 0
-        self.dir_entries: Optional[List[tuple]] = None
+        self.dir_entries: Optional[list[tuple]] = None
         self.dir_index = 0
 
     def read(self, length: int) -> bytes:
@@ -201,7 +199,7 @@ class SFTPServer:
         """
         self._channel = channel
         self._root_path = os.path.abspath(root_path)
-        self._handles: Dict[bytes, SFTPHandle] = {}
+        self._handles: dict[bytes, SFTPHandle] = {}
         self._handle_counter = 0
         self._handle_lock = threading.Lock()
         self._logger = logging.getLogger(__name__)
@@ -239,7 +237,7 @@ class SFTPServer:
 
         except Exception as e:
             self._logger.error(f"SFTP session initialization failed: {e}")
-            raise SFTPError(f"SFTP initialization failed: {e}")
+            raise SFTPError(f"SFTP initialization failed: {e}") from e
 
     def _generate_handle(self) -> bytes:
         """
@@ -250,7 +248,7 @@ class SFTPServer:
         """
         with self._handle_lock:
             self._handle_counter += 1
-            return f"handle_{self._handle_counter}".encode("utf-8")
+            return f"handle_{self._handle_counter}".encode()
 
     def _send_message(self, message: SFTPMessage) -> None:
         """
@@ -266,7 +264,7 @@ class SFTPServer:
             data = message.pack()
             self._channel.send(data)
         except Exception as e:
-            raise SFTPError(f"Failed to send SFTP message: {e}")
+            raise SFTPError(f"Failed to send SFTP message: {e}") from e
 
     def _receive_message(self) -> SFTPMessage:
         """
@@ -290,7 +288,7 @@ class SFTPServer:
 
             return SFTPMessage.unpack(msg_data)
         except Exception as e:
-            raise SFTPError(f"Failed to receive SFTP message: {e}")
+            raise SFTPError(f"Failed to receive SFTP message: {e}") from e
 
     def _process_messages(self) -> None:
         """
@@ -382,7 +380,6 @@ class SFTPServer:
             SFTPError: If path is outside root directory
         """
         # Normalize SFTP path (always use forward slashes in SFTP)
-        original_path = path
 
         # Check if this is an SFTP absolute path (starts with /)
         is_sftp_absolute = path.startswith("/")
@@ -612,7 +609,7 @@ class SFTPServer:
             handle.seek(message.offset)
 
             # Write data
-            bytes_written = handle.write(message.data)
+            handle.write(message.data)
 
             # Flush to ensure data is written
             if handle.file_obj:
@@ -774,7 +771,7 @@ class SFTPServer:
             if attrs.flags & SSH_FILEXFER_ATTR_UIDGID:
                 try:
                     os.chown(resolved_path, attrs.uid, attrs.gid)
-                except (OSError, AttributeError) as e:
+                except (OSError, AttributeError):
                     # chown may not be supported on all platforms
                     # or user may not have permission
                     pass

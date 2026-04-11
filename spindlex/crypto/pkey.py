@@ -8,7 +8,7 @@ with support for key loading, fingerprinting, and signature operations.
 import base64
 import hashlib
 import struct
-from typing import Any, Optional, Tuple, Union
+from typing import Any, Optional
 
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
@@ -18,7 +18,7 @@ from cryptography.hazmat.primitives.asymmetric.utils import (
     encode_dss_signature,
 )
 
-from ..exceptions import BadHostKeyException, CryptoException
+from ..exceptions import CryptoException
 from ..protocol.utils import write_mpint
 from .backend import CryptoBackend, default_crypto_backend
 
@@ -147,7 +147,7 @@ class PKey:
             else:
                 raise CryptoException(f"Unsupported hash algorithm: {hash_algorithm}")
         except Exception as e:
-            raise CryptoException(f"Fingerprint generation failed: {e}")
+            raise CryptoException(f"Fingerprint generation failed: {e}") from e
 
     def __eq__(self, other: object) -> bool:
         """Compare keys for equality."""
@@ -155,7 +155,7 @@ class PKey:
             return False
         try:
             return self.get_public_key_bytes() == other.get_public_key_bytes()
-        except:
+        except Exception:
             return False
 
     @classmethod
@@ -196,7 +196,7 @@ class PKey:
         except Exception as e:
             if isinstance(e, CryptoException):
                 raise
-            raise CryptoException(f"Failed to load public key from bytes: {e}")
+            raise CryptoException(f"Failed to load public key from bytes: {e}") from e
 
     @classmethod
     def generate(cls, *args: Any, **kwargs: Any) -> "PKey":
@@ -300,7 +300,7 @@ class Ed25519Key(PKey):
             if not isinstance(self._key, ed25519.Ed25519PrivateKey):
                 raise CryptoException("Key is not Ed25519 private key")
         except Exception as e:
-            raise CryptoException(f"Failed to load Ed25519 private key: {e}")
+            raise CryptoException(f"Failed to load Ed25519 private key: {e}") from e
 
     def load_public_key(self, key_data: bytes) -> None:
         """
@@ -335,7 +335,7 @@ class Ed25519Key(PKey):
 
             self._key = ed25519.Ed25519PublicKey.from_public_bytes(public_key_bytes)
         except Exception as e:
-            raise CryptoException(f"Failed to load Ed25519 public key: {e}")
+            raise CryptoException(f"Failed to load Ed25519 public key: {e}") from e
 
     def get_public_key_bytes(self) -> bytes:
         """
@@ -369,7 +369,7 @@ class Ed25519Key(PKey):
             result += struct.pack(">I", len(public_key_bytes)) + public_key_bytes
             return result
         except Exception as e:
-            raise CryptoException(f"Failed to get Ed25519 public key bytes: {e}")
+            raise CryptoException(f"Failed to get Ed25519 public key bytes: {e}") from e
 
     def sign(self, data: bytes) -> bytes:
         """
@@ -397,7 +397,7 @@ class Ed25519Key(PKey):
             result += struct.pack(">I", len(signature)) + signature
             return result
         except Exception as e:
-            raise CryptoException(f"Ed25519 signing failed: {e}")
+            raise CryptoException(f"Ed25519 signing failed: {e}") from e
 
     @classmethod
     def generate(cls, *args: Any, **kwargs: Any) -> "Ed25519Key":
@@ -427,7 +427,7 @@ class Ed25519Key(PKey):
             with open(filename, "wb") as f:
                 f.write(pem)
         except Exception as e:
-            raise CryptoException(f"Failed to save Ed25519 key: {e}")
+            raise CryptoException(f"Failed to save Ed25519 key: {e}") from e
 
     def verify(self, signature: bytes, data: bytes) -> bool:
         """
@@ -467,7 +467,7 @@ class Ed25519Key(PKey):
             # Verify signature
             public_key.verify(sig_bytes, data)
             return True
-        except:
+        except Exception:
             return False
 
 
@@ -513,7 +513,7 @@ class ECDSAKey(PKey):
             if not isinstance(self._key.curve, ec.SECP256R1):
                 raise CryptoException("Key is not P-256 ECDSA key")
         except Exception as e:
-            raise CryptoException(f"Failed to load ECDSA private key: {e}")
+            raise CryptoException(f"Failed to load ECDSA private key: {e}") from e
 
     def load_public_key(self, key_data: bytes) -> None:
         """
@@ -557,7 +557,7 @@ class ECDSAKey(PKey):
                 self.curve, point_bytes
             )
         except Exception as e:
-            raise CryptoException(f"Failed to load ECDSA public key: {e}")
+            raise CryptoException(f"Failed to load ECDSA public key: {e}") from e
 
     def get_public_key_bytes(self) -> bytes:
         """
@@ -594,7 +594,7 @@ class ECDSAKey(PKey):
             result += struct.pack(">I", len(point_bytes)) + point_bytes
             return result
         except Exception as e:
-            raise CryptoException(f"Failed to get ECDSA public key bytes: {e}")
+            raise CryptoException(f"Failed to get ECDSA public key bytes: {e}") from e
 
     def sign(self, data: bytes) -> bytes:
         """
@@ -628,7 +628,7 @@ class ECDSAKey(PKey):
             result += struct.pack(">I", len(sig_blob)) + sig_blob
             return result
         except Exception as e:
-            raise CryptoException(f"ECDSA signing failed: {e}")
+            raise CryptoException(f"ECDSA signing failed: {e}") from e
 
     @classmethod
     def generate(cls, *args: Any, **kwargs: Any) -> "ECDSAKey":
@@ -658,7 +658,7 @@ class ECDSAKey(PKey):
             with open(filename, "wb") as f:
                 f.write(pem)
         except Exception as e:
-            raise CryptoException(f"Failed to save ECDSA key: {e}")
+            raise CryptoException(f"Failed to save ECDSA key: {e}") from e
 
     def verify(self, signature: bytes, data: bytes) -> bool:
         """
@@ -714,7 +714,7 @@ class ECDSAKey(PKey):
             # Verify signature
             public_key.verify(der_signature, data, ec.ECDSA(hashes.SHA256()))
             return True
-        except:
+        except Exception:
             return False
 
 
@@ -750,7 +750,7 @@ class RSAKey(PKey):
             if not isinstance(self._key, rsa.RSAPrivateKey):
                 raise CryptoException("Key is not RSA private key")
         except Exception as e:
-            raise CryptoException(f"Failed to load RSA private key: {e}")
+            raise CryptoException(f"Failed to load RSA private key: {e}") from e
 
     def load_public_key(self, key_data: bytes) -> None:
         """
@@ -792,7 +792,7 @@ class RSAKey(PKey):
             public_numbers = rsa.RSAPublicNumbers(e, n)
             self._key = public_numbers.public_key(backend=default_backend())
         except Exception as e:
-            raise CryptoException(f"Failed to load RSA public key: {e}")
+            raise CryptoException(f"Failed to load RSA public key: {e}") from e
 
     def get_public_key_bytes(self) -> bytes:
         """
@@ -824,7 +824,7 @@ class RSAKey(PKey):
             result += write_mpint(numbers.n)
             return result
         except Exception as e:
-            raise CryptoException(f"Failed to get RSA public key bytes: {e}")
+            raise CryptoException(f"Failed to get RSA public key bytes: {e}") from e
 
     def sign(self, data: bytes) -> bytes:
         """
@@ -852,7 +852,7 @@ class RSAKey(PKey):
             result += struct.pack(">I", len(signature)) + signature
             return result
         except Exception as e:
-            raise CryptoException(f"RSA signing failed: {e}")
+            raise CryptoException(f"RSA signing failed: {e}") from e
 
     @classmethod
     def generate(cls, bits: int = 2048, *args: Any, **kwargs: Any) -> "RSAKey":
@@ -886,7 +886,7 @@ class RSAKey(PKey):
             with open(filename, "wb") as f:
                 f.write(pem)
         except Exception as e:
-            raise CryptoException(f"Failed to save RSA key: {e}")
+            raise CryptoException(f"Failed to save RSA key: {e}") from e
 
     def verify(self, signature: bytes, data: bytes) -> bool:
         """
@@ -935,7 +935,7 @@ class RSAKey(PKey):
             # Verify signature
             public_key.verify(sig_bytes, data, padding.PKCS1v15(), hash_algo)
             return True
-        except:
+        except Exception:
             return False
 
 
@@ -975,7 +975,7 @@ def load_key_from_file(filename: str, password: Optional[str] = None) -> PKey:
     except Exception as e:
         if isinstance(e, CryptoException):
             raise
-        raise CryptoException(f"Failed to load key from file: {e}")
+        raise CryptoException(f"Failed to load key from file: {e}") from e
 
 
 def load_public_key_from_string(key_string: str) -> PKey:
@@ -1013,4 +1013,4 @@ def load_public_key_from_string(key_string: str) -> PKey:
         key.load_public_key(key_data)
         return key
     except Exception as e:
-        raise CryptoException(f"Failed to load public key from string: {e}")
+        raise CryptoException(f"Failed to load public key from string: {e}") from e

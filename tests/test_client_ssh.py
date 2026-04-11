@@ -1,9 +1,8 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from spindlex.client.ssh_client import SSHClient
-from spindlex.exceptions import AuthenticationException, SSHException
+from spindlex.exceptions import AuthenticationException
 
 
 @pytest.fixture

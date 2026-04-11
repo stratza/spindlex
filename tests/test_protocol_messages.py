@@ -1,4 +1,3 @@
-import pytest
 
 from spindlex.protocol.constants import *
 from spindlex.protocol.messages import (

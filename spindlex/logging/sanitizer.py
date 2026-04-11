@@ -3,14 +3,14 @@ Log sanitization utilities for security-sensitive information.
 """
 
 import re
-from typing import Any, Dict, List, Pattern
+from typing import Any, Pattern
 
 
 class LogSanitizer:
     """Sanitizes log messages to prevent sensitive information leakage."""
 
     # Patterns for sensitive data that should be redacted
-    SENSITIVE_PATTERNS: List[Pattern[str]] = [
+    SENSITIVE_PATTERNS: list[Pattern[str]] = [
         # Passwords and secrets (with = or : or space)
         re.compile(r'password["\s]*[:=\s]["\s]*[^"\s,}]+', re.IGNORECASE),
         re.compile(r'secret["\s]*[:=\s]["\s]*[^"\s,}]+', re.IGNORECASE),
@@ -104,7 +104,7 @@ class LogSanitizer:
         return sanitized
 
     @classmethod
-    def sanitize_dict(cls, data: Dict[str, Any]) -> Dict[str, Any]:
+    def sanitize_dict(cls, data: dict[str, Any]) -> dict[str, Any]:
         """
         Sanitize a dictionary by redacting sensitive keys and values.
 

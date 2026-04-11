@@ -3,9 +3,7 @@ import struct
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from spindlex.exceptions import (
-    AuthenticationException,
     ProtocolException,
     TransportException,
 )
@@ -15,7 +13,6 @@ from spindlex.protocol.messages import (
     ChannelDataMessage,
     ChannelOpenConfirmationMessage,
     ChannelOpenFailureMessage,
-    KexInitMessage,
     Message,
     ServiceAcceptMessage,
     UserAuthFailureMessage,

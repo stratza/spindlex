@@ -8,7 +8,7 @@ maintaining known host keys and verification.
 import base64
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
 from ..crypto.pkey import PKey
 from ..exceptions import SSHException
@@ -30,7 +30,7 @@ class HostKeyStorage:
             filename: Path to known_hosts file (optional)
         """
         self._filename = filename or os.path.expanduser("~/.ssh/known_hosts")
-        self._keys: Dict[str, List[PKey]] = {}
+        self._keys: dict[str, list[PKey]] = {}
         self._logger = logging.getLogger(__name__)
 
         # Try to load existing keys
@@ -51,7 +51,7 @@ class HostKeyStorage:
             return
 
         try:
-            with open(self._filename, "r", encoding="utf-8") as f:
+            with open(self._filename, encoding="utf-8") as f:
                 for line_num, line in enumerate(f, 1):
                     line = line.strip()
 
@@ -67,7 +67,7 @@ class HostKeyStorage:
                         )
 
         except Exception as e:
-            raise SSHException(f"Failed to load host keys from {self._filename}: {e}")
+            raise SSHException(f"Failed to load host keys from {self._filename}: {e}") from e
 
     def _parse_host_key_line(self, line: str) -> None:
         """
@@ -169,7 +169,7 @@ class HostKeyStorage:
                             )
 
         except Exception as e:
-            raise SSHException(f"Failed to save host keys to {self._filename}: {e}")
+            raise SSHException(f"Failed to save host keys to {self._filename}: {e}") from e
 
     def add(self, hostname: str, key: PKey) -> None:
         """
@@ -206,7 +206,7 @@ class HostKeyStorage:
             return self._keys[hostname][0]
         return None
 
-    def get_all(self, hostname: str) -> List[PKey]:
+    def get_all(self, hostname: str) -> list[PKey]:
         """
         Get all host keys for hostname.
 

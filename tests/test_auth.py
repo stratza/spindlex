@@ -1,9 +1,7 @@
 from unittest.mock import MagicMock
 
-import pytest
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import rsa
-
 from spindlex.auth.password import PasswordAuth
 from spindlex.auth.publickey import PublicKeyAuth
 from spindlex.crypto.pkey import RSAKey

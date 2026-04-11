@@ -9,10 +9,10 @@ import logging
 import socket
 import threading
 import time
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any
 
-from ..exceptions import SSHException, TransportException
-from ..protocol.constants import CHANNEL_DIRECT_TCPIP, CHANNEL_FORWARDED_TCPIP
+from ..exceptions import SSHException
+from ..protocol.constants import CHANNEL_DIRECT_TCPIP
 from ..protocol.utils import write_string, write_uint32
 
 
@@ -27,8 +27,8 @@ class ForwardingTunnel:
     def __init__(
         self,
         tunnel_id: str,
-        local_addr: Tuple[str, int],
-        remote_addr: Tuple[str, int],
+        local_addr: tuple[str, int],
+        remote_addr: tuple[str, int],
         tunnel_type: str,
     ) -> None:
         """
@@ -45,7 +45,7 @@ class ForwardingTunnel:
         self.remote_addr = remote_addr
         self.tunnel_type = tunnel_type
         self.active = False
-        self.connections: Dict[str, Any] = {}
+        self.connections: dict[str, Any] = {}
         self._lock = threading.RLock()
         self._logger = logging.getLogger(__name__)
 
@@ -82,8 +82,8 @@ class LocalPortForwarder:
             transport: SSH transport instance
         """
         self._transport = transport
-        self._tunnels: Dict[str, ForwardingTunnel] = {}
-        self._servers: Dict[str, socket.socket] = {}
+        self._tunnels: dict[str, ForwardingTunnel] = {}
+        self._servers: dict[str, socket.socket] = {}
         self._lock = threading.RLock()
         self._logger = logging.getLogger(__name__)
 
@@ -153,11 +153,11 @@ class LocalPortForwarder:
                 if tunnel_id in self._servers:
                     try:
                         self._servers[tunnel_id].close()
-                    except:
+                    except Exception:
                         pass
                     del self._servers[tunnel_id]
 
-                raise SSHException(f"Failed to create local port forwarding: {e}")
+                raise SSHException(f"Failed to create local port forwarding: {e}") from e
 
     def _accept_connections(self, tunnel_id: str, server_socket: socket.socket) -> None:
         """
@@ -194,7 +194,7 @@ class LocalPortForwarder:
                 )
                 conn_thread.start()
 
-            except socket.error as e:
+            except OSError as e:
                 if tunnel.active:
                     self._logger.error(
                         f"Error accepting connection for tunnel {tunnel_id}: {e}"
@@ -209,7 +209,7 @@ class LocalPortForwarder:
         self._logger.debug(f"Accept loop ended for tunnel {tunnel_id}")
 
     def _handle_local_connection(
-        self, tunnel_id: str, client_socket: socket.socket, client_addr: Tuple[str, int]
+        self, tunnel_id: str, client_socket: socket.socket, client_addr: tuple[str, int]
     ) -> None:
         """
         Handle individual local port forwarding connection.
@@ -266,14 +266,14 @@ class LocalPortForwarder:
             # Cleanup connection
             try:
                 client_socket.close()
-            except:
+            except Exception:
                 pass
 
             with tunnel._lock:
                 if conn_id in tunnel.connections:
                     try:
                         tunnel.connections[conn_id]["channel"].close()
-                    except:
+                    except Exception:
                         pass
                     del tunnel.connections[conn_id]
 
@@ -328,7 +328,7 @@ class LocalPortForwarder:
             if tunnel_id in self._servers:
                 try:
                     self._servers[tunnel_id].close()
-                except:
+                except Exception:
                     pass
                 del self._servers[tunnel_id]
 
@@ -336,7 +336,7 @@ class LocalPortForwarder:
 
             self._logger.info(f"Local port forwarding tunnel closed: {tunnel_id}")
 
-    def get_tunnels(self) -> Dict[str, ForwardingTunnel]:
+    def get_tunnels(self) -> dict[str, ForwardingTunnel]:
         """
         Get all active tunnels.
 
@@ -369,7 +369,7 @@ class RemotePortForwarder:
             transport: SSH transport instance
         """
         self._transport = transport
-        self._tunnels: Dict[str, ForwardingTunnel] = {}
+        self._tunnels: dict[str, ForwardingTunnel] = {}
         self._lock = threading.RLock()
         self._logger = logging.getLogger(__name__)
 
@@ -426,7 +426,7 @@ class RemotePortForwarder:
                 if tunnel_id in self._tunnels:
                     del self._tunnels[tunnel_id]
 
-                raise SSHException(f"Failed to create remote port forwarding: {e}")
+                raise SSHException(f"Failed to create remote port forwarding: {e}") from e
 
     def _send_tcpip_forward_request(self, bind_address: str, bind_port: int) -> bool:
         """
@@ -455,7 +455,7 @@ class RemotePortForwarder:
             return False
 
     def handle_forwarded_connection(
-        self, channel: Any, origin_addr: Tuple[str, int], dest_addr: Tuple[str, int]
+        self, channel: Any, origin_addr: tuple[str, int], dest_addr: tuple[str, int]
     ) -> None:
         """
         Handle incoming forwarded connection from remote server.
@@ -522,7 +522,7 @@ class RemotePortForwarder:
             # Cleanup connection
             try:
                 local_socket.close()
-            except:
+            except Exception:
                 pass
 
             with tunnel._lock:
@@ -618,7 +618,7 @@ class RemotePortForwarder:
             self._logger.error(f"Error sending cancel-tcpip-forward request: {e}")
             return False
 
-    def get_tunnels(self) -> Dict[str, ForwardingTunnel]:
+    def get_tunnels(self) -> dict[str, ForwardingTunnel]:
         """
         Get all active tunnels.
 
@@ -712,7 +712,7 @@ class PortForwardingManager:
         else:
             self._logger.warning(f"Tunnel not found: {tunnel_id}")
 
-    def get_all_tunnels(self) -> Dict[str, ForwardingTunnel]:
+    def get_all_tunnels(self) -> dict[str, ForwardingTunnel]:
         """
         Get all active tunnels (local and remote).
 
@@ -730,7 +730,7 @@ class PortForwardingManager:
         self.remote_forwarder.close_all()
 
     def handle_forwarded_connection(
-        self, channel: Any, origin_addr: Tuple[str, int], dest_addr: Tuple[str, int]
+        self, channel: Any, origin_addr: tuple[str, int], dest_addr: tuple[str, int]
     ) -> None:
         """
         Handle incoming forwarded connection from remote server.

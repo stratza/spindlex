@@ -5,11 +5,9 @@ Basic SpindleX Usage Examples
 This module demonstrates fundamental SSH operations using SpindleX.
 """
 
-import sys
-from pathlib import Path
 
-from spindlex import SSHClient, AutoAddPolicy, RejectPolicy
-from spindlex.crypto.pkey import PKey, load_key_from_file
+from spindlex import AutoAddPolicy, RejectPolicy, SSHClient
+from spindlex.crypto.pkey import PKey
 from spindlex.exceptions import AuthenticationException, SSHException
 
 

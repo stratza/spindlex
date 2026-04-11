@@ -4,15 +4,11 @@ GSSAPI Authentication Implementation
 Implements SSH GSSAPI authentication method for Kerberos integration.
 """
 
-import struct
-from typing import Any, Optional, Tuple
+from typing import Any, Optional
 
 from ..exceptions import AuthenticationException
 from ..protocol.constants import (
     AUTH_GSSAPI_WITH_MIC,
-    MSG_USERAUTH_GSSAPI_ERROR,
-    MSG_USERAUTH_GSSAPI_ERRTOK,
-    MSG_USERAUTH_GSSAPI_MIC,
     MSG_USERAUTH_GSSAPI_RESPONSE,
     MSG_USERAUTH_GSSAPI_TOKEN,
     SERVICE_CONNECTION,
@@ -124,7 +120,7 @@ class GSSAPIAuth:
         except Exception as e:
             if isinstance(e, AuthenticationException):
                 raise
-            raise AuthenticationException(f"GSSAPI authentication failed: {e}")
+            raise AuthenticationException(f"GSSAPI authentication failed: {e}") from e
 
     def _get_target_name(self, gss_host: Optional[str]) -> Name:
         """
@@ -168,7 +164,7 @@ class GSSAPIAuth:
             )
 
         except Exception as e:
-            raise AuthenticationException(f"Failed to initialize GSSAPI context: {e}")
+            raise AuthenticationException(f"Failed to initialize GSSAPI context: {e}") from e
 
     def _perform_gssapi_exchange(self, username: str) -> bool:
         """
@@ -189,7 +185,7 @@ class GSSAPIAuth:
                 try:
                     token = self._gss_context.step(token)
                 except Exception as e:
-                    raise AuthenticationException(f"GSSAPI context step failed: {e}")
+                    raise AuthenticationException(f"GSSAPI context step failed: {e}") from e
 
                 if token:
                     # Send GSSAPI authentication request
@@ -208,7 +204,7 @@ class GSSAPIAuth:
         except Exception as e:
             if isinstance(e, AuthenticationException):
                 raise
-            raise AuthenticationException(f"GSSAPI exchange failed: {e}")
+            raise AuthenticationException(f"GSSAPI exchange failed: {e}") from e
 
     def _send_gssapi_request(self, username: str, token: bytes) -> bool:
         """
@@ -238,7 +234,7 @@ class GSSAPIAuth:
             return True
 
         except Exception as e:
-            raise AuthenticationException(f"Failed to send GSSAPI request: {e}")
+            raise AuthenticationException(f"Failed to send GSSAPI request: {e}") from e
 
     def _build_gssapi_method_data(self, token: bytes) -> bytes:
         """
@@ -299,7 +295,7 @@ class GSSAPIAuth:
         except Exception as e:
             if isinstance(e, AuthenticationException):
                 raise
-            raise AuthenticationException(f"Failed to receive GSSAPI response: {e}")
+            raise AuthenticationException(f"Failed to receive GSSAPI response: {e}") from e
 
     def _parse_gssapi_response(self, msg: Message) -> bytes:
         """
@@ -320,7 +316,7 @@ class GSSAPIAuth:
             return token
 
         except Exception as e:
-            raise AuthenticationException(f"Failed to parse GSSAPI response: {e}")
+            raise AuthenticationException(f"Failed to parse GSSAPI response: {e}") from e
 
     def _parse_gssapi_token(self, msg: Message) -> bytes:
         """
@@ -341,7 +337,7 @@ class GSSAPIAuth:
             return token
 
         except Exception as e:
-            raise AuthenticationException(f"Failed to parse GSSAPI token: {e}")
+            raise AuthenticationException(f"Failed to parse GSSAPI token: {e}") from e
 
     def get_gss_context(self) -> Optional[SecurityContext]:
         """
