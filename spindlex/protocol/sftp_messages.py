@@ -129,7 +129,10 @@ class SFTPMessage:
             SSH_FXP_EXTENDED_REPLY: SFTPExtendedReplyMessage,
         }
 
-        message_class = message_classes.get(msg_type, SFTPMessage)
+        from typing import cast
+        message_class = cast(
+            type["SFTPMessage"], message_classes.get(msg_type, SFTPMessage)
+        )
 
         if message_class == SFTPMessage:
             # Generic message

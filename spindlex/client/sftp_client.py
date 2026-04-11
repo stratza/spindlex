@@ -163,8 +163,8 @@ class SFTPClient:
         self._request_id = 0
         self._request_lock = threading.Lock()
         self._logger = logging.getLogger(__name__)
-        self._server_version = None
-        self._server_extensions = {}
+        self._server_version: Optional[int] = None
+        self._server_extensions: dict[str, str] = {}
 
         # Initialize SFTP session
         self._initialize_sftp()

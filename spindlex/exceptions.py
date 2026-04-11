@@ -49,11 +49,14 @@ class BadHostKeyException(SSHException):
     """
 
     def __init__(
-        self, hostname: str, key: Any, expected_key: Optional[Any] = None
+        self, hostname: str, key: Optional[Any], expected_key: Optional[Any] = None
     ) -> None:
         message = f"Host key verification failed for {hostname}"
-        if expected_key:
-            message += f" (expected {expected_key.get_name()}, got {key.get_name()})"
+        if expected_key and key:
+            try:
+                message += f" (expected {expected_key.get_fingerprint()}, got {key.get_fingerprint()})"
+            except Exception:
+                message += f" (expected {getattr(expected_key, 'get_name', lambda: 'unknown')()}, got {getattr(key, 'get_name', lambda: 'unknown')()})"
         super().__init__(message)
         self.hostname = hostname
         self.key = key

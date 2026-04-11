@@ -700,7 +700,7 @@ class SSHServerManager:
                     pass
                 else:
                     # Server is shutting down
-                    break
+                    break  # type: ignore[unreachable]
 
     def _handle_connection(
         self, client_socket: socket.socket, client_address: tuple, connection_id: str

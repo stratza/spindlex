@@ -25,13 +25,13 @@ class AsyncTransport(Transport):
 
     def __init__(self, sock: socket.socket) -> None:
         super().__init__(sock)
+        self._reader: Optional[asyncio.StreamReader] = None
+        self._writer: Optional[asyncio.StreamWriter] = None
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
         try:
             self._loop = asyncio.get_event_loop()
         except RuntimeError:
             self._loop = None
-
-        self._reader: Optional[asyncio.StreamReader] = None
-        self._writer: Optional[asyncio.StreamWriter] = None
 
         # Locks for async safety
         self._send_lock = asyncio.Lock()
@@ -40,13 +40,13 @@ class AsyncTransport(Transport):
 
     async def connect_existing(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
-    ):
+    ) -> None:
         """Initialize with existing asyncio streams."""
         async with self._state_lock:
             self._reader = reader
             self._writer = writer
 
-    async def start_client(self, timeout: Optional[float] = None) -> None:
+    async def start_client(self, timeout: Optional[float] = None) -> None:  # type: ignore[override]
         if timeout is not None:
             self._connect_timeout = timeout
 
@@ -137,6 +137,8 @@ class AsyncTransport(Transport):
         except RuntimeError:
             # For debugging the 'bytes' error
             # print(f"DEBUG: _recv_message from thread. Queue type: {type(self._message_queue)}")
+            if not self._loop:
+                raise TransportException("Event loop not available")
             fut = asyncio.run_coroutine_threadsafe(
                 self._recv_message_async(), self._loop
             )
@@ -153,6 +155,8 @@ class AsyncTransport(Transport):
                 "Synchronous expect_message called on event loop thread"
             )
         except RuntimeError:
+            if not self._loop:
+                raise TransportException("Event loop not available")
             fut = asyncio.run_coroutine_threadsafe(
                 self._expect_message_async(*allowed_types), self._loop
             )
@@ -162,8 +166,9 @@ class AsyncTransport(Transport):
 
     def _recv_bytes(self, length: int) -> bytes:
         """Bridge sync recv_bytes to async reader."""
-        # This is called via asyncio.to_thread in _recv_message_async
-        # so we must use run_coroutine_threadsafe.
+        if not self._reader or not self._loop:
+            raise TransportException("Transport not initialized with async streams")
+
         fut = asyncio.run_coroutine_threadsafe(
             self._reader.readexactly(length), self._loop
         )
@@ -175,6 +180,9 @@ class AsyncTransport(Transport):
             payload = message.pack()
             packet = self._build_packet(payload)
             packet = self._encrypt_packet(packet)
+
+            if not self._writer:
+                raise TransportException("Transport not initialized with async streams")
 
             self._writer.write(packet)
             await self._writer.drain()
@@ -228,10 +236,14 @@ class AsyncTransport(Transport):
     async def _send_version_async(self) -> None:
         version_string = create_version_string()
         self._client_version = version_string
+        if not self._writer:
+            raise TransportException("Transport not initialized with async streams")
         self._writer.write((version_string + "\r\n").encode(SSH_STRING_ENCODING))
         await self._writer.drain()
 
     async def _recv_version_async(self) -> None:
+        if not self._reader:
+            raise TransportException("Transport not initialized with async streams")
         while True:
             line = await self._reader.readline()
             if not line:
@@ -252,7 +264,7 @@ class AsyncTransport(Transport):
 
     # --- Common Async Methods ---
 
-    async def auth_password(self, username: str, password: str) -> bool:
+    async def auth_password(self, username: str, password: str) -> bool:  # type: ignore[override]
         if not self._userauth_service_requested:
             await self._send_message_async(ServiceRequestMessage(SERVICE_USERAUTH))
             await self._expect_message_async(MSG_SERVICE_ACCEPT)
@@ -273,7 +285,74 @@ class AsyncTransport(Transport):
             return True
         return False
 
-    async def open_channel(self, kind: str, dest_addr: Optional[tuple] = None) -> Any:
+    async def auth_publickey(self, username: str, key: Any) -> bool:  # type: ignore[override]
+        """Authenticate using public key method asynchronously."""
+        if not self._userauth_service_requested:
+            await self._send_message_async(ServiceRequestMessage(SERVICE_USERAUTH))
+            await self._expect_message_async(MSG_SERVICE_ACCEPT)
+            self._userauth_service_requested = True
+
+        # 1. Query if key is acceptable
+        query_msg = UserAuthRequestMessage(
+            username=username,
+            service=SERVICE_CONNECTION,
+            method=AUTH_PUBLICKEY,
+            method_data=self._build_publickey_query_data(key),
+        )
+        await self._send_message_async(query_msg)
+        res = await self._expect_message_async(MSG_USERAUTH_FAILURE, MSG_USERAUTH_PK_OK)
+
+        if isinstance(res, UserAuthFailureMessage):
+            return False
+
+        # 2. Key accepted, send signature
+        auth_msg = UserAuthRequestMessage(
+            username=username,
+            service=SERVICE_CONNECTION,
+            method=AUTH_PUBLICKEY,
+            method_data=self._build_publickey_auth_data(username, key),
+        )
+        await self._send_message_async(auth_msg)
+        res = await self._expect_message_async(
+            MSG_USERAUTH_SUCCESS, MSG_USERAUTH_FAILURE
+        )
+
+        if isinstance(res, UserAuthSuccessMessage):
+            self._authenticated = True
+            return True
+        return False
+
+    async def auth_gssapi(  # type: ignore[override]
+        self,
+        username: str,
+        gss_host: Optional[str] = None,
+        gss_deleg_creds: bool = False,
+    ) -> bool:
+        """Authenticate using GSSAPI method asynchronously."""
+        if not self._userauth_service_requested:
+            await self._send_message_async(ServiceRequestMessage(SERVICE_USERAUTH))
+            await self._expect_message_async(MSG_SERVICE_ACCEPT)
+            self._userauth_service_requested = True
+
+        from ..auth.gssapi import GSSAPIAuth
+
+        gssapi_auth = GSSAPIAuth(self)
+
+        try:
+            # Note: The GSSAPI exchange uses internal bridge calls (_send_message, _recv_message)
+            # which we've already bridged to async. However, for a fully async experience
+            # we should really have an AsyncGSSAPIAuth. For now, since it runs in it's own
+            # logic flow, we use to_thread to keep the loop free.
+            result = await asyncio.to_thread(
+                gssapi_auth.authenticate, username, gss_host, gss_deleg_creds
+            )
+            if result:
+                self._authenticated = True
+            return result
+        finally:
+            gssapi_auth.cleanup()
+
+    async def open_channel(self, kind: str, dest_addr: Optional[tuple] = None) -> Any:  # type: ignore[override]
         async with self._state_lock:
             cid = self._next_channel_id
             self._next_channel_id += 1
@@ -309,8 +388,12 @@ class AsyncTransport(Transport):
         self, channel_id: int, request_type: str, want_reply: bool, data: bytes
     ) -> None:
         """Send channel request message asynchronously."""
+        remote_id = self._channels[channel_id]._remote_channel_id
+        if remote_id is None:
+            raise TransportException(f"Channel {channel_id} remote ID not set")
+
         msg = ChannelRequestMessage(
-            recipient_channel=self._channels[channel_id]._remote_channel_id,
+            recipient_channel=remote_id,
             request_type=request_type,
             want_reply=want_reply,
             request_data=data,
@@ -319,36 +402,46 @@ class AsyncTransport(Transport):
 
     async def _send_channel_data_async(self, channel_id: int, data: bytes) -> None:
         """Send channel data message asynchronously."""
-        msg = ChannelDataMessage(
-            recipient_channel=self._channels[channel_id]._remote_channel_id, data=data
-        )
+        remote_id = self._channels[channel_id]._remote_channel_id
+        if remote_id is None:
+            raise TransportException(f"Channel {channel_id} remote ID not set")
+
+        msg = ChannelDataMessage(recipient_channel=remote_id, data=data)
         await self._send_message_async(msg)
 
     async def _send_channel_eof_async(self, channel_id: int) -> None:
         """Send channel EOF message asynchronously."""
-        msg = ChannelEOFMessage(
-            recipient_channel=self._channels[channel_id]._remote_channel_id
-        )
+        remote_id = self._channels[channel_id]._remote_channel_id
+        if remote_id is None:
+            return
+
+        msg = ChannelEOFMessage(recipient_channel=remote_id)
         await self._send_message_async(msg)
 
     async def _send_channel_close_async(self, channel_id: int) -> None:
         """Send channel close message asynchronously."""
-        msg = ChannelCloseMessage(
-            recipient_channel=self._channels[channel_id]._remote_channel_id
-        )
+        remote_id = self._channels[channel_id]._remote_channel_id
+        if remote_id is None:
+            return
+
+        msg = ChannelCloseMessage(recipient_channel=remote_id)
         await self._send_message_async(msg)
 
     async def _send_channel_window_adjust_async(
         self, channel_id: int, bytes_to_add: int
     ) -> None:
         """Send channel window adjust message asynchronously."""
+        remote_id = self._channels[channel_id]._remote_channel_id
+        if remote_id is None:
+            return
+
         msg = ChannelWindowAdjustMessage(
-            recipient_channel=self._channels[channel_id]._remote_channel_id,
+            recipient_channel=remote_id,
             bytes_to_add=bytes_to_add,
         )
         await self._send_message_async(msg)
 
-    async def close(self) -> None:
+    async def close(self) -> None:  # type: ignore[override]
         async with self._state_lock:
             self._active = False
             if self._writer:
@@ -366,7 +459,12 @@ class AsyncTransport(Transport):
                     pass
             for c in list(self._channels.values()):
                 try:
-                    await c.close()
+                    from .async_channel import AsyncChannel
+
+                    if isinstance(c, AsyncChannel):
+                        await c.close()
+                    else:
+                        c.close()
                 except Exception:
                     pass
             self._channels.clear()

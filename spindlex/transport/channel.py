@@ -54,8 +54,8 @@ class Channel:
         self._local_max_packet_size = 0
 
         # Data buffers
-        self._recv_buffer: deque[bytes] = deque()
-        self._stderr_buffer: deque[bytes] = deque()
+        self._recv_buffer: Any = deque()
+        self._stderr_buffer: Any = deque()
 
         # Flow control
         self._eof_received = False
@@ -164,13 +164,13 @@ class Channel:
 
                     if len(data_chunk) <= nbytes:
                         # Return entire chunk
-                        return data_chunk
+                        return bytes(data_chunk)
                     else:
                         # Split chunk and put remainder back
                         result = data_chunk[:nbytes]
                         remainder = data_chunk[nbytes:]
                         self._recv_buffer.appendleft(remainder)
-                        return result
+                        return bytes(result)
 
                 # No data available in buffer
                 if self._eof_received:
@@ -435,13 +435,13 @@ class Channel:
 
                 if len(data_chunk) <= nbytes:
                     # Return entire chunk
-                    return data_chunk
+                    return bytes(data_chunk)
                 else:
                     # Split chunk and put remainder back
                     result = data_chunk[:nbytes]
                     remainder = data_chunk[nbytes:]
                     self._stderr_buffer.appendleft(remainder)
-                    return result
+                    return bytes(result)
 
             # No stderr data available
             return b""

@@ -8,15 +8,18 @@ A simple command-line tool for generating SSH key pairs (part of Spindle).
 import argparse
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from ..crypto.pkey import ECDSAKey, Ed25519Key, RSAKey
 
 
 def generate_key(
     key_type: str, bits: Optional[int] = None, comment: Optional[str] = None
-) -> tuple:
+) -> tuple[Any, Any]:
     """Generate a new SSH key pair."""
+    from ..crypto.pkey import PKey
+
+    key: PKey
     if key_type == "ed25519":
         key = Ed25519Key.generate()
     elif key_type == "ecdsa":
@@ -33,8 +36,8 @@ def generate_key(
 
 
 def save_key_pair(
-    private_key, public_key, filename: str, comment: Optional[str] = None
-):
+    private_key: Any, public_key: Any, filename: str, comment: Optional[str] = None
+) -> None:
     """Save the key pair to files."""
     private_path = Path(filename)
     public_path = Path(f"{filename}.pub")
@@ -55,7 +58,7 @@ def save_key_pair(
     print(f"Public key saved to: {public_path}")
 
 
-def main():
+def main() -> None:
     """Main entry point for ssh-keygen tool."""
     parser = argparse.ArgumentParser(
         description="Generate SSH key pairs",

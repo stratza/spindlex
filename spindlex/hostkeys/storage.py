@@ -123,18 +123,19 @@ class HostKeyStorage:
             # Import key classes
             from ..crypto.pkey import ECDSAKey, Ed25519Key, RSAKey
 
+            pkey: PKey
             if key_type == "ssh-ed25519":
-                key = Ed25519Key()
-                key.load_public_key(key_data)
-                return key
+                pkey = Ed25519Key()
+                pkey.load_public_key(key_data)
+                return pkey
             elif key_type.startswith("ecdsa-sha2-"):
-                key = ECDSAKey()
-                key.load_public_key(key_data)
-                return key
+                pkey = ECDSAKey()
+                pkey.load_public_key(key_data)
+                return pkey
             elif key_type.startswith("ssh-rsa") or key_type.startswith("rsa-sha2-"):
-                key = RSAKey()
-                key.load_public_key(key_data)
-                return key
+                pkey = RSAKey()
+                pkey.load_public_key(key_data)
+                return pkey
             else:
                 self._logger.debug(f"Unsupported key type: {key_type}")
                 return None

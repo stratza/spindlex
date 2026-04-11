@@ -196,7 +196,7 @@ def bulk_transfer_example():
         for i, local_file in enumerate(test_files):
             remote_file = f"{remote_dir}/{local_file.name}"
 
-            print(f"Uploading {i+1}/{len(test_files)}: {local_file.name}")
+            print(f"Uploading {i + 1}/{len(test_files)}: {local_file.name}")
             sftp.put(str(local_file), remote_file)
 
         print("Upload completed!")
@@ -214,7 +214,7 @@ def bulk_transfer_example():
             remote_file = f"{remote_dir}/{filename}"
             local_file = download_dir / filename
 
-            print(f"Downloading {i+1}/{len(uploaded_files)}: {filename}")
+            print(f"Downloading {i + 1}/{len(uploaded_files)}: {filename}")
             sftp.get(remote_file, str(local_file))
 
         print("Download completed!")
@@ -276,7 +276,6 @@ def streaming_transfer_example():
             sftp.open(large_file, "rb") as remote_file,
             open(local_file, "wb") as local_file_handle,
         ):
-
             bytes_downloaded = 0
             while True:
                 chunk = remote_file.read(chunk_size)

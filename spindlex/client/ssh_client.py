@@ -168,6 +168,7 @@ class SSHClient:
         username: Optional[str] = None,
         password: Optional[str] = None,
         pkey: Optional[PKey] = None,
+        key_filename: Optional[str] = None,
         timeout: Optional[float] = None,
     ) -> None:
         """
@@ -222,7 +223,7 @@ class SSHClient:
 
             # Authenticate if credentials provided
             if username:
-                self._authenticate(username, password, pkey)
+                self._authenticate(username, password, pkey, key_filename)
 
             self._logger.info(f"Successfully connected to {hostname}:{port}")
 
@@ -282,11 +283,7 @@ class SSHClient:
                     != server_key.get_public_key_bytes()
                 ):
                     # Key mismatch!
-                    raise BadHostKeyException(
-                        f"Host key mismatch for {hostname}! "
-                        f"Expected: {known_key.get_fingerprint()}, "
-                        f"Got: {server_key.get_fingerprint()}"
-                    )
+                    raise BadHostKeyException(hostname, server_key, known_key)
 
         except BadHostKeyException:
             raise
@@ -295,7 +292,11 @@ class SSHClient:
             raise BadHostKeyException(hostname, None)
 
     def _authenticate(
-        self, username: str, password: Optional[str] = None, pkey: Optional[PKey] = None
+        self,
+        username: str,
+        password: Optional[str] = None,
+        pkey: Optional[PKey] = None,
+        key_filename: Optional[str] = None,
     ) -> None:
         """
         Authenticate with the server.
@@ -312,6 +313,15 @@ class SSHClient:
             raise AuthenticationException("No transport available")
 
         authenticated = False
+
+        # Load key from file if provided
+        if key_filename and not pkey:
+            try:
+                from ..crypto.pkey import PKey
+
+                pkey = PKey.from_private_key_file(key_filename, password)
+            except Exception as e:
+                self._logger.debug(f"Failed to load key from {key_filename}: {e}")
 
         # Try public key authentication first if key provided
         if pkey and not authenticated:
@@ -373,6 +383,7 @@ class SSHClient:
             raise SSHException("Command cannot be empty")
 
         try:
+            assert self._transport is not None
             # Open a new session channel
             channel = self._transport.open_channel("session")
 
@@ -407,6 +418,7 @@ class SSHClient:
             raise SSHException("Not connected to server")
 
         try:
+            assert self._transport is not None
             # Open a new session channel
             channel = self._transport.open_channel("session")
 
@@ -441,6 +453,7 @@ class SSHClient:
         try:
             from .sftp_client import SFTPClient
 
+            assert self._transport is not None
             return SFTPClient(self._transport)
         except Exception as e:
             if isinstance(e, SSHException):
@@ -520,6 +533,7 @@ class SSHClient:
             raise SSHException("Not connected to SSH server")
 
         try:
+            assert self._transport is not None
             forwarding_manager = self._transport.get_port_forwarding_manager()
             return forwarding_manager.create_local_tunnel(
                 local_port, remote_host, remote_port, local_host
@@ -551,6 +565,7 @@ class SSHClient:
             raise SSHException("Not connected to SSH server")
 
         try:
+            assert self._transport is not None
             forwarding_manager = self._transport.get_port_forwarding_manager()
             return forwarding_manager.create_remote_tunnel(
                 remote_port, local_host, local_port, remote_host
@@ -574,6 +589,7 @@ class SSHClient:
             raise SSHException("Not connected to SSH server")
 
         try:
+            assert self._transport is not None
             forwarding_manager = self._transport.get_port_forwarding_manager()
             forwarding_manager.close_tunnel(tunnel_id)
         except Exception as e:
@@ -595,6 +611,7 @@ class SSHClient:
             raise SSHException("Not connected to SSH server")
 
         try:
+            assert self._transport is not None
             forwarding_manager = self._transport.get_port_forwarding_manager()
             tunnels = forwarding_manager.get_all_tunnels()
 

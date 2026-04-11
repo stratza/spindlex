@@ -155,18 +155,19 @@ class CryptographyBackend:
             iv_bytes = bytes(iv)
             data_bytes = bytes(data)
 
+            cipher: Any
             if algorithm == "chacha20-poly1305@openssh.com":
                 cipher = ChaCha20Poly1305(key_bytes)
-                return cipher.encrypt(iv_bytes, data_bytes, None)
+                return bytes(cipher.encrypt(iv_bytes, data_bytes, None))
             elif algorithm in ["aes256-gcm@openssh.com", "aes128-gcm@openssh.com"]:
                 cipher = AESGCM(key_bytes)
-                return cipher.encrypt(iv_bytes, data_bytes, None)
+                return bytes(cipher.encrypt(iv_bytes, data_bytes, None))
             elif algorithm == "aes256-ctr":
                 cipher_algo = algorithms.AES(key_bytes)
                 mode = modes.CTR(iv_bytes)
                 cipher = Cipher(cipher_algo, mode, backend=self.backend)
                 encryptor = cipher.encryptor()
-                return encryptor.update(data_bytes) + encryptor.finalize()
+                return bytes(encryptor.update(data_bytes) + encryptor.finalize())
             else:
                 raise CryptoException(f"Unsupported cipher algorithm: {algorithm}")
         except Exception as e:
@@ -194,18 +195,19 @@ class CryptographyBackend:
             iv_bytes = bytes(iv)
             data_bytes = bytes(data)
 
+            cipher: Any
             if algorithm == "chacha20-poly1305@openssh.com":
                 cipher = ChaCha20Poly1305(key_bytes)
-                return cipher.decrypt(iv_bytes, data_bytes, None)
+                return bytes(cipher.decrypt(iv_bytes, data_bytes, None))
             elif algorithm in ["aes256-gcm@openssh.com", "aes128-gcm@openssh.com"]:
                 cipher = AESGCM(key_bytes)
-                return cipher.decrypt(iv_bytes, data_bytes, None)
+                return bytes(cipher.decrypt(iv_bytes, data_bytes, None))
             elif algorithm == "aes256-ctr":
                 cipher_algo = algorithms.AES(key_bytes)
                 mode = modes.CTR(iv_bytes)
                 cipher = Cipher(cipher_algo, mode, backend=self.backend)
                 decryptor = cipher.decryptor()
-                return decryptor.update(data_bytes) + decryptor.finalize()
+                return bytes(decryptor.update(data_bytes) + decryptor.finalize())
             else:
                 raise CryptoException(f"Unsupported cipher algorithm: {algorithm}")
         except Exception as e:
@@ -270,9 +272,9 @@ class CryptographyBackend:
             data_bytes = bytes(data)
 
             hash_class = self.MAC_ALGORITHMS[algorithm]
-            h = hmac.HMAC(key_bytes, hash_class(), backend=self.backend)
+            h = hmac.HMAC(key_bytes, hash_class(), backend=self.backend)  # type: ignore
             h.update(data_bytes)
-            return h.finalize()
+            return bytes(h.finalize())
         except Exception as e:
             raise CryptoException(f"MAC computation failed: {e}") from e
 
