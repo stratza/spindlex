@@ -9,15 +9,16 @@ description = "A modern, high-performance, pure-Python SSHv2 and SFTP client/ser
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
-    {name = "Di3Z1E", email = "di3z1e@proton.me"}
+    {name = "Di3Z1E"}
 ]
 maintainers = [
-    {name = "Di3Z1E", email = "di3z1e@proton.me"}
+    {name = "Di3Z1E"}
 ]
-keywords = ["ssh", "sftp", "client", "server", "cryptography", "security"]
+keywords = ["ssh", "sftp", "client", "server", "cryptography", "security", "automation", "devops", "pure-python"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
@@ -31,6 +32,7 @@ classifiers = [
     "Topic :: Security :: Cryptography",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: System :: Networking",
+    "Topic :: System :: Systems Administration",
 ]
 requires-python = ">=3.9"
 dependencies = [
@@ -60,11 +62,13 @@ dev = [
     "safety>=2.3.0",
 ]
 docs = [
-    "sphinx>=6.0.0",
-    "sphinx-rtd-theme>=1.2.0",
-    "myst-parser>=1.0.0",
-    "sphinx-autobuild>=2021.3.14",
-    "sphinxcontrib-spelling>=7.6",
+    "mkdocs>=1.5.0",
+    "mkdocs-material>=9.1.0",
+    "mkdocstrings[python]>=0.22.0",
+    "mkdocs-minify-plugin>=0.6.0",
+    "mkdocs-git-revision-date-localized-plugin>=1.2.0",
+    "pymdown-extensions>=10.0",
+    "pygments>=2.15.0",
 ]
 test = [
     "pytest>=7.0.0",
