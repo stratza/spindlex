@@ -40,7 +40,7 @@ async def run_demo():
         tasks = [client.exec_command(cmd) for cmd in commands]
         results = await asyncio.gather(*tasks)
         
-        for i, (stdin, stdout, stderr) in enumerate(results):
+        for i, (_stdin, stdout, _stderr) in enumerate(results):
             output = await stdout.read()
             print(f"📊 Task {i+1} output: {output.decode().strip()}")
             

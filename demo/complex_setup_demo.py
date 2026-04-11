@@ -73,7 +73,7 @@ def main():
         try:
             sftp.mkdir(".ssh", mode=0o700)
             print("📁 Created .ssh directory.")
-        except:
+        except Exception:
             # Explicitly fix permissions even if it exists
             client.exec_command("chmod 700 .ssh")
             print("ℹ️  Ensured .ssh directory has 700 permissions.")
@@ -86,7 +86,7 @@ def main():
                 content = f.read().decode()
                 # Remove any existing demo keys to prevent corruption/duplicates
                 lines = [line for line in content.splitlines() if "spindle-demo-key" not in line]
-        except:
+        except Exception:
             pass
         
         # Add the new key

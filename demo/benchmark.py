@@ -42,7 +42,8 @@ def benchmark_paramiko(host, user, password, key_file, iterations=5):
     for i in range(iterations):
         start = time.time()
         client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())  # noqa: S507
+
         client.connect(hostname=host, username=user, password=password, key_filename=key_file)
         client.close()
         times.append(time.time() - start)
