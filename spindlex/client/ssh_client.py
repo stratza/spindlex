@@ -170,6 +170,8 @@ class SSHClient:
         pkey: Optional[PKey] = None,
         key_filename: Optional[str] = None,
         timeout: Optional[float] = None,
+        rekey_bytes_limit: Optional[int] = None,
+        rekey_time_limit: Optional[int] = None,
     ) -> None:
         """
         Connect to SSH server and authenticate.
@@ -181,6 +183,8 @@ class SSHClient:
             password: Password for authentication
             pkey: Private key for authentication
             timeout: Connection timeout in seconds
+            rekey_bytes_limit: Number of bytes before rekeying (default: 1GB)
+            rekey_time_limit: Seconds before rekeying (default: 1 hour)
 
         Raises:
             SSHException: If connection or authentication fails
@@ -209,7 +213,11 @@ class SSHClient:
                 raise SSHException(f"Connection failed: {e}") from e
 
             # Create transport
-            self._transport = Transport(sock)
+            self._transport = Transport(
+                sock,
+                rekey_bytes_limit=rekey_bytes_limit,
+                rekey_time_limit=rekey_time_limit,
+            )
 
             # Set permanent timeout on transport
             if timeout:

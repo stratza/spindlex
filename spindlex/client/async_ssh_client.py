@@ -44,6 +44,8 @@ class AsyncSSHClient:
         gss_kex: bool = False,
         gss_deleg_creds: bool = True,
         gss_host: Optional[str] = None,
+        rekey_bytes_limit: Optional[int] = None,
+        rekey_time_limit: Optional[int] = None,
     ) -> None:
         """
         Connect to SSH server asynchronously.
@@ -55,6 +57,8 @@ class AsyncSSHClient:
             password: Password for authentication
             pkey: Private key for authentication
             timeout: Connection timeout in seconds
+            rekey_bytes_limit: Number of bytes before rekeying (default: 1GB)
+            rekey_time_limit: Seconds before rekeying (default: 1 hour)
             compress: Enable compression
             gss_auth: Use GSSAPI authentication
             gss_kex: Use GSSAPI key exchange
@@ -75,7 +79,11 @@ class AsyncSSHClient:
             )
 
             # Create async transport
-            self._transport = AsyncTransport(sock)
+            self._transport = AsyncTransport(
+                sock,
+                rekey_bytes_limit=rekey_bytes_limit,
+                rekey_time_limit=rekey_time_limit,
+            )
 
             # Use connect_existing helper to set reader/writer safely
             await self._transport.connect_existing(reader, writer)

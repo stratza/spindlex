@@ -105,4 +105,60 @@ with SSHClient() as client:
             print(line.strip())
     except KeyboardInterrupt:
         print("Stopping log stream...")
+
+## <a name="rekey-policy"></a>Custom Rekeying Policy
+
+For high-security or high-compliance environments, you can tighten the rekeying thresholds.
+
+```python
+from spindlex import SSHClient
+
+with SSHClient() as client:
+    client.connect('secure-host', username='audit-user')
+    
+    # Rekey every 100MB or every 15 minutes
+    transport = client.get_transport()
+    transport.set_rekey_policy(
+        bytes_limit=100 * 1024 * 1024, 
+        time_limit=900
+    )
+    
+    # Continue with secure operations
+    # ...
+```
+
+## <a name="interactive-auth"></a>Keyboard-Interactive Authentication
+
+Use a custom handler to respond to server-driven authentication challenges.
+
+```python
+import getpass
+from spindlex import SSHClient
+
+def interactive_handler(title, instructions, prompts):
+    """
+    Handles keyboard-interactive challenges.
+    'prompts' is a list of (prompt_text, echo_boolean) tuples.
+    """
+    answers = []
+    print(f"\n--- {title} ---")
+    if instructions:
+        print(instructions)
+        
+    for text, echo in prompts:
+        if echo:
+            ans = input(text)
+        else:
+            ans = getpass.getpass(text)
+        answers.append(ans)
+    return answers
+
+with SSHClient() as client:
+    # This will trigger the interactive_handler if the server requests it
+    client.connect(
+        'mfa-enabled-host', 
+        username='user', 
+        handler=interactive_handler
+    )
+```
 ```

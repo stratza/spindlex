@@ -6,6 +6,7 @@ Provides asynchronous SSH transport functionality for high-concurrency applicati
 
 import asyncio
 import socket
+import struct
 from typing import Any, Optional
 
 from ..exceptions import ProtocolException, TransportException
@@ -23,8 +24,17 @@ class AsyncTransport(Transport):
     asyncio by overriding the low-level I/O methods.
     """
 
-    def __init__(self, sock: socket.socket) -> None:
-        super().__init__(sock)
+    def __init__(
+        self,
+        sock: socket.socket,
+        rekey_bytes_limit: Optional[int] = None,
+        rekey_time_limit: Optional[int] = None,
+    ) -> None:
+        super().__init__(
+            sock,
+            rekey_bytes_limit=rekey_bytes_limit,
+            rekey_time_limit=rekey_time_limit,
+        )
         self._reader: Optional[asyncio.StreamReader] = None
         self._writer: Optional[asyncio.StreamWriter] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
@@ -234,8 +244,6 @@ class AsyncTransport(Transport):
                         if channel_id is not None:
                             msg_channel_id = getattr(msg, "recipient_channel", None)
                             if msg_channel_id is None and len(msg._data) >= 4:
-                                import struct
-
                                 msg_channel_id = struct.unpack(">I", msg._data[:4])[0]
 
                             if msg_channel_id != channel_id:
@@ -250,8 +258,6 @@ class AsyncTransport(Transport):
                 if channel_id is not None:
                     msg_channel_id = getattr(msg, "recipient_channel", None)
                     if msg_channel_id is None and len(msg._data) >= 4:
-                        import struct
-
                         msg_channel_id = struct.unpack(">I", msg._data[:4])[0]
 
                     if msg_channel_id == channel_id:
