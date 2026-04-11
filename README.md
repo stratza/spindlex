@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docs/_static/figure.png" width="160" height="160" alt="SpindleX Logo">
+  <img src="docs/_static/figure.png" width="160" height="160" alt="SpindleX - High-Performance SSH and SFTP Library for Python">
   <h1>SpindleX</h1>
   <p><strong>Modern, pure-Python SSH library for secure automation, recursive SFTP, and zero-dependency deployments.</strong></p>
 

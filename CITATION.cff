@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: "Di3Z1E"
+  given-names: ""
+title: "SpindleX"
+version: 0.5.0
+date-released: 2026-04-11
+url: "https://github.com/Di3Z1E/spindlex"
+abstract: "A modern, high-performance, pure-Python SSHv2 and SFTP library focused on speed, security, and developer experience."
+keywords:
+  - ssh
+  - sftp
+  - automation
+  - python
+  - security
+license: MIT
