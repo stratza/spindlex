@@ -466,10 +466,6 @@ class SFTPServer:
                     self._send_message(error_msg)
                     return
 
-
-
-
-
             else:
                 if not self.check_file_access(resolved_path, "r"):
                     error_msg = SFTPStatusMessage(
@@ -479,12 +475,6 @@ class SFTPServer:
                     )
                     self._send_message(error_msg)
                     return
-
-
-
-
-
-
 
             # Determine file mode
             mode = ""
@@ -529,7 +519,9 @@ class SFTPServer:
 
             # Create handle
             handle_id = self._generate_handle()
-            handle = SFTPHandle(handle_id, resolved_path, message.pflags, file_obj=file_obj)
+            handle = SFTPHandle(
+                handle_id, resolved_path, message.pflags, file_obj=file_obj
+            )
 
             with self._handle_lock:
                 self._handles[handle_id] = handle
@@ -814,13 +806,6 @@ class SFTPServer:
                 self._send_message(error_msg)
                 return
 
-
-
-
-
-
-
-
             # Check if path is a directory
             if not os.path.isdir(resolved_path):
                 error_msg = SFTPStatusMessage(
@@ -851,13 +836,6 @@ class SFTPServer:
                 )
                 self._send_message(error_msg)
                 return
-
-
-
-
-
-
-
 
             # Create directory handle
             handle_id = self._generate_handle()
@@ -939,13 +917,6 @@ class SFTPServer:
                 self._send_message(error_msg)
                 return
 
-
-
-
-
-
-
-
             # Get permissions from attributes or use default
             mode = self.get_directory_permissions(resolved_path)
             if message.attrs.flags & SSH_FILEXFER_ATTR_PERMISSIONS:
@@ -1003,13 +974,6 @@ class SFTPServer:
                 self._send_message(error_msg)
                 return
 
-
-
-
-
-
-
-
             # Remove directory
             try:
                 os.rmdir(resolved_path)
@@ -1058,13 +1022,6 @@ class SFTPServer:
                 self._send_message(error_msg)
                 return
 
-
-
-
-
-
-
-
             # Remove file
             try:
                 os.unlink(resolved_path)
@@ -1108,13 +1065,6 @@ class SFTPServer:
                 )
                 self._send_message(error_msg)
                 return
-
-
-
-
-
-
-
 
             new_parent = os.path.dirname(new_path)
             if not self.check_directory_access(new_parent, "w"):

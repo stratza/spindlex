@@ -562,7 +562,6 @@ class Channel:
                 subsystem = subsystem_bytes.decode(SSH_STRING_ENCODING)
                 return bool(server.check_channel_subsystem_request(self, subsystem))
 
-
             elif request_type == "pty-req":
                 offset = 0
                 term_bytes, offset = read_string(data, offset)
