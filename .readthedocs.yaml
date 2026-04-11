@@ -13,5 +13,6 @@ python:
       extra_requirements:
         - async
 
-sphinx:
-  configuration: docs/conf.py
+# Use MkDocs instead of Sphinx
+mkdocs:
+  configuration: mkdocs.yml
