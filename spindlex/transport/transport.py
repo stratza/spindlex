@@ -32,12 +32,19 @@ class Transport:
     and secure packet transmission according to RFC 4251-4254.
     """
 
-    def __init__(self, sock: socket.socket) -> None:
+    def __init__(
+        self,
+        sock: socket.socket,
+        rekey_bytes_limit: Optional[int] = None,
+        rekey_time_limit: Optional[int] = None,
+    ) -> None:
         """
         Initialize transport with socket connection.
 
         Args:
             sock: Connected socket for SSH communication
+            rekey_bytes_limit: Number of bytes before rekeying (default: 1GB)
+            rekey_time_limit: Seconds before rekeying (default: 1 hour)
         """
         self._socket = sock
         self._active = False
@@ -64,6 +71,10 @@ class Transport:
         self._mac_c2s: Optional[str] = None
         self._mac_s2c: Optional[str] = None
 
+        # Rekeying policy (configurable)
+        self._rekey_bytes_limit = rekey_bytes_limit or (1024 * 1024 * 1024)  # 1GB default
+        self._rekey_time_limit = rekey_time_limit or 3600  # 1 hour default
+
         # Cipher instances
         self._encryptor: Optional[Any] = None
         self._decryptor: Optional[Any] = None
@@ -78,11 +89,8 @@ class Transport:
         self._read_lock = threading.RLock()
         self._server_host_key_blob = None
 
-        # KEX state
         self._kex_in_progress = False
         self._kex = KeyExchange(self)
-        self._rekey_bytes_limit = 1024 * 1024 * 1024  # 1GB
-        self._rekey_time_limit = 3600  # 1 hour
         self._bytes_since_rekey = 0
         self._last_rekey_time = time.time()
 
@@ -117,6 +125,21 @@ class Transport:
         self._timeout = timeout
         if self._socket:
             self._socket.settimeout(timeout)
+
+    def set_rekey_policy(
+        self, bytes_limit: Optional[int] = None, time_limit: Optional[int] = None
+    ) -> None:
+        """
+        Configure rekeying thresholds.
+
+        Args:
+            bytes_limit: Number of bytes before rekeying (default: 1GB)
+            time_limit: Seconds before rekeying (default: 1 hour)
+        """
+        if bytes_limit is not None:
+            self._rekey_bytes_limit = bytes_limit
+        if time_limit is not None:
+            self._rekey_time_limit = time_limit
 
     def start_client(self, timeout: Optional[float] = None) -> None:
         """
@@ -1230,7 +1253,9 @@ class Transport:
         # Read version line character by character
         while True:
             try:
-                # Use _recv_bytes(1) to benefit from buffering
+                # Use _recv_bytes(1) to benefit from the internal 32KB buffer.
+                # While we read character by character to find the line ending,
+                # _recv_bytes efficiently pre-fetches data from the socket.
                 char = self._recv_bytes(1)
                 if not char:
                     raise TransportException(
@@ -1275,31 +1300,42 @@ class Transport:
         self._server_version = version_string
 
     def _start_kex(self) -> None:
-        """Start key exchange process."""
-        with self._lock:
-            if self._kex_in_progress:
-                return  # Avoid double start if triggered simultaneously
+        """
+        Start key exchange process in the background.
+        Includes a 30-second watchdog to prevent hanging on stalled connections.
+        """
+        start_time = time.time()
+        timeout = 30.0
 
-            self._kex_in_progress = True
+        # Set a temporary timeout for key exchange
+        old_timeout = self._socket.gettimeout()
+        self._socket.settimeout(timeout)
 
+        try:
+            # Send KEXINIT message with our supported algorithms
+            self._send_kexinit()
+
+            # Receive server's KEXINIT message
+            self._recv_kexinit()
+
+            # Now perform key exchange using KeyExchange class
+            self._kex.start_kex()
+
+            # Mark KEX as complete
+            self._kex_in_progress = False
+
+        except Exception as e:
+            self._kex_in_progress = False
+            self._active = False
             try:
-                # Send KEXINIT message with our supported algorithms
-                self._send_kexinit()
-
-                # Receive server's KEXINIT message
-                self._recv_kexinit()
-
-                # Now perform key exchange using KeyExchange class
-                self._kex.start_kex()
-
-                # Mark KEX as complete
-                self._kex_in_progress = False
-
-            except Exception as e:
-                self._kex_in_progress = False
-                if isinstance(e, (TransportException, ProtocolException)):
-                    raise
-                raise TransportException(f"Key exchange failed: {e}") from e
+                self.close()
+            except Exception:
+                pass
+            if isinstance(e, (TransportException, ProtocolException)):
+                raise
+            raise TransportException(f"Rekeying failed or timed out: {e}") from e
+        finally:
+            self._socket.settimeout(old_timeout)
 
     def _send_kexinit(self) -> None:
         """Send KEXINIT message with supported algorithms."""
@@ -1374,6 +1410,8 @@ class Transport:
                 or self._sequence_number_in >= 0x80000000
             ):
                 # Trigger rekeying in a separate thread to avoid blocking current I/O
+                # Set flag BEFORE starting thread to avoid race conditions
+                self._kex_in_progress = True
                 threading.Thread(target=self._start_kex, daemon=True).start()
                 self._bytes_since_rekey = 0
                 self._last_rekey_time = time.time()

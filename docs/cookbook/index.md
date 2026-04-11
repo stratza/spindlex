@@ -14,6 +14,12 @@ This cookbook provides practical solutions for real-world tasks using SpindleX. 
 *   [**Parallel Command Execution**](automation.md#parallel-commands): Running the same command on 100+ servers.
 *   [**SSH ProxyJump (Bastion Hosts)**](automation.md#proxy-jump): Connecting to internal servers via a gateway.
 *   [**Log Monitoring**](automation.md#log-tailing): Streaming remote logs in real-time.
+*   [**Custom Rekeying**](automation.md#rekey-policy): Tightening security thresholds for long-lived sessions.
+
+## Advanced Authentication
+
+*   [**Keyboard-Interactive**](automation.md#interactive-auth): Handling MFA and custom server challenges.
+*   [**GSSAPI/Kerberos**](automation.md#gssapi-auth): Enterprise-grade authentication without passwords.
 
 ## Custom Solutions
 

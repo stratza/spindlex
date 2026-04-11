@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  openssh-server:
+    image: linuxserver/openssh-server:latest
+    container_name: spindlex-integration-server
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/London
+      - USER_PASSWORD=password123
+      - USER_NAME=testuser
+      - PASSWORD_ACCESS=true
+    ports:
+      - "2222:22"
+    volumes:
+      - ./config:/config
+    restart: unless-stopped

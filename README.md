@@ -116,7 +116,7 @@ See SpindleX in action across various high-performance scenarios:
 | **Async Concurrency** | **Benchmark vs Paramiko** |
 |:---:|:---:|
 | ![Async Demo](demo/gifs/async-demo.gif) | ![Benchmark](demo/gifs/benchmark.gif) |
-| *Native asyncio integration* | *7x faster connection speeds* |
+| *Native asyncio integration* | *2.6x faster connection speeds* |
 
 
 
@@ -131,9 +131,9 @@ SpindleX consistently outperforms legacy libraries in connection establishment a
 
 | Library | Connection Time (Avg) | Overhead |
 |:---|:---:|:---:|
-| **SpindleX** | **0.12s** | **Low** |
+| **SpindleX** | **0.32s** | **Low** |
 | Paramiko | 0.85s | High |
-| *Improvement* | *~7x Faster* | |
+| *Improvement* | *~2.6x Faster* | |
 
 > [!TIP]
 > Run the included benchmark script to compare performance in your environment:
