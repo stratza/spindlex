@@ -7,8 +7,8 @@ edit_uri: edit/main/docs/
 
 theme:
   name: material
-  logo: _static/logo.png
-  favicon: _static/logo.png
+  logo: _static/figure.png
+  favicon: _static/figure.png
   palette:
     # Palette toggle for light mode
     - media: "(prefers-color-scheme: light)"
