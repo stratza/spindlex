@@ -93,10 +93,10 @@ pip install spindlex[gssapi]
 === "SSH Key"
 
     ```python
-    from spindlex.crypto.pkey import load_key_from_file
+    from spindlex.crypto.pkey import PKey
 
-    # Load private key
-    private_key = load_key_from_file('/path/to/private_key')
+    # Load private key (auto-detects type)
+    private_key = PKey.from_private_key_file('/path/to/private_key')
 
     client.connect(
         hostname='example.com',

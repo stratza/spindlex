@@ -4,8 +4,8 @@ authors:
 - family-names: "Di3Z1E"
   given-names: ""
 title: "SpindleX"
-version: 0.5.0
-date-released: 2026-04-11
+version: 0.5.1
+date-released: 2026-04-12
 url: "https://github.com/Di3Z1E/spindlex"
 abstract: "A modern, high-performance, pure-Python SSHv2 and SFTP library focused on speed, security, and developer experience."
 keywords:
