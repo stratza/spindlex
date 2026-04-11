@@ -8,6 +8,7 @@ authentication, and secure packet transmission.
 import socket
 import struct
 import threading
+import time
 from typing import Any, Optional
 
 from ..crypto.backend import default_crypto_backend
@@ -77,6 +78,10 @@ class Transport:
         # KEX state
         self._kex_in_progress = False
         self._kex = KeyExchange(self)
+        self._rekey_bytes_limit = 1024 * 1024 * 1024  # 1GB
+        self._rekey_time_limit = 3600  # 1 hour
+        self._bytes_since_rekey = 0
+        self._last_rekey_time = time.time()
 
         # Timeouts
         self._connect_timeout = DEFAULT_CONNECT_TIMEOUT
@@ -389,6 +394,8 @@ class Transport:
             if not self._userauth_service_requested:
                 self._request_userauth_service()
 
+            from ..auth.keyboard_interactive import KeyboardInteractiveAuth
+
             # Send initial keyboard-interactive request
             auth_request = UserAuthRequestMessage(
                 username=username,
@@ -399,8 +406,14 @@ class Transport:
 
             self._send_message(auth_request)
 
-            # Handle interactive prompts
-            return self._handle_keyboard_interactive_auth(handler)
+            # Perform interactive authentication
+            ki_auth = KeyboardInteractiveAuth(self)
+            result = ki_auth.authenticate(username, handler)
+
+            if result:
+                self._authenticated = True
+
+            return result
 
         except Exception as e:
             if isinstance(e, AuthenticationException):
@@ -415,64 +428,6 @@ class Transport:
         data.extend(write_string(""))  # language tag
         data.extend(write_string(""))  # submethods
         return bytes(data)
-
-    def _handle_keyboard_interactive_auth(self, handler: Any) -> bool:
-        """Handle keyboard-interactive authentication prompts."""
-        while True:
-            msg = self._expect_message(
-                MSG_USERAUTH_SUCCESS,
-                MSG_USERAUTH_FAILURE,
-                MSG_USERAUTH_INFO_REQUEST,
-            )
-
-            if isinstance(msg, UserAuthSuccessMessage):
-                self._authenticated = True
-                return True
-            elif isinstance(msg, UserAuthFailureMessage):
-                return False
-            elif msg.msg_type == MSG_USERAUTH_INFO_REQUEST:
-                # Handle info request (prompts)
-                responses = self._handle_info_request(msg, handler)
-
-                # Send responses
-                response_msg = self._build_info_response(responses)
-                self._send_message(response_msg)
-            else:
-                raise AuthenticationException(
-                    f"Unexpected message during keyboard-interactive auth: {type(msg).__name__}"
-                )
-
-    def _handle_info_request(self, msg: Message, handler: Any) -> list[str]:
-        """Handle keyboard-interactive info request."""
-        # Parse info request message
-        data = msg._data
-        offset = 0
-
-        name_bytes, offset = read_string(data, offset)
-        instruction_bytes, offset = read_string(data, offset)
-        language_bytes, offset = read_string(data, offset)
-        num_prompts, offset = read_uint32(data, offset)
-
-        name = name_bytes.decode(SSH_STRING_ENCODING, errors="replace")
-        instruction = instruction_bytes.decode(SSH_STRING_ENCODING, errors="replace")
-
-        prompts = []
-        for _ in range(num_prompts):
-            prompt_bytes, offset = read_string(data, offset)
-            echo, offset = read_boolean(data, offset)
-            prompt_text = prompt_bytes.decode(SSH_STRING_ENCODING, errors="replace")
-            prompts.append((prompt_text, echo))
-
-        # Call handler to get responses
-        return handler(name, instruction, prompts)
-
-    def _build_info_response(self, responses: list[str]) -> Message:
-        """Build keyboard-interactive info response message."""
-        msg = Message(MSG_USERAUTH_INFO_RESPONSE)
-        msg.add_uint32(len(responses))
-        for response in responses:
-            msg.add_string(response)
-        return msg
 
     def auth_gssapi(
         self,
@@ -927,23 +882,17 @@ class Transport:
             if recipient_channel in self._channels:
                 channel = self._channels[recipient_channel]
 
-                # Handle specific request types
-                if request_type == "exit-status":
-                    # Parse exit status
-                    if len(request_data) >= 4:
-                        exit_status, _ = read_uint32(request_data, 0)
-                        channel._handle_exit_status(exit_status)
-                elif request_type == "exit-signal":
-                    # Parse exit signal
-                    self._handle_exit_signal_request(channel, request_data)
+                # Handle channel request
+                success = channel._handle_request(request_type, request_data)
 
                 # Send reply if requested
                 if want_reply:
-                    # For now, always send success
-                    # Server implementations can override this behavior
-                    success_msg = Message(MSG_CHANNEL_SUCCESS)
-                    success_msg.add_uint32(channel._remote_channel_id)
-                    self._send_message(success_msg)
+                    if success:
+                        reply_msg = Message(MSG_CHANNEL_SUCCESS)
+                    else:
+                        reply_msg = Message(MSG_CHANNEL_FAILURE)
+                    reply_msg.add_uint32(channel._remote_channel_id)
+                    self._send_message(reply_msg)
 
     def _handle_exit_signal_request(self, channel: Channel, data: bytes) -> None:
         """Handle exit signal request data."""
@@ -1183,11 +1132,16 @@ class Transport:
             bind_address_bytes, offset = read_string(data, offset)
             bind_port, offset = read_uint32(data, offset)
 
-            bind_address_bytes.decode(SSH_STRING_ENCODING)
+            bind_address = bind_address_bytes.decode(SSH_STRING_ENCODING)
 
-            # For now, accept all tcpip-forward requests
-            # Server implementations can override this behavior
-            return True
+            # Delegate to server interface for validation
+            if self._server_mode and self._server_interface:
+                return self._server_interface.check_port_forward_request(
+                    bind_address, bind_port
+                )
+
+            # Default to reject if no server interface
+            return False
 
         except Exception:
             return False
@@ -1207,11 +1161,16 @@ class Transport:
             bind_address_bytes, offset = read_string(data, offset)
             bind_port, offset = read_uint32(data, offset)
 
-            bind_address_bytes.decode(SSH_STRING_ENCODING)
+            bind_address = bind_address_bytes.decode(SSH_STRING_ENCODING)
 
-            # For now, accept all cancel requests
-            # Server implementations can override this behavior
-            return True
+            # Delegate to server interface for validation
+            if self._server_mode and self._server_interface:
+                return self._server_interface.check_port_forward_cancel_request(
+                    bind_address, bind_port
+                )
+
+            # Default to reject if no server interface
+            return False
 
         except Exception:
             return False
@@ -1320,7 +1279,7 @@ class Transport:
         """Start key exchange process."""
         with self._lock:
             if self._kex_in_progress:
-                raise TransportException("Key exchange already in progress")
+                return # Avoid double start if triggered simultaneously
 
             self._kex_in_progress = True
 
@@ -1402,6 +1361,24 @@ class Transport:
         # Store peer's KEXINIT for algorithm negotiation
         self._peer_kexinit = msg
 
+    def _check_rekey(self) -> None:
+        """Check if rekeying is needed and start it if so."""
+        if self._kex_in_progress or not self._active:
+            return
+
+        with self._lock:
+            # Check byte limit, time limit, or sequence number (rekey every 2^31 packets)
+            if (
+                self._bytes_since_rekey >= self._rekey_bytes_limit
+                or (time.time() - self._last_rekey_time) >= self._rekey_time_limit
+                or self._sequence_number_out >= 0x80000000
+                or self._sequence_number_in >= 0x80000000
+            ):
+                # Trigger rekeying in a separate thread to avoid blocking current I/O
+                threading.Thread(target=self._start_kex, daemon=True).start()
+                self._bytes_since_rekey = 0
+                self._last_rekey_time = time.time()
+
     def _send_message(self, message: Message) -> None:
         """
         Send SSH message.
@@ -1422,6 +1399,14 @@ class Transport:
                     packet = self._encrypt_packet(packet)
 
                 self._socket.sendall(packet)
+
+                # Track bytes sent for rekeying
+                if message.msg_type not in [
+                    MSG_KEXINIT,
+                    MSG_NEWKEYS,
+                ] and not (MSG_KEXDH_INIT <= message.msg_type <= MSG_KEXDH_REPLY):
+                    self._bytes_since_rekey += len(packet)
+                    self._check_rekey()
 
                 # If this was a NEWKEYS message, activate encryption AFTER sending it
                 if message.msg_type == MSG_NEWKEYS:
@@ -1448,6 +1433,14 @@ class Transport:
                     with self._lock:
                         msg = Message.unpack(payload)
 
+                        # Track bytes received for rekeying (unless it's KEX)
+                        if msg.msg_type not in [
+                            MSG_KEXINIT,
+                            MSG_NEWKEYS,
+                        ] and not (MSG_KEXDH_INIT <= msg.msg_type <= MSG_KEXDH_REPLY):
+                            self._bytes_since_rekey += len(packet)
+                            self._check_rekey()
+
                         # ALWAYS increment sequence number for EVERY packet received
                         self._sequence_number_in = (
                             self._sequence_number_in + 1
@@ -1471,6 +1464,15 @@ class Transport:
 
                         if msg.msg_type == MSG_NEWKEYS:
                             self._activate_inbound_encryption()
+
+                        if msg.msg_type == MSG_KEXINIT and not self._kex_in_progress:
+                            # Peer initiated rekeying. Set flag immediately to prevent
+                            # multiple threads, then queue message and start KEX thread.
+                            self._kex_in_progress = True
+                            with self._lock:
+                                self._message_queue.append(msg)
+                            threading.Thread(target=self._start_kex, daemon=True).start()
+                            continue
 
                         # Dispatch channel messages (80-100) or global requests (80)
                         if (

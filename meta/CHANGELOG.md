@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-04-11
+
+### Added
+- **Rekeying Support:** Implemented RFC 4253 compliant rekeying triggered by data volume (1GB), time (1 hour), or sequence number limits (2^31 packets).
+- **Peer-Initiated Rekeying:** Added support for handling server-initiated key exchanges seamlessly.
+- **Keyboard-Interactive Authentication:** Fully implemented client-side support for interactive authentication prompts (RFC 4256), enabling MFA and complex PAM configurations.
+- **Request Delegation:** Implemented structured channel and global request delegation to the `SSHServer` interface, replacing the previous "accept all" policy.
+
+### Fixed
+- **Message Dispatching:** Resolved critical protocol message ambiguity where multiple messages shared type code 60 (e.g., `MSG_USERAUTH_PK_OK` vs `MSG_USERAUTH_INFO_REQUEST`).
+- **Port Forwarding Stability:** Improved error handling and logging in data relays to distinguish between expected closures and unexpected errors.
+- **Transport Threading:** Fixed potential race conditions during simultaneous rekeying attempts.
+
+## [0.4.2] - 2026-04-10
+
+### Changed
+- **Security:** Purged legacy SHA-1 based MACs and weak ciphers from default negotiation list.
+- **Performance:** Improved `AsyncSFTPClient` concurrency by optimizing message pumping in the underlying transport.
+
+### Fixed
+- **Documentation:** Clarified dependencies and qualified performance claims in README.
+- **CI/CD:** Fixed invalid `.codecov.yml` structure and improved coverage path mapping.
+
 ## [0.4.1] - 2026-04-10
 
 ### Fixed

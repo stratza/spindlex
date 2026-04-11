@@ -309,8 +309,10 @@ class LocalPortForwarder:
                     # Assume it's a socket
                     destination.sendall(data)
 
+        except (socket.error, EOFError, SSHException) as e:
+            self._logger.info(f"Data relay {relay_id} closed: {e}")
         except Exception as e:
-            self._logger.debug(f"Data relay {relay_id} ended: {e}")
+            self._logger.error(f"Unexpected error in data relay {relay_id}: {e}")
 
     def close_tunnel(self, tunnel_id: str) -> None:
         """
@@ -563,8 +565,10 @@ class RemotePortForwarder:
                     # Assume it's a socket
                     destination.sendall(data)
 
+        except (socket.error, EOFError, SSHException) as e:
+            self._logger.info(f"Data relay {relay_id} closed: {e}")
         except Exception as e:
-            self._logger.debug(f"Data relay {relay_id} ended: {e}")
+            self._logger.error(f"Unexpected error in data relay {relay_id}: {e}")
 
     def close_tunnel(self, tunnel_id: str) -> None:
         """
