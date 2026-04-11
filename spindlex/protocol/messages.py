@@ -128,6 +128,7 @@ class Message:
         }
 
         from typing import cast
+
         message_class = cast(type["Message"], message_classes.get(msg_type, Message))
 
         if message_class == Message:

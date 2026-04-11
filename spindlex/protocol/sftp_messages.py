@@ -130,6 +130,7 @@ class SFTPMessage:
         }
 
         from typing import cast
+
         message_class = cast(
             type["SFTPMessage"], message_classes.get(msg_type, SFTPMessage)
         )
