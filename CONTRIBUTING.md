@@ -12,7 +12,7 @@ By participating in this project, you agree to abide by the project's Code of Co
 
 1. **Fork and Clone**
    ```bash
-   git clone https://gitlab.com/daveops.world/development/python/spindle.git
+   git clone https://github.com/Di3Z1E/spindlex.git
    cd spindle
    ```
 
@@ -86,7 +86,7 @@ When reporting issues, please include:
 Use the project's issue templates:
 - Bug Report
 - Feature Request
-- Security Issue (open a GitLab issue with the 'security' label)
+- Security Issue (use GitHub Security Advisory)
 
 ### Submitting Changes
 
@@ -385,7 +385,7 @@ open _build/html/index.html
 
 - **GitHub Issues**: Bug reports and feature requests
 - **GitHub Discussions**: General questions and discussions
-- **Security Issue**: Open a GitLab issue with the 'security' label for security-related concerns.
+- **Security Issue**: Use the GitHub Security Advisory system for security-related concerns.
 
 ### Getting Help
 

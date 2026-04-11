@@ -1,8 +1,8 @@
 site_name: SpindleX
 site_description: A modern, high-performance, pure-Python SSHv2 and SFTP client/server library
 site_url: https://spindlex.readthedocs.io/
-repo_url: https://gitlab.com/daveops.world/development/python/spindle
-repo_name: daveops.world/spindle
+repo_url: https://github.com/Di3Z1E/spindlex
+repo_name: Di3Z1E/spindlex
 edit_uri: edit/main/docs/
 
 theme:

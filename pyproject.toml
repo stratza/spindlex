@@ -79,11 +79,11 @@ test = [
 ]
 
 [project.urls]
-Homepage = "https://gitlab.com/daveops.world/development/python/spindle"
+Homepage = "https://github.com/Di3Z1E/spindlex"
 Documentation = "https://spindlex.readthedocs.io/"
-Repository = "https://gitlab.com/daveops.world/development/python/spindle"
-Issues = "https://gitlab.com/daveops.world/development/python/spindle/-/issues"
-Changelog = "https://gitlab.com/daveops.world/development/python/spindle/-/blob/main/CHANGELOG.md"
+Repository = "https://github.com/Di3Z1E/spindlex"
+Issues = "https://github.com/Di3Z1E/spindlex/issues"
+Changelog = "https://github.com/Di3Z1E/spindlex/blob/main/CHANGELOG.md"
 
 [project.scripts]
 spindlex-keygen = "spindlex.tools.keygen:main"

@@ -53,7 +53,7 @@ Contributors are recognized in several ways:
 
 1. **This file** - All contributors are listed here
 2. **Release notes** - Significant contributions are mentioned in releases
-3. **GitLab contributors page** - Automatic recognition for code contributions
+3. **GitHub contributors page** - Automatic recognition for code contributions
 4. **Special recognition** - Outstanding contributions may receive special mention
 
 ## Getting Started
@@ -61,7 +61,7 @@ Contributors are recognized in several ways:
 To get started contributing:
 
 1. Read my [Contributing Guide](docs/contributing.rst)
-2. Check out the [good first issue](https://gitlab.com/daveops.world/development/python/spindle/-/issues?label_name%5B%5D=good%20first%20issue) label
+2. Check out the [good first issue](https://github.com/Di3Z1E/spindlex/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22) label
 3. Join the community discussions
 4. Fork the repository and start coding!
 

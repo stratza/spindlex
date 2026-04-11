@@ -13,14 +13,14 @@ Only the latest version of SpindleX is currently supported for security updates.
 
 I take the security of SpindleX seriously. If you believe you have found a security vulnerability, please report it privately.
 
-**Please do not report security vulnerabilities via public GitLab issues.**
+**Please do not report security vulnerabilities via public GitHub issues.**
 
 ### Reporting Channels
 
 You can report security vulnerabilities through the following channels:
 
-1. **GitLab Issue**: Open a new issue in the GitLab repository with the **'security'** label. GitLab will automatically treat issues with this label as confidential if configured correctly, or you can manually mark it as confidential.
-2. **GitLab Security Issue**: Use the "security" label when opening a private issue on GitLab (if you have the appropriate permissions).
+1. **GitHub Advisory**: Use the [GitHub Security Advisory](https://github.com/Di3Z1E/spindlex/security/advisories/new) system to report vulnerabilities privately.
+2. **GitHub Issue (with 'security' label)**: Only if you cannot use the advisory system. Please mark it as private if GitHub allows, or request a private reporting channel first.
 
 ### What to Include in Your Report
 
