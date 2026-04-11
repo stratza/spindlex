@@ -1,0 +1,107 @@
+site_name: SpindleX
+site_description: A modern, high-performance, pure-Python SSHv2 and SFTP client/server library
+site_url: https://spindlex.readthedocs.io/
+repo_url: https://gitlab.com/daveops.world/development/python/spindle
+repo_name: daveops.world/spindle
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    # Palette toggle for light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+
+    # Palette toggle for dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - content.code.copy
+    - content.code.annotate
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - search.share
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.termlog
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+  - minify:
+      minify_html: true
+  - git-revision-date-localized:
+      type: date
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [.]
+          options:
+            show_source: true
+            show_root_heading: true
+            show_category_heading: true
+
+nav:
+  - Home: index.md
+  - Quick Start: quickstart.md
+  - User Guide:
+      - Introduction: user_guide/index.md
+      - Authentication: user_guide/authentication.md
+      - Client Usage: user_guide/client.md
+      - SFTP Operations: user_guide/sftp.md
+  - Migration:
+      - From Paramiko: migration/paramiko.md
+  - Cookbook:
+      - Overview: cookbook/index.md
+      - SFTP Recipes: cookbook/sftp_recipes.md
+      - Automation: cookbook/automation.md
+  - Deployment: deployment.md
+  - API Reference:
+      - Overview: api_reference/index.md
+      - Client: api_reference/client.md
+      - Server: api_reference/server.md
+      - Transport: api_reference/transport.md
+      - Protocol: api_reference/protocol.md
+      - Crypto: api_reference/crypto.md
+      - Host Keys: api_reference/hostkeys.md
+      - Logging: api_reference/logging.md
+      - Exceptions: api_reference/exceptions.md
+  - Security: security.md
+  - Performance: performance.md
+  - Contributing: contributing.md
+  - Changelog: changelog.md

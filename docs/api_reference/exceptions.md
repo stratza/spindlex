@@ -1,0 +1,3 @@
+# Exceptions
+
+::: spindlex.exceptions

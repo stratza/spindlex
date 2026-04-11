@@ -19,7 +19,7 @@ I take the security of SpindleX seriously. If you believe you have found a secur
 
 You can report security vulnerabilities through the following channels:
 
-1. **Email**: Send a detailed report to [di3z1e@proton.me](mailto:di3z1e@proton.me).
+1. **GitLab Issue**: Open a new issue in the GitLab repository with the **'security'** label. GitLab will automatically treat issues with this label as confidential if configured correctly, or you can manually mark it as confidential.
 2. **GitLab Security Issue**: Use the "security" label when opening a private issue on GitLab (if you have the appropriate permissions).
 
 ### What to Include in Your Report
