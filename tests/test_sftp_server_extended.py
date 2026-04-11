@@ -99,7 +99,7 @@ def test_sftp_server_handle_remove(sftp_server, temp_root):
     open(test_file, "w").close()
     
     msg = SFTPRemoveMessage(1, "test.txt")
-    with patch.object(sftp_server, "_send_message") as mock_send:
+    with patch.object(sftp_server, "_send_message"):
         sftp_server._handle_remove(msg)
         assert not os.path.exists(test_file)
 
@@ -110,7 +110,7 @@ def test_sftp_server_handle_rename(sftp_server, temp_root):
     open(old_file, "w").close()
     
     msg = SFTPRenameMessage(1, "old.txt", "new.txt")
-    with patch.object(sftp_server, "_send_message") as mock_send:
+    with patch.object(sftp_server, "_send_message"):
         sftp_server._handle_rename(msg)
         assert not os.path.exists(old_file)
         assert os.path.exists(new_file)

@@ -8,7 +8,7 @@ mock_gssapi = MagicMock()
 sys.modules["gssapi"] = mock_gssapi
 sys.modules["gssapi.raw"] = MagicMock()
 
-from spindlex.auth.gssapi import GSSAPIAuth
+from spindlex.auth.gssapi import GSSAPIAuth  # noqa: E402
 
 
 @pytest.fixture
@@ -23,9 +23,10 @@ def mock_transport():
 def test_gssapi_auth_success(mock_transport):
     with patch("spindlex.auth.gssapi.GSSAPI_AVAILABLE", True):
         # Patch specifically the classes that the module uses
-        with patch("spindlex.auth.gssapi.Credentials") as mock_cred_cls:
+        with patch("spindlex.auth.gssapi.Credentials"):
             with patch("spindlex.auth.gssapi.SecurityContext") as mock_ctx_cls:
-                with patch("spindlex.auth.gssapi.Name") as mock_name_cls:
+                with patch("spindlex.auth.gssapi.Name"):
+
                     mock_ctx = mock_ctx_cls.return_value
                     mock_ctx.complete = True
                     
