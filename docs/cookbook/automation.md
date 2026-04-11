@@ -161,4 +161,63 @@ with SSHClient() as client:
         handler=interactive_handler
     )
 ```
+
+## <a name="gssapi-auth"></a>GSSAPI/Kerberos Authentication
+
+Authenticate using Kerberos tickets (SSO) in enterprise environments.
+
+```python
+from spindlex import SSHClient
+
+with SSHClient() as client:
+    # Set gss_auth=True to attempt Kerberos authentication
+    client.connect(
+        'kerberos-host.internal', 
+        username='jdoe',
+        gss_auth=True,
+        gss_deleg_creds=True
+    )
+    print("Authenticated via Kerberos!")
+```
+
+## <a name="key-rotation"></a>SSH Key Rotation
+
+Automate the rotation of public keys across multiple servers.
+
+```python
+from spindlex import SSHClient
+import os
+
+def rotate_key(client, new_key_path):
+    with open(new_key_path, 'r') as f:
+        new_key = f.read().strip()
+    
+    # Append new key to authorized_keys
+    client.exec_command(f'echo "{new_key}" >> ~/.ssh/authorized_keys')
+    print("New key added.")
+
+# Example usage
+# ...
+```
+
+## <a name="backup-configs"></a>Backing up Network Configs
+
+Example of a script that backs up a remote configuration file with timestamping.
+
+```python
+from spindlex import SSHClient
+from datetime import datetime
+
+def backup_config(hostname, remote_path, local_dir):
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    local_path = f"{local_dir}/{hostname}_{timestamp}.conf"
+    
+    with SSHClient() as client:
+        client.connect(hostname, username='admin')
+        with client.open_sftp() as sftp:
+            sftp.get(remote_path, local_path)
+            print(f"Backup saved to {local_path}")
+
+# backup_config('router01', '/etc/config', './backups')
+```
 ```

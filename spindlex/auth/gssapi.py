@@ -63,10 +63,10 @@ except (ImportError, OSError):
             mutual_authentication = 1
             delegate_to_peer = 2
 
-    gssapi = MockGSSAPIModule()  # type: ignore
-    Credentials = MockCredentials  # type: ignore
-    Name = MockName  # type: ignore
-    SecurityContext = MockSecurityContext  # type: ignore
+    gssapi = MockGSSAPIModule()
+    Credentials = MockCredentials
+    Name = MockName
+    SecurityContext = MockSecurityContext
 
 
 class GSSAPIAuth:
@@ -157,7 +157,7 @@ class GSSAPIAuth:
 
             return Name(service_name, name_type=NameType.hostbased_service)
         else:
-            return Name(service_name, name_type=Name.NameType.hostbased_service)  # type: ignore
+            return Name(service_name, name_type=Name.NameType.hostbased_service)
 
     def _init_gss_context(self, target_name: Name, delegate_creds: bool) -> None:
         """
