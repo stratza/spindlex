@@ -180,6 +180,35 @@ class SSHServer:
         # Default implementation rejects GSSAPI authentication
         return AUTH_FAILED
 
+    def check_port_forward_request(self, address: str, port: int) -> bool:
+        """
+        Check if port forwarding request should be allowed.
+        Override this to implement custom forwarding policies.
+
+        Args:
+            address: Address to bind to
+            port: Port to bind to
+
+        Returns:
+            True if request is allowed, False otherwise
+        """
+        # Default implementation rejects all port forwarding requests
+        return False
+
+    def check_port_forward_cancel_request(self, address: str, port: int) -> bool:
+        """
+        Check if port forwarding cancel request should be allowed.
+
+        Args:
+            address: Address to cancel forwarding for
+            port: Port to cancel forwarding for
+
+        Returns:
+            True if request is allowed, False otherwise
+        """
+        # Usually safe to allow cancellation if they could request it
+        return True
+
     def check_channel_request(self, kind: str, chanid: int) -> int:
         """
         Check channel creation request.

@@ -14,6 +14,12 @@ from ..exceptions import ChannelException
 from ..protocol.constants import (
     MSG_CHANNEL_FAILURE,
     MSG_CHANNEL_SUCCESS,
+    SSH_STRING_ENCODING,
+)
+from ..protocol.utils import (
+    read_string,
+    read_uint32,
+    read_boolean,
 )
 
 
@@ -522,6 +528,92 @@ class Channel:
         """
         with self._lock:
             self._exit_status = exit_status
+
+    def _handle_request(self, request_type: str, data: bytes) -> bool:
+        """
+        Handle incoming channel request from remote side.
+        
+        Args:
+            request_type: Type of request (e.g., "shell", "exec")
+            data: Request-specific data
+            
+        Returns:
+            True if request was accepted, False otherwise
+        """
+        if not self._transport._server_mode or not self._transport._server_interface:
+            # Default for client mode or if no server interface is provided
+            # Some requests might be harmlessly accepted
+            if request_type in ["exit-status", "exit-signal"]:
+                return True
+            return False
+
+        server = self._transport._server_interface
+
+        try:
+            if request_type == "shell":
+                return server.check_channel_shell_request(self)
+            
+            elif request_type == "exec":
+                command_bytes, _ = read_string(data)
+                return server.check_channel_exec_request(self, command_bytes)
+            
+            elif request_type == "subsystem":
+                subsystem_bytes, _ = read_string(data)
+                subsystem = subsystem_bytes.decode(SSH_STRING_ENCODING)
+                return server.check_channel_subsystem_request(self, subsystem)
+            
+            elif request_type == "pty-req":
+                offset = 0
+                term_bytes, offset = read_string(data, offset)
+                term = term_bytes.decode(SSH_STRING_ENCODING)
+                width, offset = read_uint32(data, offset)
+                height, offset = read_uint32(data, offset)
+                pixelwidth, offset = read_uint32(data, offset)
+                pixelheight, offset = read_uint32(data, offset)
+                modes, offset = read_string(data, offset)
+                
+                return server.check_channel_pty_request(
+                    self, term, width, height, pixelwidth, pixelheight, modes
+                )
+            
+            elif request_type == "window-change":
+                offset = 0
+                width, offset = read_uint32(data, offset)
+                height, offset = read_uint32(data, offset)
+                pixelwidth, offset = read_uint32(data, offset)
+                pixelheight, offset = read_uint32(data, offset)
+                
+                return server.check_channel_window_change_request(
+                    self, width, height, pixelwidth, pixelheight
+                )
+            
+            elif request_type == "env":
+                offset = 0
+                variable_name_bytes, offset = read_string(data, offset)
+                variable_value_bytes, offset = read_string(data, offset)
+                name = variable_name_bytes.decode(SSH_STRING_ENCODING)
+                value = variable_value_bytes.decode(SSH_STRING_ENCODING)
+                
+                return server.check_channel_env_request(self, name, value)
+            
+            elif request_type == "x11-req":
+                offset = 0
+                single_connection, offset = read_boolean(data, offset)
+                auth_protocol_bytes, offset = read_string(data, offset)
+                auth_cookie_bytes, offset = read_string(data, offset)
+                screen_number, offset = read_uint32(data, offset)
+                
+                auth_protocol = auth_protocol_bytes.decode(SSH_STRING_ENCODING)
+                
+                return server.check_channel_x11_request(
+                    self, single_connection, auth_protocol, auth_cookie_bytes, screen_number
+                )
+
+            # Unknown request type
+            return False
+
+        except Exception:
+            return False
 
     def _handle_exit_signal(
         self, signal_name: str, core_dumped: bool, error_message: str, language_tag: str
