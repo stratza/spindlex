@@ -86,7 +86,7 @@ When reporting issues, please include:
 Use the project's issue templates:
 - Bug Report
 - Feature Request
-- Security Issue (use di3z1e@proton.me for sensitive issues)
+- Security Issue (open a GitLab issue with the 'security' label)
 
 ### Submitting Changes
 
@@ -385,7 +385,7 @@ open _build/html/index.html
 
 - **GitHub Issues**: Bug reports and feature requests
 - **GitHub Discussions**: General questions and discussions
-- **Security Email**: di3z1e@proton.me for security issues
+- **Security Issue**: Open a GitLab issue with the 'security' label for security-related concerns.
 
 ### Getting Help
 

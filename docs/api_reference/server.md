@@ -1,0 +1,3 @@
+# Server API
+
+::: spindlex.server
