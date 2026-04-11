@@ -1,6 +1,7 @@
 import os
-import pytest
 import time
+
+import pytest
 from spindlex import SSHClient
 from spindlex.hostkeys.policy import AutoAddPolicy
 
