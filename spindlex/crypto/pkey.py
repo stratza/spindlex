@@ -397,10 +397,11 @@ class Ed25519Key(PKey):
 
             # Sign data
             signature = self._key.sign(data)
-            
+
             # Format as SSH signature: string algorithm_name, string signature_blob
             # Total size should be: 4(len) + 11("ssh-ed25519") + 4(len) + 64(sig)
             from ..protocol.utils import write_string
+
             return write_string("ssh-ed25519") + write_string(signature)
 
         except Exception as e:
@@ -741,7 +742,6 @@ class RSAKey(PKey):
         """Get SSH key type."""
         return "ssh-rsa"
 
-
     def load_private_key(
         self, key_data: bytes, password: Optional[bytes] = None
     ) -> None:
@@ -786,7 +786,6 @@ class RSAKey(PKey):
 
             if algorithm not in ["ssh-rsa", "rsa-sha2-256", "rsa-sha2-512"]:
                 raise CryptoException(f"Expected RSA algorithm, got {algorithm}")
-
 
             # Read public exponent
             e_len = struct.unpack(">I", key_data[offset : offset + 4])[0]

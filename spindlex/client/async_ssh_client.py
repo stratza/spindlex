@@ -91,8 +91,9 @@ class AsyncSSHClient:
                 elif pkey:
                     await self.auth_publickey(username, pkey)
                 else:
-                    raise AuthenticationException("No authentication credentials provided")
-
+                    raise AuthenticationException(
+                        "No authentication credentials provided"
+                    )
 
             # Store connection info
             self._hostname = hostname
@@ -247,7 +248,7 @@ class AsyncSSHClient:
         """
         if not self._transport:
             raise SSHException("No transport available")
-        
+
         if not await self._transport.auth_password(username, password):
             raise AuthenticationException("Password authentication failed")
 
@@ -264,12 +265,11 @@ class AsyncSSHClient:
         """
         if not self._transport:
             raise SSHException("No transport available")
-        
+
         if not await self._transport.auth_publickey(username, pkey):
             raise AuthenticationException("Public key authentication failed")
 
     def set_missing_host_key_policy(self, policy: MissingHostKeyPolicy) -> None:
-
         """
         Set policy for handling missing host keys.
 

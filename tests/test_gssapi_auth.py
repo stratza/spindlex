@@ -26,13 +26,14 @@ def test_gssapi_auth_success(mock_transport):
         with patch("spindlex.auth.gssapi.Credentials"):
             with patch("spindlex.auth.gssapi.SecurityContext") as mock_ctx_cls:
                 with patch("spindlex.auth.gssapi.Name"):
-
                     mock_ctx = mock_ctx_cls.return_value
                     mock_ctx.complete = True
-                    
+
                     auth = GSSAPIAuth(mock_transport)
-                    
-                    with patch.object(auth, "_perform_gssapi_exchange", return_value=True):
+
+                    with patch.object(
+                        auth, "_perform_gssapi_exchange", return_value=True
+                    ):
                         res = auth.authenticate("alice")
                         assert res is True
 
@@ -43,6 +44,8 @@ def test_gssapi_auth_handshake_fail(mock_transport):
             with patch("spindlex.auth.gssapi.SecurityContext", MagicMock()):
                 with patch("spindlex.auth.gssapi.Name", MagicMock()):
                     auth = GSSAPIAuth(mock_transport)
-                    with patch.object(auth, "_perform_gssapi_exchange", return_value=False):
+                    with patch.object(
+                        auth, "_perform_gssapi_exchange", return_value=False
+                    ):
                         res = auth.authenticate("alice")
                         assert res is False

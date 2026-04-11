@@ -37,7 +37,6 @@ def test_rsa_key_properties(rsa_key):
     assert blob.startswith(b"\x00\x00\x00\x07ssh-rsa")
 
 
-
 def test_rsa_sign_verify(rsa_key):
     data = b"hello world"
     signature = rsa_key.sign(data)
