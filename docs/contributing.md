@@ -8,7 +8,7 @@ We welcome contributions to SpindleX! This guide will help you get started with 
 
 1.  **Fork and Clone the Repository**:
     ```bash
-    git clone https://gitlab.com/daveops.world/development/python/spindle.git
+    git clone https://github.com/Di3Z1E/spindlex.git
     cd spindlex
     ```
 
@@ -146,7 +146,7 @@ mkdocs build
 If you discover a security vulnerability:
 
 1.  **Do NOT** create a public issue.
-2.  **Open a GitLab issue** with the **'security'** label to report it privately. GitLab can automatically handle these as confidential.
+2.  **Use GitHub Security Advisory** to report it privately.
 3.  **Include** steps to reproduce the vulnerability.
 4.  **Wait** for acknowledgment before public disclosure.
 

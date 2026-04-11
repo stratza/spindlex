@@ -6,7 +6,7 @@ This script automates the release process for SpindleX:
 1. Updates version numbers
 2. Updates changelog
 3. Creates git tag
-4. Pushes to GitLab (triggers CI/CD pipeline)
+4. Pushes to GitHub (triggers CI/CD pipeline)
 
 Usage:
     python scripts/release.py --version 0.4.0 --type minor
@@ -214,7 +214,7 @@ def main():
         print("🏷️ Creating git tag...")
         tag_name = create_git_tag(args.version)
         
-        print("🚀 Pushing to GitLab...")
+        print("🚀 Pushing to GitHub...")
         run_command("git push origin main")
         run_command(f"git push origin {tag_name}")
         
@@ -226,7 +226,7 @@ def main():
 🎉 Release process completed for SpindleX {args.version}!
 
 Next steps:
-1. Go to GitLab CI/CD pipelines: https://gitlab.com/daveops.world/development/python/spindle/-/pipelines
+1. Go to GitHub Actions: https://github.com/Di3Z1E/spindlex/actions
 2. Find the pipeline for tag v{args.version}
 3. Manually trigger the PyPI deployment jobs:
    - First: deploy:pypi:test (uploads to Test PyPI)
