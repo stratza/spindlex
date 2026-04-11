@@ -51,6 +51,7 @@ jobs:
       - name: Run Tests
         run: pytest tests/ -v --cov=spindlex --cov-report=xml
       - name: Upload coverage to Codecov
+        if: matrix.python-version == '3.11'
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
