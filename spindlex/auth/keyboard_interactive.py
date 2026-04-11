@@ -4,9 +4,7 @@ Keyboard-Interactive Authentication Implementation
 Implements SSH keyboard-interactive authentication method according to RFC 4256.
 """
 
-from typing import Any, List, Tuple
-
-from ..exceptions import AuthenticationException
+from typing import Any
 
 
 class KeyboardInteractiveAuth:

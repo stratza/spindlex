@@ -8,11 +8,10 @@ A tool for benchmarking SSH operations and comparing performance (part of Spindl
 import argparse
 import statistics
 import time
-from typing import Any, Dict, List
+from typing import Any
 
 from ..client.ssh_client import SSHClient
 from ..crypto.backend import get_crypto_backend
-from ..logging import get_performance_monitor
 
 
 def benchmark_connection(
@@ -21,11 +20,11 @@ def benchmark_connection(
     password: str = None,
     key_filename: str = None,
     iterations: int = 10,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Benchmark SSH connection establishment."""
     times = []
 
-    for i in range(iterations):
+    for _i in range(iterations):
         start_time = time.time()
 
         client = SSHClient()
@@ -56,11 +55,11 @@ def benchmark_connection(
 
 def benchmark_command_execution(
     client: SSHClient, command: str, iterations: int = 10
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Benchmark command execution."""
     times = []
 
-    for i in range(iterations):
+    for _i in range(iterations):
         start_time = time.time()
 
         stdin, stdout, stderr = client.exec_command(command)
@@ -82,16 +81,16 @@ def benchmark_command_execution(
     }
 
 
-def benchmark_crypto_operations(iterations: int = 1000) -> List[Dict[str, Any]]:
+def benchmark_crypto_operations(iterations: int = 1000) -> list[dict[str, Any]]:
     """Benchmark cryptographic operations."""
-    backend = get_crypto_backend()
+    get_crypto_backend()
     results = []
 
     # Benchmark key generation
     for key_type in ["ed25519", "ecdsa", "rsa"]:
         times = []
 
-        for i in range(min(iterations, 10)):  # Limit key gen iterations
+        for _i in range(min(iterations, 10)):  # Limit key gen iterations
             start_time = time.time()
 
             if key_type == "ed25519":
@@ -126,7 +125,7 @@ def benchmark_crypto_operations(iterations: int = 1000) -> List[Dict[str, Any]]:
     return results
 
 
-def print_benchmark_results(results: List[Dict[str, Any]]):
+def print_benchmark_results(results: list[dict[str, Any]]):
     """Print benchmark results in a formatted table."""
     print("\nBenchmark Results")
     print("=" * 80)

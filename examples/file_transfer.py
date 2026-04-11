@@ -9,7 +9,7 @@ import os
 import tempfile
 from pathlib import Path
 
-from spindlex import SSHClient, AutoAddPolicy
+from spindlex import AutoAddPolicy, SSHClient
 from spindlex.exceptions import SFTPError, SSHException
 
 
@@ -49,7 +49,7 @@ def basic_file_transfer_example():
             print("Download completed")
             
             # Verify files are identical
-            with open(local_file, 'r') as f1, open(download_file, 'r') as f2:
+            with open(local_file) as f1, open(download_file) as f2:
                 if f1.read() == f2.read():
                     print("Files are identical - transfer successful!")
                 else:

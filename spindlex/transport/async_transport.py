@@ -6,11 +6,9 @@ Provides asynchronous SSH transport functionality for high-concurrency applicati
 
 import asyncio
 import socket
-import struct
-import os
-from typing import Any, Dict, Optional, List
+from typing import Any, Optional
 
-from ..exceptions import AuthenticationException, ProtocolException, TransportException
+from ..exceptions import ProtocolException, TransportException
 from ..protocol.constants import *
 from ..protocol.messages import *
 from ..protocol.utils import *
@@ -74,7 +72,7 @@ class AsyncTransport(Transport):
             await self.close()
             if isinstance(e, (TransportException, ProtocolException)):
                 raise
-            raise TransportException(f"Client start failed: {e}")
+            raise TransportException(f"Client start failed: {e}") from e
 
     async def _start_kex_async(self) -> None:
         """Performs KEX by bridging sync KEX logic into a thread."""
@@ -87,7 +85,7 @@ class AsyncTransport(Transport):
             # We run the entire KEX initiation in a thread to avoid deadlocking the loop
             # with sync-to-async bridge calls (.result() calls).
             await asyncio.to_thread(self._run_kex_threadsafe)
-        except Exception as e:
+        except Exception:
             async with self._state_lock:
                 self._kex_in_progress = False
             raise
@@ -122,7 +120,7 @@ class AsyncTransport(Transport):
             fut = asyncio.run_coroutine_threadsafe(self._send_message_async(message), self._loop)
             fut.result()
 
-    def _recv_message(self, allowed_types: Optional[List[int]] = None) -> Message:
+    def _recv_message(self, allowed_types: Optional[list[int]] = None) -> Message:
         """Bridge sync calls to async recv."""
         if not self._loop:
             return super()._recv_message()
@@ -242,7 +240,7 @@ class AsyncTransport(Transport):
     async def auth_password(self, username: str, password: str) -> bool:
         if not self._userauth_service_requested:
             await self._send_message_async(ServiceRequestMessage(SERVICE_USERAUTH))
-            msg = await self._expect_message_async(MSG_SERVICE_ACCEPT)
+            await self._expect_message_async(MSG_SERVICE_ACCEPT)
             self._userauth_service_requested = True
             
         auth_msg = UserAuthRequestMessage(
@@ -331,13 +329,13 @@ class AsyncTransport(Transport):
                 try:
                     self._writer.close()
                     await self._writer.wait_closed()
-                except: pass
+                except Exception: pass
                 self._writer = None
             self._reader = None
             if self._socket:
                 try: self._socket.close()
-                except: pass
+                except Exception: pass
             for c in list(self._channels.values()):
                 try: await c.close()
-                except: pass
+                except Exception: pass
             self._channels.clear()

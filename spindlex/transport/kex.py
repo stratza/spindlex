@@ -5,12 +5,10 @@ Implements SSH key exchange algorithms including Curve25519, ECDH,
 and Diffie-Hellman for secure session key establishment.
 """
 
-import hashlib
-import os
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import dh
 
 from ..crypto.backend import default_crypto_backend
@@ -159,7 +157,7 @@ class KeyExchange:
         except Exception as e:
             if isinstance(e, (CryptoException, ProtocolException)):
                 raise
-            raise CryptoException(f"Key exchange failed: {e}")
+            raise CryptoException(f"Key exchange failed: {e}") from e
 
     def _send_kexinit(self) -> None:
         """Send KEXINIT message with supported algorithms."""
@@ -238,7 +236,7 @@ class KeyExchange:
         self._compression_algorithm_c2s = COMPRESS_NONE
         self._compression_algorithm_s2c = COMPRESS_NONE
 
-    def _choose_algorithm(self, client_list: List[str], server_list: List[str]) -> str:
+    def _choose_algorithm(self, client_list: list[str], server_list: list[str]) -> str:
         """Choose first matching algorithm from client and server lists, excluding extensions."""
         # Filter out SSH extensions from both lists
         extensions = [
@@ -332,7 +330,7 @@ class KeyExchange:
             # Verify server signature
             self._verify_server_signature(server_host_key_blob, signature_blob)
 
-        except Exception as e:
+        except Exception:
             raise
 
     def _verify_server_signature(
@@ -348,7 +346,7 @@ class KeyExchange:
         except Exception as e:
             if isinstance(e, CryptoException):
                 raise
-            raise CryptoException(f"Failed to verify server signature: {e}")
+            raise CryptoException(f"Failed to verify server signature: {e}") from e
 
     def _perform_ecdh_sha2_nistp256(self) -> None:
         """Perform ECDH NIST P-256 SHA256 key exchange."""
@@ -412,7 +410,7 @@ class KeyExchange:
             # Verify server signature
             self._verify_server_signature(server_host_key_blob, signature_blob)
 
-        except Exception as e:
+        except Exception:
             raise
 
     def _compute_ecdh_exchange_hash(
@@ -523,7 +521,7 @@ class KeyExchange:
             # Verify server signature
             self._verify_server_signature(server_host_key_blob, signature_blob)
 
-        except Exception as e:
+        except Exception:
             raise
 
     def _perform_curve25519_sha256(self) -> None:
@@ -587,7 +585,7 @@ class KeyExchange:
             # Verify server signature
             self._verify_server_signature(server_host_key_blob, signature_blob)
 
-        except Exception as e:
+        except Exception:
             raise
 
     def _compute_curve25519_exchange_hash(
@@ -692,7 +690,7 @@ class KeyExchange:
             # Verify server signature
             self._verify_server_signature(server_host_key_blob, signature_blob)
 
-        except Exception as e:
+        except Exception:
             raise
 
     def _compute_exchange_hash(
@@ -894,7 +892,7 @@ class KeyExchange:
         if msg.msg_type != MSG_NEWKEYS:
             raise ProtocolException(f"Expected NEWKEYS, got {msg.msg_type}")
 
-    def generate_keys(self) -> Tuple[bytes, bytes, bytes, bytes]:
+    def generate_keys(self) -> tuple[bytes, bytes, bytes, bytes]:
         """
         Generate session keys from shared secret.
 

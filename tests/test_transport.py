@@ -2,7 +2,6 @@ import socket
 from unittest.mock import MagicMock
 
 import pytest
-
 from spindlex.protocol.messages import Message
 from spindlex.transport.transport import Transport
 

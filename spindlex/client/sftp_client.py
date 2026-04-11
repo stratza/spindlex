@@ -8,9 +8,9 @@ secure file operations over SSH connections.
 import logging
 import os
 import threading
-from typing import Any, BinaryIO, List, Optional, Union
+from typing import Any, Optional
 
-from ..exceptions import ChannelException, SFTPError, SSHException
+from ..exceptions import SFTPError
 from ..protocol.sftp_constants import (
     SFTP_MAX_READ_SIZE,
     SFTP_SUBSYSTEM,
@@ -23,9 +23,6 @@ from ..protocol.sftp_constants import (
     SSH_FXF_READ,
     SSH_FXF_TRUNC,
     SSH_FXF_WRITE,
-    SSH_FXP_INIT,
-    SSH_FXP_RENAME,
-    SSH_FXP_VERSION,
 )
 from ..protocol.sftp_messages import (
     SFTPAttributes,
@@ -215,7 +212,7 @@ class SFTPClient:
                 self._channel = None
             if isinstance(e, SFTPError):
                 raise
-            raise SFTPError(f"SFTP initialization failed: {e}")
+            raise SFTPError(f"SFTP initialization failed: {e}") from e
 
     def _get_next_request_id(self) -> int:
         """Get next request ID for SFTP messages."""
@@ -240,7 +237,7 @@ class SFTPClient:
             data = message.pack()
             self._channel.send(data)
         except Exception as e:
-            raise SFTPError(f"Failed to send SFTP message: {e}")
+            raise SFTPError(f"Failed to send SFTP message: {e}") from e
 
     def _receive_message(self) -> SFTPMessage:
         """
@@ -267,7 +264,7 @@ class SFTPClient:
 
             return SFTPMessage.unpack(msg_data)
         except Exception as e:
-            raise SFTPError(f"Failed to receive SFTP message: {e}")
+            raise SFTPError(f"Failed to receive SFTP message: {e}") from e
 
     def _send_request_and_wait_response(self, request: SFTPMessage) -> SFTPMessage:
         """
@@ -353,7 +350,7 @@ class SFTPClient:
         except Exception as e:
             if isinstance(e, SFTPError):
                 raise
-            raise SFTPError(f"File download failed: {e}", filename=remotepath)
+            raise SFTPError(f"File download failed: {e}", filename=remotepath) from e
 
     def put(self, localpath: str, remotepath: str) -> None:
         """
@@ -428,7 +425,7 @@ class SFTPClient:
                 raise
             raise SFTPError(f"File upload failed: {e}", filename=localpath)
 
-    def listdir(self, path: str = ".") -> List[str]:
+    def listdir(self, path: str = ".") -> list[str]:
         """
         List directory contents.
 
@@ -444,7 +441,7 @@ class SFTPClient:
         try:
             # Open directory
             request_id = self._get_next_request_id()
-            attrs = SFTPAttributes()
+            SFTPAttributes()
             from ..protocol.sftp_messages import SFTPOpenDirMessage
 
             opendir_msg = SFTPOpenDirMessage(request_id, path)
@@ -482,7 +479,7 @@ class SFTPClient:
                         from ..protocol.sftp_messages import SFTPNameMessage
 
                         if isinstance(response, SFTPNameMessage):
-                            for filename, longname, attrs in response.names:
+                            for filename, _longname, _attrs in response.names:
                                 # Skip . and .. entries
                                 if filename not in (".", ".."):
                                     filenames.append(filename)
@@ -741,7 +738,7 @@ class SFTPClient:
         except Exception as e:
             if isinstance(e, SFTPError):
                 raise
-            raise SFTPError(f"Rename operation failed: {e}")
+            raise SFTPError(f"Rename operation failed: {e}") from e
 
     def getcwd(self) -> str:
         """
@@ -780,7 +777,7 @@ class SFTPClient:
         except Exception as e:
             if isinstance(e, SFTPError):
                 raise
-            raise SFTPError(f"Get current directory failed: {e}")
+            raise SFTPError(f"Get current directory failed: {e}") from e
 
     def normalize(self, path: str) -> str:
         """

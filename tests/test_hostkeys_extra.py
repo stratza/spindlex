@@ -1,10 +1,12 @@
-import pytest
 import os
 import tempfile
-from unittest.mock import MagicMock, patch
-from spindlex.hostkeys.storage import HostKeyStorage
-from spindlex.hostkeys.policy import AutoAddPolicy, RejectPolicy, WarningPolicy
+from unittest.mock import MagicMock
+
+import pytest
 from spindlex.crypto.pkey import RSAKey
+from spindlex.hostkeys.policy import AutoAddPolicy, RejectPolicy, WarningPolicy
+from spindlex.hostkeys.storage import HostKeyStorage
+
 
 @pytest.fixture
 def temp_hosts():

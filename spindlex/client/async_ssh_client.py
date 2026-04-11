@@ -6,7 +6,7 @@ Provides asynchronous SSH client functionality for high-concurrency applications
 
 import asyncio
 import socket
-from typing import Any, Optional, Tuple, Union
+from typing import Any, Optional
 
 from ..exceptions import AuthenticationException, SSHException
 from ..hostkeys.policy import AutoAddPolicy, MissingHostKeyPolicy
@@ -120,11 +120,11 @@ class AsyncSSHClient:
 
             if isinstance(e, (SSHException, AuthenticationException)):
                 raise
-            raise SSHException(f"Connection failed: {e}")
+            raise SSHException(f"Connection failed: {e}") from e
 
     async def _create_connection(
         self, hostname: str, port: int, timeout: Optional[float]
-    ) -> Tuple[socket.socket, asyncio.StreamReader, asyncio.StreamWriter]:
+    ) -> tuple[socket.socket, asyncio.StreamReader, asyncio.StreamWriter]:
         """
         Create socket connection to SSH server.
 
@@ -147,14 +147,14 @@ class AsyncSSHClient:
 
             return sock, reader, writer
 
-        except asyncio.TimeoutError:
-            raise SSHException(f"Connection timeout to {hostname}:{port}")
+        except asyncio.TimeoutError as e:
+            raise SSHException(f"Connection timeout to {hostname}:{port}") from e
         except Exception as e:
-            raise SSHException(f"Failed to connect to {hostname}:{port}: {e}")
+            raise SSHException(f"Failed to connect to {hostname}:{port}: {e}") from e
 
     async def exec_command(
         self, command: str, bufsize: int = -1, timeout: Optional[float] = None
-    ) -> Tuple[Any, Any, Any]:
+    ) -> tuple[Any, Any, Any]:
         """
         Execute command on remote server asynchronously.
 
@@ -189,7 +189,7 @@ class AsyncSSHClient:
         except Exception as e:
             if isinstance(e, SSHException):
                 raise
-            raise SSHException(f"Command execution failed: {e}")
+            raise SSHException(f"Command execution failed: {e}") from e
 
     async def invoke_shell(self) -> Any:
         """
@@ -216,7 +216,7 @@ class AsyncSSHClient:
         except Exception as e:
             if isinstance(e, SSHException):
                 raise
-            raise SSHException(f"Shell invocation failed: {e}")
+            raise SSHException(f"Shell invocation failed: {e}") from e
 
     async def open_sftp(self) -> AsyncSFTPClient:
         """
@@ -245,7 +245,7 @@ class AsyncSSHClient:
         except Exception as e:
             if isinstance(e, SSHException):
                 raise
-            raise SSHException(f"SFTP open failed: {e}")
+            raise SSHException(f"SFTP open failed: {e}") from e
 
     def set_missing_host_key_policy(self, policy: MissingHostKeyPolicy) -> None:
         """

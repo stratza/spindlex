@@ -6,7 +6,7 @@ serialization, and validation.
 """
 
 import struct
-from typing import Tuple, Union
+from typing import Union
 
 from ..exceptions import ProtocolException
 from .constants import (
@@ -17,11 +17,10 @@ from .constants import (
     PACKET_LENGTH_SIZE,
     PADDING_LENGTH_SIZE,
     SSH_STRING_ENCODING,
-    validate_message_type,
 )
 
 
-def read_byte(data: bytes, offset: int) -> Tuple[int, int]:
+def read_byte(data: bytes, offset: int) -> tuple[int, int]:
     """
     Read single byte from data.
 
@@ -41,7 +40,7 @@ def read_byte(data: bytes, offset: int) -> Tuple[int, int]:
     return data[offset], offset + 1
 
 
-def read_boolean(data: bytes, offset: int) -> Tuple[bool, int]:
+def read_boolean(data: bytes, offset: int) -> tuple[bool, int]:
     """
     Read boolean from data.
 
@@ -59,7 +58,7 @@ def read_boolean(data: bytes, offset: int) -> Tuple[bool, int]:
     return bool(value), new_offset
 
 
-def read_uint32(data: bytes, offset: int) -> Tuple[int, int]:
+def read_uint32(data: bytes, offset: int) -> tuple[int, int]:
     """
     Read 32-bit unsigned integer from data.
 
@@ -80,7 +79,7 @@ def read_uint32(data: bytes, offset: int) -> Tuple[int, int]:
     return value, offset + 4
 
 
-def read_uint64(data: bytes, offset: int) -> Tuple[int, int]:
+def read_uint64(data: bytes, offset: int) -> tuple[int, int]:
     """
     Read 64-bit unsigned integer from data.
 
@@ -101,7 +100,7 @@ def read_uint64(data: bytes, offset: int) -> Tuple[int, int]:
     return value, offset + 8
 
 
-def read_string(data: bytes, offset: int) -> Tuple[bytes, int]:
+def read_string(data: bytes, offset: int) -> tuple[bytes, int]:
     """
     Read string from data.
 
@@ -128,7 +127,7 @@ def read_string(data: bytes, offset: int) -> Tuple[bytes, int]:
     return string_data, new_offset + length
 
 
-def read_mpint(data: bytes, offset: int) -> Tuple[int, int]:
+def read_mpint(data: bytes, offset: int) -> tuple[int, int]:
     """
     Read multiple precision integer from data.
 

@@ -4,9 +4,8 @@ Async SFTP Client Implementation
 Provides asynchronous SFTP client functionality for file operations.
 """
 
-import asyncio
 import struct
-from typing import Any, BinaryIO, List, Optional, Union
+from typing import Any
 
 from ..exceptions import SFTPError
 from ..protocol.sftp_constants import *
@@ -100,7 +99,7 @@ class AsyncSFTPClient:
         except Exception as e:
             if isinstance(e, SFTPError):
                 raise
-            raise SFTPError(f"File removal failed: {e}")
+            raise SFTPError(f"File removal failed: {e}") from e
 
     async def get(self, remotepath: str, localpath: str) -> None:
         """
@@ -131,7 +130,7 @@ class AsyncSFTPClient:
         except Exception as e:
             if isinstance(e, SFTPError):
                 raise
-            raise SFTPError(f"File download failed: {e}")
+            raise SFTPError(f"File download failed: {e}") from e
 
     async def put(self, localpath: str, remotepath: str) -> None:
         """
@@ -161,9 +160,9 @@ class AsyncSFTPClient:
         except Exception as e:
             if isinstance(e, SFTPError):
                 raise
-            raise SFTPError(f"File upload failed: {e}")
+            raise SFTPError(f"File upload failed: {e}") from e
 
-    async def listdir(self, path: str = ".") -> List[str]:
+    async def listdir(self, path: str = ".") -> list[str]:
         """
         List directory contents asynchronously.
 
@@ -206,7 +205,7 @@ class AsyncSFTPClient:
         except Exception as e:
             if isinstance(e, SFTPError):
                 raise
-            raise SFTPError(f"Directory listing failed: {e}")
+            raise SFTPError(f"Directory listing failed: {e}") from e
 
     async def stat(self, path: str) -> Any:
         """
@@ -243,7 +242,7 @@ class AsyncSFTPClient:
         except Exception as e:
             if isinstance(e, SFTPError):
                 raise
-            raise SFTPError(f"Stat operation failed: {e}")
+            raise SFTPError(f"Stat operation failed: {e}") from e
 
     async def mkdir(self, path: str, mode: int = 0o755) -> None:
         """
@@ -281,7 +280,7 @@ class AsyncSFTPClient:
         except Exception as e:
             if isinstance(e, SFTPError):
                 raise
-            raise SFTPError(f"Directory creation failed: {e}")
+            raise SFTPError(f"Directory creation failed: {e}") from e
 
     async def rmdir(self, path: str) -> None:
         """
@@ -314,7 +313,7 @@ class AsyncSFTPClient:
         except Exception as e:
             if isinstance(e, SFTPError):
                 raise
-            raise SFTPError(f"Directory removal failed: {e}")
+            raise SFTPError(f"Directory removal failed: {e}") from e
 
     async def open(self, filename: str, mode: str = "r") -> "AsyncSFTPFile":
         """
@@ -360,7 +359,7 @@ class AsyncSFTPClient:
         except Exception as e:
             if isinstance(e, SFTPError):
                 raise
-            raise SFTPError(f"File open failed: {e}")
+            raise SFTPError(f"File open failed: {e}") from e
 
     async def close(self) -> None:
         """Close SFTP client and cleanup resources."""
@@ -451,7 +450,7 @@ class AsyncSFTPClient:
         else:
             raise SFTPError("Unexpected response to opendir request")
 
-    async def _readdir(self, handle: bytes) -> List[Any]:
+    async def _readdir(self, handle: bytes) -> list[Any]:
         """
         Read directory entries.
 
@@ -577,7 +576,7 @@ class AsyncSFTPFile:
         except Exception as e:
             if isinstance(e, SFTPError):
                 raise
-            raise SFTPError(f"File read failed: {e}")
+            raise SFTPError(f"File read failed: {e}") from e
 
     async def write(self, data: bytes) -> None:
         """
@@ -620,7 +619,7 @@ class AsyncSFTPFile:
         except Exception as e:
             if isinstance(e, SFTPError):
                 raise
-            raise SFTPError(f"File write failed: {e}")
+            raise SFTPError(f"File write failed: {e}") from e
 
     async def close(self) -> None:
         """Close file handle."""
@@ -635,7 +634,7 @@ class AsyncSFTPFile:
                 # Wait for response
                 await self._client._wait_for_response(request_id)
 
-            except:
+            except Exception:
                 pass  # Ignore errors during close
             finally:
                 self._closed = True

@@ -2,8 +2,6 @@ import json
 import logging
 import time
 
-import pytest
-
 from spindlex.logging.formatters import (
     DebugFormatter,
     JSONFormatter,
@@ -13,13 +11,10 @@ from spindlex.logging.formatters import (
 from spindlex.logging.handlers import PerformanceHandler, SecurityHandler
 from spindlex.logging.logger import configure_logging, get_logger
 from spindlex.logging.monitoring import (
-    ConnectionMetrics,
     CryptoTimer,
-    PerformanceMetric,
     PerformanceMonitor,
     ProtocolAnalyzer,
     get_performance_monitor,
-    get_protocol_analyzer,
     timed_operation,
 )
 from spindlex.logging.sanitizer import LogSanitizer
