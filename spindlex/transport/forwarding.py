@@ -157,7 +157,9 @@ class LocalPortForwarder:
                         pass
                     del self._servers[tunnel_id]
 
-                raise SSHException(f"Failed to create local port forwarding: {e}") from e
+                raise SSHException(
+                    f"Failed to create local port forwarding: {e}"
+                ) from e
 
     def _accept_connections(self, tunnel_id: str, server_socket: socket.socket) -> None:
         """
@@ -426,7 +428,9 @@ class RemotePortForwarder:
                 if tunnel_id in self._tunnels:
                     del self._tunnels[tunnel_id]
 
-                raise SSHException(f"Failed to create remote port forwarding: {e}") from e
+                raise SSHException(
+                    f"Failed to create remote port forwarding: {e}"
+                ) from e
 
     def _send_tcpip_forward_request(self, bind_address: str, bind_port: int) -> bool:
         """

@@ -284,7 +284,9 @@ class Transport:
         except Exception as e:
             if isinstance(e, AuthenticationException):
                 raise
-            raise AuthenticationException(f"Public key authentication failed: {e}") from e
+            raise AuthenticationException(
+                f"Public key authentication failed: {e}"
+            ) from e
 
     def _try_publickey_query(self, username: str, key: Any) -> bool:
         """Try public key authentication without signature (query)."""
@@ -715,7 +717,7 @@ class Transport:
                 else:
                     pass
                     # print(f"DEBUG: Channel {recipient_channel} not found in {list(self._channels.keys())}")
-        
+
         # If it's a global request, handle it separately
         if msg.msg_type == MSG_GLOBAL_REQUEST:
             self._handle_global_request(msg)
@@ -1099,7 +1101,9 @@ class Transport:
 
             if want_reply:
                 # Wait for response
-                response = self._expect_message(MSG_REQUEST_SUCCESS, MSG_REQUEST_FAILURE)
+                response = self._expect_message(
+                    MSG_REQUEST_SUCCESS, MSG_REQUEST_FAILURE
+                )
 
                 if response.msg_type == MSG_REQUEST_SUCCESS:
                     return True
@@ -1455,7 +1459,7 @@ class Transport:
                         # Handle internal messages
                         if msg.msg_type in [MSG_IGNORE, MSG_DEBUG]:
                             continue
-                        
+
                         if msg.msg_type == MSG_DISCONNECT:
                             # Parse disconnect reason if possible
                             try:
@@ -1472,7 +1476,9 @@ class Transport:
                             self._activate_inbound_encryption()
 
                         # Dispatch channel messages (80-100) or global requests (80)
-                        if (msg.msg_type >= 80 and msg.msg_type <= 100) or msg.msg_type == MSG_GLOBAL_REQUEST:
+                        if (
+                            msg.msg_type >= 80 and msg.msg_type <= 100
+                        ) or msg.msg_type == MSG_GLOBAL_REQUEST:
                             self._handle_channel_message(msg)
 
                         return msg
@@ -1489,7 +1495,7 @@ class Transport:
         with self._lock:
             if self._message_queue:
                 return self._message_queue.pop(0)
-        
+
         return self._read_message()
 
     def _expect_message(self, *allowed_types: int) -> Message:
@@ -1503,12 +1509,12 @@ class Transport:
                 for i, msg in enumerate(self._message_queue):
                     if msg.msg_type in allowed_types:
                         return self._message_queue.pop(i)
-            
+
             # 2. Not in queue, read from socket
             msg = self._read_message()
             if msg.msg_type in allowed_types:
                 return msg
-            
+
             # 3. Not what we wanted, queue it for others
             with self._lock:
                 self._message_queue.append(msg)
