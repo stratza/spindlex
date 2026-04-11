@@ -1,7 +1,7 @@
 <div align="center">
   <img src="docs/_static/figure.png" width="160" height="160" alt="SpindleX Logo">
   <h1>SpindleX</h1>
-  <p><strong>A modern, high-performance SSHv2 and SFTP library.</strong></p>
+  <p><strong>Modern, pure-Python SSH library for secure automation, recursive SFTP, and zero-dependency deployments.</strong></p>
 
 [![CI Status](https://img.shields.io/github/actions/workflow/status/Di3Z1E/spindlex/ci.yml?branch=main&style=for-the-badge&logo=github)](https://github.com/Di3Z1E/spindlex/actions)
 [![Coverage](https://img.shields.io/codecov/c/github/Di3Z1E/spindlex?style=for-the-badge&logo=codecov)](https://codecov.io/gh/Di3Z1E/spindlex)
@@ -11,7 +11,7 @@
 [![PyPI Downloads](https://img.shields.io/pypi/dm/spindlex?style=for-the-badge&logo=pypi&logoColor=white&color=brightgreen)](https://pypi.org/project/spindlex/)
 [![Security Status](https://img.shields.io/badge/socket-security-brightgreen?style=for-the-badge&logo=socket.io)](https://badge.socket.dev/pypi/package/spindlex)
 
-<p align="center">
+  <br />
   <a href="https://spindlex.readthedocs.io/"><strong>Explore the Docs »</strong></a>
   <br />
   <br />
@@ -26,7 +26,6 @@
   <a href="#-security">Security</a>
   •
   <a href="meta/CONTRIBUTING.md">Contributing</a>
-</p>
 </div>
 
 ---
