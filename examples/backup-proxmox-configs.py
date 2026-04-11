@@ -3,6 +3,7 @@
 Example: Backing up Proxmox configuration files recursively.
 This script demonstrates using SFTP for downloading configuration directories.
 """
+
 import os
 
 from spindlex import SSHClient
@@ -20,11 +21,12 @@ def download_recursive(sftp, remote_path, local_path):
         remote_item = os.path.join(remote_path, item.filename).replace("\\", "/")
         local_item = os.path.join(local_path, item.filename)
 
-        if item.st_mode & 0o40000: # Directory
+        if item.st_mode & 0o40000:  # Directory
             download_recursive(sftp, remote_item, local_item)
-        else: # File
+        else:  # File
             print(f"Downloading: {remote_item}")
             sftp.get(remote_item, local_item)
+
 
 def main():
     hostname = "proxmox.local"
@@ -39,6 +41,7 @@ def main():
 
         with client.open_sftp() as sftp:
             download_recursive(sftp, remote_config_dir, local_backup_dir)
+
 
 if __name__ == "__main__":
     main()
