@@ -9,7 +9,10 @@ import socket
 import struct
 import threading
 import time
-from typing import Any, Optional
+from typing import Any, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .forwarding import PortForwardingManager
 
 from ..crypto.backend import default_crypto_backend
 from ..exceptions import AuthenticationException, ProtocolException, TransportException
@@ -94,7 +97,7 @@ class Transport:
         self._server_interface: Optional[Any] = None
 
         # Port forwarding
-        self._port_forwarding_manager = None
+        self._port_forwarding_manager: Optional["PortForwardingManager"] = None
 
         # Message dispatching
         self._message_queue: list[Message] = []
@@ -706,7 +709,7 @@ class Transport:
                         recipient_channel=sender_channel,
                         reason_code=SSH_OPEN_UNKNOWN_CHANNEL_TYPE,
                         description=f"Unknown channel type: {channel_type}",
-                        language_tag="",
+                        language="",
                     )
                     self._send_message(failure_msg)
 
@@ -717,7 +720,7 @@ class Transport:
                     recipient_channel=sender_channel,
                     reason_code=SSH_OPEN_CONNECT_FAILED,
                     description=f"Channel open failed: {e}",
-                    language_tag="",
+                    language="",
                 )
                 self._send_message(failure_msg)
             except Exception:
@@ -1279,7 +1282,7 @@ class Transport:
         """Start key exchange process."""
         with self._lock:
             if self._kex_in_progress:
-                return # Avoid double start if triggered simultaneously
+                return  # Avoid double start if triggered simultaneously
 
             self._kex_in_progress = True
 
@@ -1471,7 +1474,9 @@ class Transport:
                             self._kex_in_progress = True
                             with self._lock:
                                 self._message_queue.append(msg)
-                            threading.Thread(target=self._start_kex, daemon=True).start()
+                            threading.Thread(
+                                target=self._start_kex, daemon=True
+                            ).start()
                             continue
 
                         # Dispatch channel messages (80-100) or global requests (80)

@@ -64,7 +64,7 @@ class PasswordAuth:
             self._transport._send_message(auth_msg)
 
             # Handle response
-            return self._transport._handle_auth_response()
+            return bool(self._transport._handle_auth_response())
 
         except Exception as e:
             if isinstance(e, AuthenticationException):

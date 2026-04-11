@@ -60,7 +60,7 @@ class LogSanitizer:
                 p for p in cls.SENSITIVE_PATTERNS if pattern_type in p.pattern.lower()
             )
 
-            def replace_sensitive(match):
+            def replace_sensitive(match: re.Match[str]) -> str:
                 matched_text = match.group()
                 if "=" in matched_text:
                     return (
@@ -132,16 +132,15 @@ class LogSanitizer:
             elif isinstance(value, dict):
                 sanitized[key] = cls.sanitize_dict(value)
             elif isinstance(value, (list, tuple)):
-                sanitized[key] = [
-                    (
-                        cls.sanitize_message(item)
-                        if isinstance(item, str)
-                        else cls.sanitize_dict(item)
-                        if isinstance(item, dict)
-                        else item
-                    )
-                    for item in value
-                ]
+                sanitized_list: list[Any] = []
+                for item in value:
+                    if isinstance(item, str):
+                        sanitized_list.append(cls.sanitize_message(item))
+                    elif isinstance(item, dict):
+                        sanitized_list.append(cls.sanitize_dict(item))
+                    else:
+                        sanitized_list.append(item)
+                sanitized[key] = sanitized_list
             else:
                 sanitized[key] = value
 
