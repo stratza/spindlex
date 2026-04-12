@@ -18,6 +18,8 @@ from .exceptions import (
     SSHException,
     TransportException,
 )
+from .server.sftp_server import SFTPServer
+from .server.ssh_server import SSHServer, SSHServerManager
 from .transport.transport import Transport
 
 __all__ = [
@@ -25,6 +27,9 @@ __all__ = [
     "SFTPClient",
     "AsyncSSHClient",
     "AsyncSFTPClient",
+    "SSHServer",
+    "SFTPServer",
+    "SSHServerManager",
     "Transport",
     "SSHException",
     "TransportException",

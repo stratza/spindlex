@@ -128,6 +128,28 @@ with client.open_sftp() as sftp:
     sftp.chmod('/remote/file.txt', 0o644)  # rw-r--r--
 ```
 
+## SFTP Server
+
+In addition to the client, SpindleX provides an `SFTPServer` implementation that can be used within an `SSHServer` to provide secure file access.
+
+### Implementing an SFTP Server
+
+To enable SFTP in your custom SSH server, you need to handle the "sftp" subsystem request.
+
+```python
+from spindlex.server import SSHServer, SFTPServer
+
+class MyServer(SSHServer):
+    def check_channel_subsystem_request(self, channel, name):
+        if name == "sftp":
+            # root_path defines the base directory for SFTP clients
+            handler = SFTPServer(channel, root_path="/srv/sftp/data")
+            return True
+        return False
+```
+
+The `SFTPServer` handler will automatically process all SFTP packets (reading, writing, directory listing, etc.) relative to the specified `root_path`.
+
 ## Best Practices
 
 ### Security Considerations
