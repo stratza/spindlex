@@ -161,6 +161,51 @@ client.set_missing_host_key_policy(RejectPolicy())
 client.set_missing_host_key_policy(WarningPolicy())
 ```
 
+## Port Forwarding
+
+SpindleX supports both local and remote port forwarding (SSH tunneling).
+
+### Local Port Forwarding
+
+Local port forwarding allows you to forward a port on your local machine to a port on a remote server.
+
+```python
+with SSHClient() as client:
+    client.connect('jump-host.example.com', username='user')
+    
+    # Forward local port 8080 to remote-server.internal:80
+    tunnel_id = client.create_local_port_forward(
+        local_port=8080,
+        remote_host='remote-server.internal',
+        remote_port=80
+    )
+    
+    print(f"Tunnel {tunnel_id} established. Connect to localhost:8080")
+    
+    # Keep the connection open while you use the tunnel
+    import time
+    while True:
+        time.sleep(1)
+```
+
+### Remote Port Forwarding
+
+Remote port forwarding allows you to forward a port on the remote server to a port on your local machine.
+
+```python
+with SSHClient() as client:
+    client.connect('server.example.com', username='user')
+    
+    # Forward remote port 9090 to localhost:3000
+    tunnel_id = client.create_remote_port_forward(
+        remote_port=9090,
+        local_host='127.0.0.1',
+        local_port=3000
+    )
+    
+    print(f"Remote tunnel {tunnel_id} established on server:9090")
+```
+
 ## Error Handling
 
 ### Common Exceptions

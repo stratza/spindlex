@@ -5,9 +5,9 @@ SpindleX supports multiple authentication methods to provide secure access to re
 ## Supported Authentication Methods
 
 1.  **:key: Public Key Authentication** (Recommended)
-2.  **:password: Password Authentication**
+2.  **:lock: Password Authentication**
 3.  **:shield: GSSAPI/Kerberos Authentication**
-4.  **:keyboard: Keyboard-Interactive Authentication** (Currently not implemented)
+4.  **:keyboard: Keyboard-Interactive Authentication**
 
 ## Public Key Authentication
 
@@ -107,6 +107,35 @@ async def connect_gssapi():
             gss_deleg_creds=True    # Delegate credentials if needed
         )
 ```
+
+## Keyboard-Interactive Authentication
+
+Keyboard-interactive authentication is used when the server requires the user to respond to one or more prompts. This is common for multi-factor authentication (MFA).
+
+=== "Sync"
+
+    ```python
+    from spindlex import SSHClient
+
+    def my_handler(title, instruction, prompts):
+        responses = []
+        for prompt, echo in prompts:
+            if echo:
+                responses.append(input(prompt))
+            else:
+                import getpass
+                responses.append(getpass.getpass(prompt))
+        return responses
+
+    with SSHClient() as client:
+        client.connect(
+            hostname="server.example.com",
+            username="user"
+        )
+        # Authentication will trigger keyboard-interactive if required
+        # or you can explicitly use auth_keyboard_interactive
+        client.auth_keyboard_interactive("user", my_handler)
+    ```
 
 ## Security Best Practices
 

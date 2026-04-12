@@ -6,9 +6,9 @@ SpindleX was designed to be a modern, high-performance alternative to Paramiko. 
 
 *   **:zap: Performance**: SpindleX offers a highly efficient protocol implementation with optimized internal read buffering.
 *   **:package: Lean Design**: SpindleX is a modern library that leverages the standard `cryptography` package for secure primitives.
-*   **:asyncio: Native Async**: SpindleX has first-class `asyncio` support.
+*   **:cyclone: Native Async**: SpindleX has first-class `asyncio` support.
 *   **:shield: Modern Security**: SpindleX prioritizes modern, secure algorithms by default.
-*   **:type: Better DX**: Full type hints and a cleaner API.
+*   **:label: Better DX**: Full type hints and a cleaner API.
 
 ## Side-by-Side Comparison
 

@@ -14,10 +14,10 @@ Welcome to SpindleX's documentation! SpindleX is a modern, high-performance SSHv
 *   **:shield: Modern Security**: Supports Ed25519, ECDSA, ChaCha20-Poly1305, and other modern algorithms.
 *   **:package: Lean Design**: Minimal dependencies, leveraging the industry-standard `cryptography` library.
 *   **:link: Full SSH & SFTP**: Both client and server implementations for SSHv2 and SFTP.
-*   **:asyncio: Native Async**: First-class support for `asyncio` with `AsyncSSHClient` and `AsyncSFTPClient`.
+*   **:cyclone: Native Async**: First-class support for `asyncio` with `AsyncSSHClient` and `AsyncSFTPClient`.
 *   **:test_tube: Well Tested**: Robust test suite with focus on protocol correctness and reliability.
-*   **:type: Fully Typed**: Complete type hints for a better developer experience.
-*   **:magic_wand: Unified API**: Consistent synchronous and asynchronous client interfaces.
+*   **:label: Fully Typed**: Complete type hints for a better developer experience.
+*   **:sparkles: Unified API**: Consistent synchronous and asynchronous client interfaces.
 
 ## Quick Start
 
