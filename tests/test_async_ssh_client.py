@@ -26,7 +26,10 @@ async def test_async_ssh_client_connect(async_ssh_client):
         with patch("spindlex.client.async_ssh_client.AsyncTransport") as mock_trans_cls:
             mock_trans = AsyncMock()
             mock_trans_cls.return_value = mock_trans
+            # No need to explicitly mock start_client as AsyncMock() is already a coroutine
+            # but we can do it for clarity
             mock_trans.start_client = AsyncMock()
+            mock_trans.connect_existing = AsyncMock()
 
             await async_ssh_client.connect(
                 "localhost", username="alice", password="password"
@@ -52,6 +55,7 @@ async def test_async_ssh_client_exec_command(async_ssh_client):
 @pytest.mark.asyncio
 async def test_async_ssh_client_close(async_ssh_client):
     transport = AsyncMock()
+    # transport.close is automatically an AsyncMock if transport is AsyncMock
     async_ssh_client._transport = transport
     async_ssh_client._connected = True
     await async_ssh_client.close()
@@ -70,6 +74,8 @@ async def test_async_ssh_client_host_key_verification_fail(async_ssh_client):
             mock_trans = AsyncMock()
             mock_trans_cls.return_value = mock_trans
             mock_trans.start_client = AsyncMock()
+            mock_trans.connect_existing = AsyncMock()
+            mock_trans.close = AsyncMock()
 
             # Mock host key mismatch
             mock_trans.get_server_host_key.return_value = MagicMock()
@@ -78,3 +84,6 @@ async def test_async_ssh_client_host_key_verification_fail(async_ssh_client):
                 await async_ssh_client.connect(
                     "localhost", username="alice", password="password"
                 )
+            
+            # Ensure transport.close was called and awaited (internally by connect)
+            assert mock_trans.close.called
