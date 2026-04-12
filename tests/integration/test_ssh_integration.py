@@ -24,9 +24,10 @@ def ssh_server(docker_ip, docker_services):
 
     def check():
         try:
-            # Simple port connectivity check
-            with socket.create_connection((docker_ip, port), timeout=1):
-                return True
+            with socket.create_connection((docker_ip, port), timeout=2) as sock:
+                sock.settimeout(2)
+                banner = sock.recv(1024)
+                return banner.startswith(b"SSH-")
         except Exception:
             return False
 
