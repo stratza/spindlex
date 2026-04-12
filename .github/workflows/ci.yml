@@ -88,15 +88,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Spin up OpenSSH Server
-        run: docker compose -f tests/integration/docker-compose.yml up -d
       - name: Run Integration Suite
         run: |
           uv pip install --system -e ".[test]" pytest-docker
           pytest tests/integration/ -v
-      - name: Teardown
-        if: always()
-        run: docker compose -f tests/integration/docker-compose.yml down
 
   # --- 3. Documentation & Quality ---
   docs-build:
