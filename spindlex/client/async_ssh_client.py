@@ -4,10 +4,12 @@ Async SSH Client Implementation
 Provides asynchronous SSH client functionality for high-concurrency applications.
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import socket
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable
 
 if TYPE_CHECKING:
     pass
@@ -29,10 +31,10 @@ class AsyncSSHClient:
 
     def __init__(self) -> None:
         """Initialize async SSH client."""
-        self._transport: Optional[AsyncTransport] = None
-        self._hostname: Optional[str] = None
+        self._transport: AsyncTransport | None = None
+        self._hostname: str | None = None
         self._port: int = 22
-        self._username: Optional[str] = None
+        self._username: str | None = None
         self._host_key_policy: MissingHostKeyPolicy = RejectPolicy()
         self._host_key_storage = HostKeyStorage()
         self._logger = logging.getLogger(__name__)
@@ -42,17 +44,17 @@ class AsyncSSHClient:
         self,
         hostname: str,
         port: int = 22,
-        username: Optional[str] = None,
-        password: Optional[str] = None,
-        pkey: Optional[Any] = None,
-        timeout: Optional[float] = None,
+        username: str | None = None,
+        password: str | None = None,
+        pkey: Any | None = None,
+        timeout: float | None = None,
         compress: bool = False,
         gss_auth: bool = False,
         gss_kex: bool = False,
         gss_deleg_creds: bool = True,
-        gss_host: Optional[str] = None,
-        rekey_bytes_limit: Optional[int] = None,
-        rekey_time_limit: Optional[int] = None,
+        gss_host: str | None = None,
+        rekey_bytes_limit: int | None = None,
+        rekey_time_limit: int | None = None,
     ) -> None:
         """
         Connect to SSH server asynchronously.
@@ -184,7 +186,7 @@ class AsyncSSHClient:
             raise BadHostKeyException(hostname, None)
 
     async def _create_connection(
-        self, hostname: str, port: int, timeout: Optional[float]
+        self, hostname: str, port: int, timeout: float | None
     ) -> tuple[socket.socket, asyncio.StreamReader, asyncio.StreamWriter]:
         """
         Create socket connection to SSH server.
@@ -214,7 +216,7 @@ class AsyncSSHClient:
             raise SSHException(f"Failed to connect to {hostname}:{port}: {e}") from e
 
     async def exec_command(
-        self, command: str, bufsize: int = -1, timeout: Optional[float] = None
+        self, command: str, bufsize: int = -1, timeout: float | None = None
     ) -> tuple[Any, Any, Any]:
         """
         Execute command on remote server asynchronously.
@@ -345,7 +347,7 @@ class AsyncSSHClient:
     async def auth_keyboard_interactive(
         self,
         username: str,
-        handler: Optional[Callable[[str, str, list[tuple[str, bool]]], Any]] = None,
+        handler: Callable[[str, str, list[tuple[str, bool]]], Any] | None = None,
     ) -> None:
         """Authenticate using keyboard-interactive method asynchronously."""
         if not self._transport:
@@ -362,7 +364,7 @@ class AsyncSSHClient:
     async def auth_gssapi(
         self,
         username: str,
-        gss_host: Optional[str] = None,
+        gss_host: str | None = None,
         gss_deleg_creds: bool = False,
     ) -> None:
         """Authenticate using GSSAPI (Kerberos) asynchronously."""
@@ -375,10 +377,10 @@ class AsyncSSHClient:
     async def _authenticate(
         self,
         username: str,
-        password: Optional[str] = None,
-        pkey: Optional[Any] = None,
+        password: str | None = None,
+        pkey: Any | None = None,
         gss_auth: bool = False,
-        gss_host: Optional[str] = None,
+        gss_host: str | None = None,
         gss_deleg_creds: bool = False,
     ) -> None:
         """Internal helper to guide authentication flow."""
@@ -537,7 +539,7 @@ class AsyncSSHClient:
         self._port = 22
         self._username = None
 
-    async def __aenter__(self) -> "AsyncSSHClient":
+    async def __aenter__(self) -> AsyncSSHClient:
         """Async context manager entry."""
         return self
 
@@ -551,7 +553,7 @@ class AsyncSSHClient:
         return self._connected and self._transport is not None
 
     @property
-    def hostname(self) -> Optional[str]:
+    def hostname(self) -> str | None:
         """Get connected hostname."""
         return self._hostname
 
@@ -561,6 +563,6 @@ class AsyncSSHClient:
         return self._port
 
     @property
-    def username(self) -> Optional[str]:
+    def username(self) -> str | None:
         """Get authenticated username."""
         return self._username
