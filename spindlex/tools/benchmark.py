@@ -104,7 +104,7 @@ def benchmark_crypto_operations(iterations: int = 1000) -> list[dict[str, Any]]:
             elif key_type == "rsa":
                 from ..crypto.pkey import RSAKey
 
-                RSAKey.generate(2048)
+                RSAKey.generate(bits=2048)
 
             gen_time = time.time() - start_time
             times.append(gen_time)

@@ -1,6 +1,7 @@
 import pytest
-from spindlex.crypto.pkey import PKey, Ed25519Key, RSAKey, ECDSAKey
+from spindlex.crypto.pkey import ECDSAKey, Ed25519Key, PKey, RSAKey
 from spindlex.exceptions import CryptoException
+
 
 def test_pkey_generate_ed25519():
     key = PKey.generate('ed25519')

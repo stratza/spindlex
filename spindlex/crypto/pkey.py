@@ -204,13 +204,14 @@ class PKey:
             raise CryptoException(f"Failed to load public key from bytes: {e}") from e
 
     @classmethod
-    def generate(cls, key_type: str = "ed25519", bits: int = 2048) -> "PKey":
+    def generate(cls, key_type: str = "ed25519", bits: int = 2048, **kwargs: Any) -> "PKey":
         """
         Generate a new key pair.
 
         Args:
             key_type: Type of key to generate ('ed25519', 'rsa', 'ecdsa')
-            bits: Number of bits for RSA keys
+            bits: Number of bits for RSA keys (legacy, use kwargs for others)
+            **kwargs: Additional arguments for specific key types
 
         Returns:
             New PKey instance with generated key pair
@@ -223,11 +224,11 @@ class PKey:
 
         key_type = key_type.lower()
         if key_type == "ed25519":
-            return Ed25519Key.generate()
+            return Ed25519Key.generate(**kwargs)
         elif key_type == "rsa":
-            return RSAKey.generate(bits=bits)
+            return RSAKey.generate(bits=bits, **kwargs)
         elif key_type == "ecdsa":
-            return ECDSAKey.generate()
+            return ECDSAKey.generate(**kwargs)
         else:
             raise CryptoException(f"Unsupported key type for generation: {key_type}")
 
@@ -426,7 +427,7 @@ class Ed25519Key(PKey):
             raise CryptoException(f"Ed25519 signing failed: {e}") from e
 
     @classmethod
-    def generate(cls, *args: Any, **kwargs: Any) -> "Ed25519Key":
+    def generate(cls, key_type: str = "ed25519", bits: int = 256, *args: Any, **kwargs: Any) -> "Ed25519Key":
         """Generate a new Ed25519 key pair."""
         key = cls()
         key._key = ed25519.Ed25519PrivateKey.generate()
@@ -657,7 +658,7 @@ class ECDSAKey(PKey):
             raise CryptoException(f"ECDSA signing failed: {e}") from e
 
     @classmethod
-    def generate(cls, *args: Any, **kwargs: Any) -> "ECDSAKey":
+    def generate(cls, key_type: str = "ecdsa", bits: int = 256, *args: Any, **kwargs: Any) -> "ECDSAKey":
         """Generate a new ECDSA key pair (P-256)."""
         key = cls()
         key._key = ec.generate_private_key(key.curve, backend=default_backend())
@@ -886,7 +887,7 @@ class RSAKey(PKey):
             raise CryptoException(f"RSA signing failed: {e}") from e
 
     @classmethod
-    def generate(cls, bits: int = 2048, *args: Any, **kwargs: Any) -> "RSAKey":
+    def generate(cls, key_type: str = "rsa", bits: int = 2048, *args: Any, **kwargs: Any) -> "RSAKey":
         """Generate a new RSA key pair."""
         key = cls()
         key._key = rsa.generate_private_key(

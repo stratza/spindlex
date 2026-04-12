@@ -28,7 +28,7 @@ def generate_key(
         key_size = bits or 2048
         if key_size < 2048:
             raise ValueError("RSA key size must be at least 2048 bits")
-        key = RSAKey.generate(key_size)
+        key = RSAKey.generate(bits=key_size)
     else:
         raise ValueError(f"Unsupported key type: {key_type}")
 

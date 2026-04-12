@@ -1,7 +1,9 @@
-import pytest
 from unittest.mock import MagicMock
-from spindlex.transport.channel import Channel
+
+import pytest
 from spindlex.protocol.constants import SSH_STRING_ENCODING
+from spindlex.transport.channel import Channel
+
 
 @pytest.fixture
 def mock_transport():
