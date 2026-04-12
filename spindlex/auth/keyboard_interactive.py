@@ -5,7 +5,7 @@ Implements SSH keyboard-interactive authentication method according to RFC 4256.
 """
 
 import getpass
-from typing import Any, Callable, list, tuple, cast
+from typing import Any, Callable, cast, List, Tuple
 
 from ..exceptions import AuthenticationException
 from ..protocol.constants import (
@@ -109,6 +109,73 @@ class KeyboardInteractiveAuth:
                 # Send response
                 info_resp = UserAuthInfoResponseMessage(responses)
                 self._transport._send_message(info_resp)
+            else:
+                raise AuthenticationException(
+                    f"Unexpected message during auth: {msg.msg_type}"
+                )
+
+
+class AsyncKeyboardInteractiveAuth(KeyboardInteractiveAuth):
+    """
+    Asynchronous version of keyboard-interactive authentication.
+    """
+
+    async def authenticate_async(
+        self,
+        username: str,
+        handler: Callable[[str, str, list[tuple[str, bool]]], Any],
+    ) -> bool:
+        """
+        Perform keyboard-interactive authentication asynchronously.
+        """
+        try:
+            return await self._handle_auth_loop_async(handler)
+        except Exception as e:
+            if isinstance(e, AuthenticationException):
+                raise
+            raise AuthenticationException(
+                f"Keyboard-interactive authentication failed: {e}"
+            )
+
+    async def _handle_auth_loop_async(self, handler: Callable) -> bool:
+        """Handle the interactive information exchange loop asynchronously."""
+        while True:
+            msg = await self._transport._expect_message_async(
+                MSG_USERAUTH_SUCCESS,
+                MSG_USERAUTH_FAILURE,
+                MSG_USERAUTH_INFO_REQUEST,
+            )
+
+            if isinstance(msg, UserAuthSuccessMessage):
+                return True
+            elif isinstance(msg, UserAuthFailureMessage):
+                if msg.partial_success:
+                    raise AuthenticationException(
+                        f"Partial success - more methods required: {', '.join(msg.authentications)}"
+                    )
+                return False
+            elif msg.msg_type == MSG_USERAUTH_INFO_REQUEST:
+                info_req = cast(
+                    UserAuthInfoRequestMessage,
+                    UserAuthInfoRequestMessage.unpack(msg._data),
+                )
+
+                # Call user handler (might be async or sync)
+                import asyncio
+
+                if asyncio.iscoroutinefunction(handler):
+                    responses = await handler(
+                        info_req.name, info_req.instruction, info_req.prompts
+                    )
+                else:
+                    # Run sync handler in thread to avoid blocking the loop
+                    responses = await asyncio.to_thread(
+                        handler, info_req.name, info_req.instruction, info_req.prompts
+                    )
+
+                # Send response
+                info_resp = UserAuthInfoResponseMessage(responses)
+                await self._transport._send_message_async(info_resp)
             else:
                 raise AuthenticationException(
                     f"Unexpected message during auth: {msg.msg_type}"

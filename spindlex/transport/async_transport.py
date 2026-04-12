@@ -390,6 +390,41 @@ class AsyncTransport(Transport):
         finally:
             gssapi_auth.cleanup()
 
+    async def auth_keyboard_interactive(  # type: ignore[override]
+        self, username: str, handler: Any
+    ) -> bool:
+        """Authenticate using keyboard-interactive method asynchronously."""
+        if not self._userauth_service_requested:
+            await self._send_message_async(ServiceRequestMessage(SERVICE_USERAUTH))
+            await self._expect_message_async(MSG_SERVICE_ACCEPT)
+            self._userauth_service_requested = True
+
+        from ..auth.keyboard_interactive import AsyncKeyboardInteractiveAuth
+
+        # Send initial keyboard-interactive request
+        auth_request = UserAuthRequestMessage(
+            username=username,
+            service=SERVICE_CONNECTION,
+            method=AUTH_KEYBOARD_INTERACTIVE,
+            method_data=self._build_keyboard_interactive_data(),
+        )
+        await self._send_message_async(auth_request)
+
+        # Perform interactive authentication
+        ki_auth = AsyncKeyboardInteractiveAuth(self)
+        result = await ki_auth.authenticate_async(username, handler)
+
+        if result:
+            self._authenticated = True
+        return result
+
+    def _build_keyboard_interactive_data(self) -> bytes:
+        """Build keyboard-interactive authentication method data."""
+        data = bytearray()
+        data.extend(write_string(""))  # language tag
+        data.extend(write_string(""))  # submethods
+        return bytes(data)
+
     async def open_channel(self, kind: str, dest_addr: Optional[tuple] = None) -> Any:  # type: ignore[override]
         async with self._state_lock:
             cid = self._next_channel_id
