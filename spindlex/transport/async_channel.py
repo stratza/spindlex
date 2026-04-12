@@ -357,7 +357,10 @@ class AsyncChannel(Channel):
                 pass  # Ignore errors during close
             finally:
                 # Remove from transport
-                if hasattr(self._transport, "_channels") and self._channel_id in self._transport._channels:
+                if (
+                    hasattr(self._transport, "_channels")
+                    and self._channel_id in self._transport._channels
+                ):
                     async with getattr(self._transport, "_state_lock", asyncio.Lock()):
                         if self._channel_id in self._transport._channels:
                             del self._transport._channels[self._channel_id]

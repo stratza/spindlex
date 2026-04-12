@@ -34,7 +34,7 @@ async def test_async_ssh_client_connect(async_ssh_client):
             # Ensure synchronous methods return values, not coroutines
             mock_trans.get_server_host_key = MagicMock()
             mock_trans.get_server_host_key.return_value = MagicMock()
-            
+
             # No need to explicitly mock start_client as AsyncMock() is already a coroutine
             # but we can do it for clarity
             mock_trans.start_client = AsyncMock()
