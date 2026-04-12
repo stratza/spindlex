@@ -4,7 +4,8 @@ Keyboard-Interactive Authentication Implementation
 Implements SSH keyboard-interactive authentication method according to RFC 4256.
 """
 
-from typing import Any, Callable, cast
+import getpass
+from typing import Any, Callable, list, tuple, cast
 
 from ..exceptions import AuthenticationException
 from ..protocol.constants import (
@@ -112,3 +113,35 @@ class KeyboardInteractiveAuth:
                 raise AuthenticationException(
                     f"Unexpected message during auth: {msg.msg_type}"
                 )
+
+
+def console_handler(
+    title: str, instruction: str, prompts: list[tuple[str, bool]]
+) -> list[str]:
+    """
+    Default terminal-based handler for keyboard-interactive authentication.
+
+    Uses input() and getpass.getpass() to collect responses from the user
+    in the console.
+
+    Args:
+        title: Authentication title from server
+        instruction: Instruction text from server
+        prompts: List of (prompt, echo) tuples
+
+    Returns:
+        List of strings containing the user's responses
+    """
+    if title:
+        print(f"\n{title}")
+    if instruction:
+        print(instruction)
+
+    responses = []
+    for prompt, echo in prompts:
+        if echo:
+            responses.append(input(prompt))
+        else:
+            responses.append(getpass.getpass(prompt))
+
+    return responses
