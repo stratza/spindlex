@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 if TYPE_CHECKING:
     from .sftp_client import SFTPClient
 
+from ..auth.keyboard_interactive import console_handler
 from ..crypto.pkey import PKey
 from ..exceptions import (
     AuthenticationException,
@@ -22,7 +23,6 @@ from ..hostkeys.policy import MissingHostKeyPolicy, RejectPolicy
 from ..hostkeys.storage import HostKeyStorage
 from ..transport.channel import Channel
 from ..transport.transport import Transport
-from ..auth.keyboard_interactive import console_handler
 
 
 class ChannelFile:
@@ -356,7 +356,9 @@ class SSHClient:
     def auth_keyboard_interactive(
         self,
         username: str,
-        handler: Optional[Callable[[str, str, list[tuple[str, bool]]], list[str]]] = None,
+        handler: Optional[
+            Callable[[str, str, list[tuple[str, bool]]], list[str]]
+        ] = None,
     ) -> None:
         """
         Authenticate using keyboard-interactive method.

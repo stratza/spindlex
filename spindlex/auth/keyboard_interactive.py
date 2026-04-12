@@ -5,7 +5,7 @@ Implements SSH keyboard-interactive authentication method according to RFC 4256.
 """
 
 import getpass
-from typing import Any, Callable, cast, List, Tuple
+from typing import Any, Callable, cast
 
 from ..exceptions import AuthenticationException
 from ..protocol.constants import (

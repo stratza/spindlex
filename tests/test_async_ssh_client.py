@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from spindlex.client.async_ssh_client import AsyncSSHClient
@@ -14,8 +14,9 @@ def async_ssh_client():
 @pytest.mark.asyncio
 async def test_async_ssh_client_connect(async_ssh_client):
     from spindlex.hostkeys.policy import AutoAddPolicy
+
     async_ssh_client.set_missing_host_key_policy(AutoAddPolicy())
-    
+
     with patch("asyncio.open_connection", new_callable=AsyncMock) as mock_open:
         mock_reader = AsyncMock()
         mock_reader.readline.return_value = b"SSH-2.0-spindlex_test\r\n"
