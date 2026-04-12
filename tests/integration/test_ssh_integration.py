@@ -1,4 +1,5 @@
 import os
+import socket
 import time
 
 import pytest
@@ -21,8 +22,16 @@ def ssh_server(docker_ip, docker_services):
     """Ensure that SSH server is up and responsive."""
     port = docker_services.port_for("openssh-server", 22)
 
+    def check():
+        try:
+            with socket.create_connection((docker_ip, port), timeout=1) as sock:
+                banner = sock.recv(1024)
+                return banner.startswith(b"SSH-")
+        except Exception:
+            return False
+
     # Wait for SSH banner
-    docker_services.wait_until_responsive(timeout=30.0, pause=0.5, check=lambda: True)
+    docker_services.wait_until_responsive(timeout=30.0, pause=0.5, check=check)
     return docker_ip, port
 
 
