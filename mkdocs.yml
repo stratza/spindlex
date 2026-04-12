@@ -88,6 +88,7 @@ nav:
       - Authentication: user_guide/authentication.md
       - Client Usage: user_guide/client.md
       - SFTP Operations: user_guide/sftp.md
+      - Server Usage: user_guide/server.md
   - Migration:
       - From Paramiko: migration/paramiko.md
   - Cookbook:

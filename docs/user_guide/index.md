@@ -10,3 +10,6 @@ Learn about supported authentication methods including Password, Public Key (RSA
 
 ## [**SFTP Operations**](sftp.md)
 Everything you need to know about file transfers, directory management, and streaming with SFTP.
+
+## [**Server Usage**](server.md)
+Learn how to implement custom SSH and SFTP servers using SpindleX's modular server framework.
