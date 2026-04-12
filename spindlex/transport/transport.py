@@ -1249,41 +1249,56 @@ class Transport:
         self._socket.sendall(version_line.encode(SSH_STRING_ENCODING))
 
     def _recv_version(self) -> None:
-        """Receive and validate SSH version string."""
+        """Receive and validate SSH version string with retries."""
+        import time
+
+        max_retries = 15
+        retry_delay = 2.0
         version_line = b""
 
-        # Read version line character by character
-        while True:
+        for attempt in range(max_retries):
             try:
-                # Use _recv_bytes(1) to benefit from the internal 32KB buffer.
-                # While we read character by character to find the line ending,
-                # _recv_bytes efficiently pre-fetches data from the socket.
-                char = self._recv_bytes(1)
-                if not char:
-                    raise TransportException(
-                        "Connection closed during version exchange"
+                # Read version line character by character
+                while True:
+                    char = self._recv_bytes(1)
+                    if not char:
+                        raise TransportException("Connection closed")
+
+                    version_line += char
+
+                    # Check for line ending
+                    if version_line.endswith(b"\r\n"):
+                        version_line = version_line[:-2]
+                        break
+                    elif version_line.endswith(b"\n"):
+                        version_line = version_line[:-1]
+                        break
+
+                    # Prevent excessive version line length
+                    if len(version_line) > 255:
+                        raise ProtocolException("Version line too long")
+
+                if version_line:
+                    break
+
+            except (TransportException, socket.timeout, ConnectionResetError):
+                if attempt < max_retries - 1:
+                    self._logger.debug(
+                        f"Banner read attempt {attempt + 1} failed, retrying..."
                     )
+                    time.sleep(retry_delay)
+                    version_line = b""  # Reset for next attempt
+                    continue
+                raise TransportException(
+                    f"Failed to receive SSH banner after {max_retries} attempts"
+                )
 
-                version_line += char
+        self._remote_version = version_line.decode().strip()
+        self._logger.debug(f"Remote version: {self._remote_version}")
 
-                # Check for line ending
-                if version_line.endswith(b"\r\n"):
-                    version_line = version_line[:-2]
-                    break
-                elif version_line.endswith(b"\n"):
-                    version_line = version_line[:-1]
-                    break
-
-                # Prevent excessive version line length
-                if len(version_line) > 255:
-                    raise ProtocolException("Version line too long")
-
-            except TransportException as e:
-                if "Timeout" in str(e):
-                    raise TransportException("Timeout during version exchange")
-                raise
-            except Exception as e:
-                raise TransportException(f"Error during version exchange: {e}") from e
+        # Check if version is supported
+        if not is_supported_version(self._remote_version):
+            raise TransportException(f"Unsupported SSH version: {self._remote_version}")
 
         try:
             version_string = version_line.decode(SSH_STRING_ENCODING)
