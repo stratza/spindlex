@@ -7,7 +7,7 @@ and managing SSH sessions with comprehensive authentication support.
 
 import logging
 import socket
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 if TYPE_CHECKING:
     from .sftp_client import SFTPClient

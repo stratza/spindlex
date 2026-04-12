@@ -138,6 +138,21 @@ Keyboard-interactive authentication is used when the server requires the user to
     client.auth_keyboard_interactive("user", my_handler)
     ```
 
+=== "Async"
+
+    ```python
+    from spindlex import AsyncSSHClient
+
+    async def main():
+        async with AsyncSSHClient() as client:
+            await client.connect(
+                hostname="server.example.com",
+                username="user"
+            )
+            # Both sync and async handlers are supported
+            await client.auth_keyboard_interactive("user")
+    ```
+
 ## Security Best Practices
 
 ### Key Management
