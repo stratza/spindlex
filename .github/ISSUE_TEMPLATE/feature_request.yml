@@ -1,26 +1,114 @@
-name: ✨ Feature Request
-description: Suggest an idea or enhancement for SpindleX
-labels: ["enhancement"]
+name: 🚀 Feature Request
+description: Propose a new feature or enhancement for SpindleX
+title: "[Feature]: "
+labels: ["enhancement", "triage"]
+assignees: []
+
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Have an idea to make SpindleX better? We'd love to hear it. Please describe your proposal clearly so we can evaluate and discuss it.
+
   - type: textarea
     id: problem
     attributes:
-      label: Is your feature request related to a problem?
-      description: A clear and concise description of what the problem is.
-  - type: textarea
-    id: solution
-    attributes:
-      label: Describe the solution you'd like
-      description: A clear and concise description of what you want to happen.
+      label: Problem / Motivation
+      description: What problem does this feature solve, or what use case does it enable? What are you trying to do today that is impossible or painful?
+      placeholder: "e.g. There is currently no way to set a per-command timeout on exec_command, so long-running commands can block a thread indefinitely."
     validations:
       required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Solution
+      description: Describe what you'd like to see added or changed. Include a rough API sketch if you have one.
+      render: python
+      placeholder: |
+        # Example API sketch
+        stdin, stdout, stderr = client.exec_command('long_task', timeout=30)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Feature Area
+      description: Which part of SpindleX does this relate to?
+      multiple: true
+      options:
+        - SSHClient (sync)
+        - AsyncSSHClient (async)
+        - SFTPClient (sync)
+        - AsyncSFTPClient (async)
+        - Authentication
+        - Host key management
+        - Connection / transport layer
+        - Channel & command execution
+        - Port forwarding / tunnelling
+        - Logging & diagnostics
+        - Configuration / settings API
+        - Type annotations
+        - Documentation
+        - Performance
+        - Security hardening
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: How important is this to you?
+      options:
+        - Critical — blocking my use-case entirely
+        - High — I work around it but it's painful
+        - Medium — nice to have
+        - Low — minor quality-of-life improvement
+    validations:
+      required: true
+
   - type: textarea
     id: alternatives
     attributes:
-      label: Describe alternatives you've considered
-      description: A clear and concise description of any alternative solutions or features you've considered.
+      label: Alternatives Considered
+      description: Are there other ways to solve this today (workarounds, other libraries, etc.)? Why do they fall short?
+    validations:
+      required: false
+
   - type: textarea
-    id: context
+    id: prior_art
     attributes:
-      label: Additional context
-      description: Add any other context or screenshots about the feature request here.
+      label: Prior Art / References
+      description: Links to similar features in other SSH libraries (Paramiko, AsyncSSH, libssh2-python), RFCs, or relevant discussions.
+      placeholder: |
+        - AsyncSSH does this via `process.wait(timeout=30)`: https://...
+        - RFC 4254 §6.10 describes the underlying protocol support
+    validations:
+      required: false
+
+  - type: textarea
+    id: breaking
+    attributes:
+      label: Potential Breaking Changes
+      description: Would this require any changes to the existing public API? If so, describe the impact.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I am willing to open a pull request for this feature.
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      options:
+        - label: I have searched existing issues and this has not already been requested.
+          required: true
+        - label: This request is specific to SpindleX (not a general SSH question).
+          required: true

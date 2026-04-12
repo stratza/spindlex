@@ -1,0 +1,12 @@
+blank_issues_enabled: false
+
+contact_links:
+  - name: 📖 Documentation
+    url: https://spindlex.readthedocs.io/
+    about: Check the docs first — your answer might already be there.
+  - name: 💬 General Questions & Discussions
+    url: https://github.com/Di3Z1E/spindlex/discussions
+    about: Use Discussions for usage questions, ideas, and community chat.
+  - name: 🔒 Security Vulnerability
+    url: https://github.com/Di3Z1E/spindlex/blob/main/SECURITY.md
+    about: Please do NOT open a public issue for security vulnerabilities. Follow the security policy instead.

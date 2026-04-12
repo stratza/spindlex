@@ -1,61 +1,166 @@
 name: 🐛 Bug Report
-description: Report a bug to help us improve SpindleX
-labels: ["bug"]
+description: Report a bug or unexpected behaviour in SpindleX
+title: "[Bug]: "
+labels: ["bug", "triage"]
+assignees: []
+
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time to fill out this bug report!
+        Thanks for taking the time to report a bug! Please fill in as much detail as possible to help us reproduce and fix it quickly.
+
   - type: textarea
     id: description
     attributes:
-      label: Description
+      label: Bug Description
       description: A clear and concise description of what the bug is.
+      placeholder: "e.g. `SSHClient.connect()` raises `ConnectionResetError` on the second call within the same context manager."
     validations:
       required: true
+
   - type: textarea
     id: reproduction
     attributes:
-      label: Reproduction Steps
-      description: |
-        How can we reproduce the bug?
-        Please provide a minimal code example or steps to reproduce.
-      placeholder: |
-        1. Install SpindleX version X.Y.Z
-        2. Run this script...
-        3. See error
-    validations:
-      required: true
-  - type: textarea
-    id: expected-behavior
-    attributes:
-      label: Expected Behavior
-      description: What did you expect to happen?
-    validations:
-      required: true
-  - type: textarea
-    id: logs
-    attributes:
-      label: Logs
-      description: |
-        Please provide any relevant logs or stack traces.
-        Tip: You can use triple backticks to format code.
+      label: Minimal Reproduction
+      description: Provide the smallest possible code snippet that reproduces the issue.
       render: python
+      placeholder: |
+        from spindlex import SSHClient
+        from spindlex.hostkeys.policy import AutoAddPolicy
+
+        with SSHClient() as client:
+            client.set_missing_host_key_policy(AutoAddPolicy())
+            client.connect('example.com', username='admin')
+            # Bug occurs here
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behaviour
+      description: What did you expect to happen?
+      placeholder: "The command should execute and return stdout without error."
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behaviour
+      description: What actually happened? Include the full traceback if applicable.
+      render: python
+      placeholder: |
+        Traceback (most recent call last):
+          ...
+        spindlex.exceptions.SomeError: ...
+    validations:
+      required: true
+
   - type: dropdown
-    id: version
+    id: transport
+    attributes:
+      label: Transport / Protocol
+      description: Which part of SpindleX does this affect?
+      multiple: true
+      options:
+        - SSHClient (sync)
+        - AsyncSSHClient (async)
+        - SFTPClient (sync)
+        - AsyncSFTPClient (async)
+        - Host key / policy
+        - Authentication (password / key / agent)
+        - Channel / exec_command
+        - Port forwarding / tunnelling
+        - Other / unsure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: auth_method
+    attributes:
+      label: Authentication Method Used
+      options:
+        - Password
+        - Ed25519 key
+        - ECDSA key
+        - RSA key
+        - SSH agent
+        - Not applicable / unsure
+    validations:
+      required: false
+
+  - type: input
+    id: spindlex_version
     attributes:
       label: SpindleX Version
-      options:
-        - Latest (Main)
-        - 0.4.x
-        - 0.3.x
-        - Other (please specify in description)
+      description: Run `python -c "import spindlex; print(spindlex.__version__)"` or check `pip show spindlex`.
+      placeholder: "e.g. 0.4.2"
     validations:
       required: true
+
   - type: input
-    id: environment
+    id: python_version
     attributes:
-      label: Environment
-      placeholder: e.g. Ubuntu 22.04, Python 3.11, uv v0.1.0
+      label: Python Version
+      description: Run `python --version`.
+      placeholder: "e.g. 3.12.3"
     validations:
       required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      options:
+        - Linux
+        - macOS
+        - Windows
+        - Docker / container
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: server_info
+    attributes:
+      label: SSH Server (if relevant)
+      description: Server software and version you're connecting to, if known.
+      placeholder: "e.g. OpenSSH 9.3, Dropbear 2022.83, unknown"
+    validations:
+      required: false
+
+  - type: textarea
+    id: debug_log
+    attributes:
+      label: Debug Logs
+      description: |
+        If possible, enable debug logging and paste the relevant output here.
+        ```python
+        import logging
+        logging.basicConfig(level=logging.DEBUG)
+        ```
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Any other context, screenshots, or links that might help.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      options:
+        - label: I have searched existing issues and this is not a duplicate.
+          required: true
+        - label: I am using the latest release of SpindleX.
+          required: true
+        - label: I have included a minimal reproduction snippet.
+          required: true
