@@ -12,7 +12,7 @@ services:
       - USER_NAME=testuser
       - PASSWORD_ACCESS=true
     ports:
-      - "2222:22"
+      - 22
     volumes:
       - ./config:/config
     restart: unless-stopped
