@@ -25,14 +25,23 @@ def ssh_server(docker_ip, docker_services):
     def check():
         try:
             with socket.create_connection((docker_ip, port), timeout=2) as sock:
-                # Wait for SSH banner
-                banner = sock.recv(1024)
-                return banner.startswith(b"SSH-2.0-")
+                # First ensure we can at least connect
+                sock.settimeout(3.0)
+                try:
+                    # Try to read the banner but don't fail strictly on it
+                    # if we just connected successfully
+                    banner = sock.recv(1024)
+                    if banner.startswith(b"SSH-2.0-"):
+                        return True
+                except (socket.timeout, ConnectionResetError):
+                    # Connection was made but server isn't ready to talk yet
+                    pass
+                return False
         except Exception:
             return False
 
     # Wait for SSH server to be responsive (increase timeout for CI)
-    docker_services.wait_until_responsive(timeout=120.0, pause=2.0, check=check)
+    docker_services.wait_until_responsive(timeout=180.0, pause=3.0, check=check)
 
     # Short extra wait to ensure internal services are ready
     import time
