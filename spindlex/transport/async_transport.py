@@ -4,10 +4,12 @@ Async SSH Transport Layer Implementation
 Provides asynchronous SSH transport functionality for high-concurrency applications.
 """
 
+from __future__ import annotations
+
 import asyncio
 import socket
 import struct
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .async_forwarding import AsyncPortForwardingManager
@@ -30,18 +32,18 @@ class AsyncTransport(Transport):
     def __init__(
         self,
         sock: socket.socket,
-        rekey_bytes_limit: Optional[int] = None,
-        rekey_time_limit: Optional[int] = None,
+        rekey_bytes_limit: int | None = None,
+        rekey_time_limit: int | None = None,
     ) -> None:
         super().__init__(
             sock,
             rekey_bytes_limit=rekey_bytes_limit,
             rekey_time_limit=rekey_time_limit,
         )
-        self._reader: Optional[asyncio.StreamReader] = None
-        self._writer: Optional[asyncio.StreamWriter] = None
-        self._loop: Optional[asyncio.AbstractEventLoop] = None
-        self._port_forwarding_manager: Optional["AsyncPortForwardingManager"] = None  # type: ignore[assignment]
+        self._reader: asyncio.StreamReader | None = None
+        self._writer: asyncio.StreamWriter | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._port_forwarding_manager: AsyncPortForwardingManager | None = None  # type: ignore[assignment]
         try:
             self._loop = asyncio.get_event_loop()
         except RuntimeError:
@@ -60,7 +62,7 @@ class AsyncTransport(Transport):
             self._reader = reader
             self._writer = writer
 
-    async def start_client(self, timeout: Optional[float] = None) -> None:  # type: ignore[override]
+    async def start_client(self, timeout: float | None = None) -> None:  # type: ignore[override]
         if timeout is not None:
             self._connect_timeout = timeout
 
@@ -116,7 +118,7 @@ class AsyncTransport(Transport):
         # Reset progress flag
         self._kex_in_progress = False
 
-    def get_port_forwarding_manager(self) -> "AsyncPortForwardingManager":  # type: ignore[override]
+    def get_port_forwarding_manager(self) -> AsyncPortForwardingManager:  # type: ignore[override]
         """Get port forwarding manager."""
         if self._port_forwarding_manager is None:
             from .async_forwarding import AsyncPortForwardingManager
@@ -149,7 +151,7 @@ class AsyncTransport(Transport):
             )
             fut.result()
 
-    def _recv_message(self, allowed_types: Optional[list[int]] = None) -> Message:
+    def _recv_message(self, allowed_types: list[int] | None = None) -> Message:
         """Bridge sync calls to async recv."""
         if not self._loop:
             return super()._recv_message()
@@ -245,7 +247,7 @@ class AsyncTransport(Transport):
             self._message_queue.append(msg)
 
     async def _expect_message_async(
-        self, *allowed_types: int, channel_id: Optional[int] = None
+        self, *allowed_types: int, channel_id: int | None = None
     ) -> Message:
         """Async version of expect_message."""
         while True:
@@ -376,7 +378,7 @@ class AsyncTransport(Transport):
     async def auth_gssapi(  # type: ignore[override]
         self,
         username: str,
-        gss_host: Optional[str] = None,
+        gss_host: str | None = None,
         gss_deleg_creds: bool = False,
     ) -> bool:
         """Authenticate using GSSAPI method asynchronously."""
@@ -433,7 +435,7 @@ class AsyncTransport(Transport):
 
     async def _send_global_request_async(
         self, request_name: str, want_reply: bool, request_data: bytes = b""
-    ) -> Optional[Message]:
+    ) -> Message | None:
         """Send global request asynchronously."""
         msg = GlobalRequestMessage(request_name, want_reply, request_data)
         await self._send_message_async(msg)
@@ -480,7 +482,7 @@ class AsyncTransport(Transport):
         data.extend(write_string(""))  # submethods
         return bytes(data)
 
-    async def open_channel(self, kind: str, dest_addr: Optional[tuple] = None) -> Any:  # type: ignore[override]
+    async def open_channel(self, kind: str, dest_addr: tuple | None = None) -> Any:  # type: ignore[override]
         async with self._state_lock:
             cid = self._next_channel_id
             self._next_channel_id += 1
