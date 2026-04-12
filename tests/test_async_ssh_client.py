@@ -13,9 +13,10 @@ def async_ssh_client():
 
 @pytest.mark.asyncio
 async def test_async_ssh_client_connect(async_ssh_client):
+    import os
+
     from spindlex.hostkeys.policy import AutoAddPolicy
     from spindlex.hostkeys.storage import HostKeyStorage
-    import os
 
     # Use a temporary empty storage for the test
     async_ssh_client._host_key_storage = HostKeyStorage(os.devnull)
