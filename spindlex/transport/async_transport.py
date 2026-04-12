@@ -200,7 +200,9 @@ class AsyncTransport(Transport):
             )
             return fut.result()
         except Exception as e:
-            print(f"DEBUG: AsyncTransport._recv_bytes({length}) failed: {e} ({type(e)})")
+            print(
+                f"DEBUG: AsyncTransport._recv_bytes({length}) failed: {e} ({type(e)})"
+            )
             raise
 
     async def _send_message_async(self, message: Message) -> None:
