@@ -52,12 +52,12 @@ class AsyncChannel(Channel):
         """Handle incoming channel EOF."""
         self._eof_received = True
 
-    async def send(self, data: bytes) -> int:  # type: ignore[override]
+    async def send(self, data: bytes | str) -> int:  # type: ignore[override]
         """
         Send data through channel asynchronously.
 
         Args:
-            data: Data to send
+            data: Data to send (bytes or string)
 
         Returns:
             Number of bytes sent
@@ -68,8 +68,16 @@ class AsyncChannel(Channel):
         if self.closed:
             raise ChannelException("Channel is closed")
 
+        if not data:
+            return 0
+
+        # Convert string to bytes if needed
+        if isinstance(data, str):
+            from ..protocol.constants import SSH_STRING_ENCODING
+
+            data = data.encode(SSH_STRING_ENCODING)
+
         total_sent = 0
-        len(data)
 
         try:
             # Check if we have enough window space
@@ -311,6 +319,29 @@ class AsyncChannel(Channel):
             if isinstance(e, ChannelException):
                 raise
             raise ChannelException(f"Subsystem invocation failed: {e}") from e
+
+    async def send_exit_status(self, status: int) -> None:
+        """
+        Send command exit status to remote side asynchronously.
+
+        Args:
+            status: Exit status code (typically 0 for success)
+
+        Raises:
+            ChannelException: If send fails
+        """
+        from ..protocol.utils import write_uint32
+
+        try:
+            # Build exit-status request data (4-byte unsigned integer)
+            request_data = write_uint32(status)
+
+            # Send exit-status request (no reply wanted for this type)
+            await self._transport._send_channel_request_async(
+                self._channel_id, "exit-status", False, request_data
+            )
+        except Exception as e:
+            raise ChannelException(f"Failed to send exit status: {e}") from e
 
     async def close(self) -> None:  # type: ignore[override]
         """Close channel asynchronously."""

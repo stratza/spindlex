@@ -45,7 +45,7 @@ from spindlex.server import SSHServerManager
 from spindlex.crypto.pkey import PKey
 
 # Load or generate server host key
-server_key = PKey.generate('ed25519')
+server_key = PKey.generate(key_type='ed25519')
 
 # Initialize interface and manager
 interface = MySSHServer()
@@ -78,6 +78,7 @@ class ExecServer(SSHServer):
         print(f"Client requested: {cmd_str}")
         
         # In a real server, you might spawn a process
+        # channel.send accepts both bytes and strings
         channel.send(f"Executed: {cmd_str}\n")
         channel.send_exit_status(0)
         channel.close()

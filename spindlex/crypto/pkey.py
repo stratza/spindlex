@@ -204,14 +204,32 @@ class PKey:
             raise CryptoException(f"Failed to load public key from bytes: {e}") from e
 
     @classmethod
-    def generate(cls, *args: Any, **kwargs: Any) -> "PKey":
+    def generate(cls, key_type: str = "ed25519", bits: int = 2048) -> "PKey":
         """
         Generate a new key pair.
 
+        Args:
+            key_type: Type of key to generate ('ed25519', 'rsa', 'ecdsa')
+            bits: Number of bits for RSA keys
+
         Returns:
             New PKey instance with generated key pair
+
+        Raises:
+            CryptoException: If generation fails or unsupported key type
         """
-        raise NotImplementedError("Subclasses must implement generate")
+        if cls is not PKey:
+            raise NotImplementedError("Subclasses must implement generate")
+
+        key_type = key_type.lower()
+        if key_type == "ed25519":
+            return Ed25519Key.generate()
+        elif key_type == "rsa":
+            return RSAKey.generate(bits=bits)
+        elif key_type == "ecdsa":
+            return ECDSAKey.generate()
+        else:
+            raise CryptoException(f"Unsupported key type for generation: {key_type}")
 
     def save_to_file(self, filename: str, password: Optional[str] = None) -> None:
         """
