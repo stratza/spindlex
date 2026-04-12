@@ -33,6 +33,7 @@ def ssh_server(docker_ip, docker_services):
     docker_services.wait_until_responsive(timeout=90.0, pause=1.0, check=check)
     # Give the SSH server extra time to generate host keys and start listening
     import time
+
     time.sleep(15)
     return docker_ip, port
 
