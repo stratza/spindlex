@@ -112,6 +112,15 @@ class AsyncTransport(Transport):
         # Reset progress flag
         self._kex_in_progress = False
 
+    def get_port_forwarding_manager(self) -> Any:
+        """Get port forwarding manager."""
+        if self._port_forwarding_manager is None:
+            from .async_forwarding import AsyncPortForwardingManager
+
+            self._port_forwarding_manager = AsyncPortForwardingManager(self)
+
+        return self._port_forwarding_manager
+
     # --- Bridge Methods for Sync Logic ---
 
     def _send_message(self, message: Message) -> None:
@@ -417,6 +426,48 @@ class AsyncTransport(Transport):
         if result:
             self._authenticated = True
         return result
+
+    async def _send_global_request_async(
+        self, request_name: str, want_reply: bool, request_data: bytes = b""
+    ) -> Optional[Message]:
+        """Send global request asynchronously."""
+        msg = GlobalRequestMessage(request_name, want_reply, request_data)
+        await self._send_message_async(msg)
+
+        if want_reply:
+            return await self._expect_message_async(
+                MSG_REQUEST_SUCCESS, MSG_REQUEST_FAILURE
+            )
+        return None
+
+    def _handle_forwarded_tcpip_open(
+        self,
+        sender_channel: int,
+        initial_window_size: int,
+        maximum_packet_size: int,
+        type_specific_data: bytes,
+    ) -> None:
+        """Bridge sync forwarded-tcpip open to async manager."""
+        if self._port_forwarding_manager:
+            # We must schedule this in the event loop as it involves async operations
+            asyncio.run_coroutine_threadsafe(
+                self._port_forwarding_manager.handle_forwarded_connection_async(
+                    sender_channel,
+                    initial_window_size,
+                    maximum_packet_size,
+                    type_specific_data,
+                ),
+                self._loop,  # type: ignore
+            )
+        else:
+            # No manager, reject the channel
+            failure_msg = ChannelOpenFailureMessage(
+                recipient_channel=sender_channel,
+                reason_code=SSH_OPEN_CONNECT_FAILED,
+                description="Port forwarding not enabled",
+                language="",
+            )
+            self._send_message(failure_msg)
 
     def _build_keyboard_interactive_data(self) -> bytes:
         """Build keyboard-interactive authentication method data."""
