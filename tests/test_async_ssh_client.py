@@ -84,6 +84,6 @@ async def test_async_ssh_client_host_key_verification_fail(async_ssh_client):
                 await async_ssh_client.connect(
                     "localhost", username="alice", password="password"
                 )
-            
+
             # Ensure transport.close was called and awaited (internally by connect)
             assert mock_trans.close.called
