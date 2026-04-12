@@ -22,6 +22,7 @@ from ..hostkeys.policy import MissingHostKeyPolicy, RejectPolicy
 from ..hostkeys.storage import HostKeyStorage
 from ..transport.channel import Channel
 from ..transport.transport import Transport
+from ..auth.keyboard_interactive import console_handler
 
 
 class ChannelFile:
@@ -351,6 +352,54 @@ class SSHClient:
 
         if not self._transport.auth_publickey(username, pkey):
             raise AuthenticationException("Public key authentication failed")
+
+    def auth_keyboard_interactive(
+        self,
+        username: str,
+        handler: Optional[Callable[[str, str, list[tuple[str, bool]]], list[str]]] = None,
+    ) -> None:
+        """
+        Authenticate using keyboard-interactive method.
+
+        Args:
+            username: Username for authentication
+            handler: Callback function to handle prompts.
+                     If None, uses console_handler (terminal prompts).
+
+        Raises:
+            AuthenticationException: If authentication fails
+        """
+        if not self._transport:
+            raise SSHException("No transport available")
+
+        if handler is None:
+            handler = console_handler
+
+        if not self._transport.auth_keyboard_interactive(username, handler):
+            raise AuthenticationException("Keyboard-interactive authentication failed")
+
+    def auth_gssapi(
+        self,
+        username: str,
+        gss_host: Optional[str] = None,
+        gss_deleg_creds: bool = False,
+    ) -> None:
+        """
+        Authenticate using GSSAPI (Kerberos).
+
+        Args:
+            username: Username for authentication
+            gss_host: GSSAPI hostname (optional)
+            gss_deleg_creds: Whether to delegate credentials
+
+        Raises:
+            AuthenticationException: If authentication fails
+        """
+        if not self._transport:
+            raise SSHException("No transport available")
+
+        if not self._transport.auth_gssapi(username, gss_host, gss_deleg_creds):
+            raise AuthenticationException("GSSAPI authentication failed")
 
     def _authenticate(
         self,
