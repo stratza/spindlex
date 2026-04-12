@@ -22,8 +22,10 @@ from ..protocol.messages import (
 from ..protocol.utils import read_string, write_string, write_uint32
 
 try:
-    import gssapi
-    from gssapi import Credentials, Name, SecurityContext
+    import gssapi as _gssapi
+    from gssapi import Credentials as _Credentials
+    from gssapi import Name as _Name
+    from gssapi import SecurityContext as _SecurityContext
 
     GSSAPI_AVAILABLE = True
 except (ImportError, OSError):
@@ -63,10 +65,16 @@ except (ImportError, OSError):
             mutual_authentication = 1
             delegate_to_peer = 2
 
-    gssapi = MockGSSAPIModule()  # type: ignore[assignment]
-    Credentials = MockCredentials  # type: ignore[assignment,misc]
-    Name = MockName  # type: ignore[assignment,misc]
-    SecurityContext = MockSecurityContext  # type: ignore[assignment,misc]
+    _gssapi = MockGSSAPIModule()  # type: ignore
+    _Credentials = MockCredentials  # type: ignore
+    _Name = MockName  # type: ignore
+    _SecurityContext = MockSecurityContext  # type: ignore
+
+# Expose the internal names for use in the rest of the module
+gssapi = _gssapi
+Credentials = _Credentials
+Name = _Name
+SecurityContext = _SecurityContext
 
 
 class GSSAPIAuth:
@@ -157,6 +165,7 @@ class GSSAPIAuth:
 
             return Name(service_name, name_type=NameType.hostbased_service)
         else:
+            # In mock mode, Name is MockName
             return Name(service_name, name_type=Name.NameType.hostbased_service)  # type: ignore[attr-defined]
 
     def _init_gss_context(self, target_name: Name, delegate_creds: bool) -> None:
