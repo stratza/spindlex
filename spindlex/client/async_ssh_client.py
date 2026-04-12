@@ -7,7 +7,7 @@ Provides asynchronous SSH client functionality for high-concurrency applications
 import asyncio
 import logging
 import socket
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Dict, Optional, Tuple
 
 from ..exceptions import AuthenticationException, BadHostKeyException, SSHException
 from ..hostkeys.policy import AutoAddPolicy, MissingHostKeyPolicy, RejectPolicy
@@ -416,6 +416,83 @@ class AsyncSSHClient:
 
         if not authenticated:
             raise AuthenticationException(f"Authentication failed for user {username}")
+
+    async def create_local_port_forward(
+        self,
+        local_port: int,
+        remote_host: str,
+        remote_port: int,
+        local_host: str = "127.0.0.1",
+    ) -> str:
+        """
+        Create local port forwarding tunnel asynchronously.
+
+        Args:
+            local_port: Local port to listen on
+            remote_host: Remote host to connect to
+            remote_port: Remote port to connect to
+            local_host: Local interface to bind to
+
+        Returns:
+            Tunnel ID for management
+        """
+        if not self._connected or not self._transport:
+            raise SSHException("Not connected")
+
+        manager = self._transport.get_port_forwarding_manager()
+        return await manager.create_local_tunnel(
+            local_port, remote_host, remote_port, local_host
+        )
+
+    async def create_remote_port_forward(
+        self,
+        remote_port: int,
+        local_host: str,
+        local_port: int,
+        remote_host: str = "",
+    ) -> str:
+        """
+        Create remote port forwarding tunnel asynchronously.
+
+        Args:
+            remote_port: Remote port to listen on
+            local_host: Local host to connect to
+            local_port: Local port to connect to
+            remote_host: Remote interface to bind to
+
+        Returns:
+            Tunnel ID for management
+        """
+        if not self._connected or not self._transport:
+            raise SSHException("Not connected")
+
+        manager = self._transport.get_port_forwarding_manager()
+        return await manager.create_remote_tunnel(
+            remote_port, local_host, local_port, remote_host
+        )
+
+    async def close_port_forward(self, tunnel_id: str) -> None:
+        """
+        Close port forwarding tunnel asynchronously.
+
+        Args:
+            tunnel_id: Tunnel identifier
+        """
+        if self._transport:
+            manager = self._transport.get_port_forwarding_manager()
+            await manager.close_tunnel(tunnel_id)
+
+    def get_port_forwards(self) -> Dict[str, Any]:
+        """
+        Get all active port forwarding tunnels.
+
+        Returns:
+            Dictionary mapping tunnel IDs to tunnel objects
+        """
+        if self._transport:
+            manager = self._transport.get_port_forwarding_manager()
+            return manager.get_all_tunnels()
+        return {}
 
     def set_missing_host_key_policy(self, policy: MissingHostKeyPolicy) -> None:
         """
