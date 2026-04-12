@@ -5,6 +5,7 @@ Core SSH transport functionality including protocol handshake, key exchange,
 authentication, and secure packet transmission.
 """
 
+import logging
 import socket
 import struct
 import threading
@@ -112,6 +113,8 @@ class Transport:
         # Message dispatching
         self._message_queue: list[Message] = []
         self._timeout = 10.0
+
+        self._logger = logging.getLogger(__name__)
 
     def get_timeout(self) -> Optional[float]:
         """
@@ -1238,7 +1241,7 @@ class Transport:
         except Exception as e:
             if isinstance(e, (TransportException, ProtocolException)):
                 raise
-            raise TransportException(f"Handshake failed: {e}") from e
+            raise TransportException(f"Error during version exchange: {e}") from e
 
     def _send_version(self) -> None:
         """Send SSH version string."""
@@ -1290,15 +1293,11 @@ class Transport:
                     version_line = b""  # Reset for next attempt
                     continue
                 raise TransportException(
-                    f"Failed to receive SSH banner after {max_retries} attempts"
+                    f"Failed to receive SSH banner after {max_retries} attempts: Timeout"
                 )
 
         self._remote_version = version_line.decode().strip()
         self._logger.debug(f"Remote version: {self._remote_version}")
-
-        # Check if version is supported
-        if not is_supported_version(self._remote_version):
-            raise TransportException(f"Unsupported SSH version: {self._remote_version}")
 
         try:
             version_string = version_line.decode(SSH_STRING_ENCODING)
