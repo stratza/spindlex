@@ -166,7 +166,7 @@ class KeyExchange:
 
     def _receive_kexinit(self) -> None:
         """Receive and process server KEXINIT message."""
-        msg = self._transport._recv_message()
+        msg = self._transport._expect_message(MSG_KEXINIT)
 
         if not isinstance(msg, KexInitMessage):
             raise ProtocolException(f"Expected KEXINIT, got {type(msg).__name__}")
@@ -267,13 +267,8 @@ class KeyExchange:
             kexdh_init.add_mpint(self._dh_public_key)
             self._transport._send_message(kexdh_init)
 
-            # Receive KEXDH_REPLY message
-            reply_msg = self._transport._recv_message()
-
-            if reply_msg.msg_type != MSG_KEXDH_REPLY:
-                raise ProtocolException(
-                    f"Expected KEXDH_REPLY, got {reply_msg.msg_type}"
-                )
+            # Receive KEXDH_REPLY
+            reply_msg = self._transport._expect_message(MSG_KEXDH_REPLY)
 
             # Parse KEXDH_REPLY
             offset = 0
@@ -354,12 +349,7 @@ class KeyExchange:
             self._transport._send_message(kex_ecdh_init)
 
             # Receive KEX_ECDH_REPLY message
-            reply_msg = self._transport._recv_message()
-
-            if reply_msg.msg_type != 31:  # MSG_KEX_ECDH_REPLY
-                raise ProtocolException(
-                    f"Expected KEX_ECDH_REPLY, got {reply_msg.msg_type}"
-                )
+            reply_msg = self._transport._expect_message(MSG_KEX_ECDH_REPLY)
 
             # Parse KEX_ECDH_REPLY
             offset = 0
@@ -458,12 +448,7 @@ class KeyExchange:
             self._transport._send_message(kex_ecdh_init)
 
             # Receive KEX_ECDH_REPLY message
-            reply_msg = self._transport._recv_message()
-
-            if reply_msg.msg_type != 31:  # MSG_KEX_ECDH_REPLY
-                raise ProtocolException(
-                    f"Expected KEX_ECDH_REPLY, got {reply_msg.msg_type}"
-                )
+            reply_msg = self._transport._expect_message(MSG_KEX_ECDH_REPLY)
 
             # Parse KEX_ECDH_REPLY
             offset = 0
@@ -704,9 +689,7 @@ class KeyExchange:
 
     def _receive_newkeys(self) -> None:
         """Receive NEWKEYS message from server."""
-        msg = self._transport._recv_message()
-        if msg.msg_type != MSG_NEWKEYS:
-            raise ProtocolException(f"Expected NEWKEYS, got {msg.msg_type}")
+        self._transport._expect_message(MSG_NEWKEYS)
 
     def generate_keys(self) -> tuple[bytes, bytes, bytes, bytes]:
         """

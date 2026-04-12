@@ -194,10 +194,14 @@ class AsyncTransport(Transport):
         if not self._reader or not self._loop:
             raise TransportException("Transport not initialized with async streams")
 
-        fut = asyncio.run_coroutine_threadsafe(
-            self._reader.readexactly(length), self._loop
-        )
-        return fut.result()
+        try:
+            fut = asyncio.run_coroutine_threadsafe(
+                self._reader.readexactly(length), self._loop
+            )
+            return fut.result()
+        except Exception as e:
+            print(f"DEBUG: AsyncTransport._recv_bytes({length}) failed: {e} ({type(e)})")
+            raise
 
     async def _send_message_async(self, message: Message) -> None:
         """Async version of _send_message."""
@@ -491,6 +495,9 @@ class AsyncTransport(Transport):
 
         chan = AsyncChannel(self, cid)
 
+        async with self._state_lock:
+            self._channels[cid] = chan
+
         # Build open message
         msg = ChannelOpenMessage(
             channel_type=kind,
@@ -501,17 +508,25 @@ class AsyncTransport(Transport):
         await self._send_message_async(msg)
 
         # Wait for confirmation
-        res = await self._expect_message_async(
-            MSG_CHANNEL_OPEN_CONFIRMATION, MSG_CHANNEL_OPEN_FAILURE, channel_id=cid
-        )
+        try:
+            res = await self._expect_message_async(
+                MSG_CHANNEL_OPEN_CONFIRMATION, MSG_CHANNEL_OPEN_FAILURE, channel_id=cid
+            )
+        except Exception:
+            async with self._state_lock:
+                if cid in self._channels:
+                    del self._channels[cid]
+            raise
+
         if isinstance(res, ChannelOpenConfirmationMessage):
             chan._remote_channel_id = res.sender_channel
             chan._remote_window_size = res.initial_window_size
             chan._remote_max_packet_size = res.maximum_packet_size
-
-            async with self._state_lock:
-                self._channels[cid] = chan
             return chan
+
+        async with self._state_lock:
+            if cid in self._channels:
+                del self._channels[cid]
         raise TransportException("Failed to open channel")
 
     async def _send_channel_request_async(

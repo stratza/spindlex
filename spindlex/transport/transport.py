@@ -72,6 +72,12 @@ class Transport:
         self._mac_c2s: Optional[str] = None
         self._mac_s2c: Optional[str] = None
 
+        # Active crypto state (updated only on NEWKEYS)
+        self._mac_key_c2s_active: Optional[bytes] = None
+        self._mac_key_s2c_active: Optional[bytes] = None
+        self._mac_c2s_active: Optional[str] = None
+        self._mac_s2c_active: Optional[str] = None
+
         # Rekeying policy (configurable)
         self._rekey_bytes_limit = rekey_bytes_limit or (
             1024 * 1024 * 1024
@@ -172,16 +178,24 @@ class Transport:
 
                 try:
                     # Perform SSH handshake
+                    self._logger.debug("Starting handshake...")
                     self._do_handshake()
+                    self._logger.debug("Handshake complete.")
 
                     # Start key exchange
+                    self._logger.debug("Starting KEX...")
                     self._start_kex()
+                    self._logger.debug("KEX complete.")
 
                     self._active = True
 
                 finally:
                     # Restore original socket timeout
-                    self._socket.settimeout(old_timeout)
+                    try:
+                        if self._socket and self._socket.fileno() != -1:
+                            self._socket.settimeout(old_timeout)
+                    except (OSError, AttributeError):
+                        pass
 
         except Exception as e:
             self.close()
@@ -217,16 +231,24 @@ class Transport:
 
                 try:
                     # Perform SSH handshake
+                    self._logger.debug("Starting handshake...")
                     self._do_handshake()
+                    self._logger.debug("Handshake complete.")
 
                     # Start key exchange
+                    self._logger.debug("Starting KEX...")
                     self._start_kex()
+                    self._logger.debug("KEX complete.")
 
                     self._active = True
 
                 finally:
                     # Restore original socket timeout
-                    self._socket.settimeout(old_timeout)
+                    try:
+                        if self._socket and self._socket.fileno() != -1:
+                            self._socket.settimeout(old_timeout)
+                    except (OSError, AttributeError):
+                        pass
 
         except Exception as e:
             self.close()
@@ -1320,6 +1342,7 @@ class Transport:
         Start key exchange process in the background.
         Includes a 30-second watchdog to prevent hanging on stalled connections.
         """
+        self._kex_in_progress = True
         timeout = 30.0
 
         # Set a temporary timeout for key exchange
@@ -1350,7 +1373,11 @@ class Transport:
                 raise
             raise TransportException(f"Rekeying failed or timed out: {e}") from e
         finally:
-            self._socket.settimeout(old_timeout)
+            try:
+                if self._socket and self._socket.fileno() != -1:
+                    self._socket.settimeout(old_timeout)
+            except (OSError, AttributeError):
+                pass
 
     def _send_kexinit(self) -> None:
         """Send KEXINIT message with supported algorithms."""
@@ -1616,6 +1643,9 @@ class Transport:
         else:
             self._encryptor_instance = None
 
+        self._mac_c2s_active = self._mac_c2s
+        self._mac_key_c2s_active = self._mac_key_c2s
+
     def _activate_inbound_encryption(self) -> None:
         """Activate inbound encryption using negotiated parameters."""
         if not self._cipher_s2c or not self._encryption_key_s2c:
@@ -1639,26 +1669,20 @@ class Transport:
         else:
             self._decryptor_instance = None
 
+        self._mac_s2c_active = self._mac_s2c
+        self._mac_key_s2c_active = self._mac_key_s2c
+
     def _encrypt_packet(self, packet: bytes) -> bytes:
         """Encrypt SSH packet and add MAC if needed."""
-        if self._cipher_c2s == "chacha20-poly1305@openssh.com":
-            # ChaCha20-Poly1305 special handling (OpenSSH style)
-            # The first 4 bytes (packet length) are encrypted with a separate key
-            # but we use a simplified version here for now or full implementation
-            # Actually, standard ChaCha20-Poly1305 in SSH encrypts length differently.
-            # For simplicity in this "fix" turn, let's assume we can use CryptographyBackend.encrypt
-            # if it was set up for that.
-            pass
-
         if self._encryptor_instance:
             # AES-CTR or similar
             encrypted = self._encryptor_instance.update(packet)
 
             # Add MAC
-            if self._mac_c2s and self._mac_key_c2s:
+            if self._mac_c2s_active and self._mac_key_c2s_active:
                 mac_data = struct.pack(">I", self._sequence_number_out) + packet
                 mac = self._crypto_backend.compute_mac(
-                    self._mac_c2s, self._mac_key_c2s, mac_data
+                    self._mac_c2s_active, self._mac_key_c2s_active, mac_data
                 )
                 return bytes(encrypted + mac)
             return bytes(encrypted)
@@ -1728,9 +1752,9 @@ class Transport:
             packet_payload = self._decryptor_instance.update(encrypted_payload)
 
             # Verify MAC
-            if self._mac_s2c and self._mac_key_s2c:
+            if self._mac_s2c_active and self._mac_key_s2c_active:
                 # Get mac length from CipherSuite
-                mac_info = self._kex._cipher_suite.get_mac_info(self._mac_s2c)
+                mac_info = self._kex._cipher_suite.get_mac_info(self._mac_s2c_active)
                 mac_len = mac_info["digest_len"]
 
                 received_mac = self._recv_bytes(mac_len)
@@ -1740,7 +1764,7 @@ class Transport:
                     + packet_payload
                 )
                 expected_mac = self._crypto_backend.compute_mac(
-                    self._mac_s2c, self._mac_key_s2c, mac_data
+                    self._mac_s2c_active, self._mac_key_s2c_active, mac_data
                 )
 
                 if received_mac != expected_mac:
@@ -1797,8 +1821,10 @@ class Transport:
                 to_read = max(32768, length - len(data))
                 chunk = self._socket.recv(to_read)
                 if not chunk:
+                    self._logger.debug("Socket closed while receiving")
                     raise TransportException("Connection closed unexpectedly")
 
+                self._logger.debug(f"Received {len(chunk)} bytes: {chunk!r}")
                 data += chunk
             except socket.timeout:
                 # If we have some data, but not enough, keep it in buffer
