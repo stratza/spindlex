@@ -169,3 +169,5 @@ SpindleX is released under the **MIT License**. See [LICENSE](LICENSE) for the f
   <br/>
   <sub>&copy; 2024 SpindleX Project</sub>
 </div>
+
+<!-- Achievement: YOLO/Pull Shark -->
