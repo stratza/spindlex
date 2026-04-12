@@ -7,19 +7,15 @@ Handles tunnel creation, data relay, and connection management using asyncio.
 
 import asyncio
 import logging
-import time
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import Any
 
 from ..exceptions import SSHException
 from ..protocol.constants import (
     CHANNEL_DIRECT_TCPIP,
     DEFAULT_MAX_PACKET_SIZE,
     DEFAULT_WINDOW_SIZE,
-    MSG_CHANNEL_OPEN_CONFIRMATION,
-    MSG_CHANNEL_OPEN_FAILURE,
     MSG_REQUEST_SUCCESS,
 )
-from ..protocol.messages import ChannelOpenConfirmationMessage, ChannelOpenMessage
 from ..protocol.utils import read_string, read_uint32, write_string, write_uint32
 
 
@@ -31,8 +27,8 @@ class AsyncForwardingTunnel:
     def __init__(
         self,
         tunnel_id: str,
-        local_addr: Tuple[str, int],
-        remote_addr: Tuple[str, int],
+        local_addr: tuple[str, int],
+        remote_addr: tuple[str, int],
         tunnel_type: str,
     ) -> None:
         self.tunnel_id = tunnel_id
@@ -40,7 +36,7 @@ class AsyncForwardingTunnel:
         self.remote_addr = remote_addr
         self.tunnel_type = tunnel_type
         self.active = False
-        self.tasks: List[asyncio.Task] = []
+        self.tasks: list[asyncio.Task] = []
         self._logger = logging.getLogger(__name__)
 
     async def close(self) -> None:
@@ -60,8 +56,8 @@ class AsyncLocalPortForwarder:
 
     def __init__(self, transport: Any) -> None:
         self._transport = transport
-        self._tunnels: Dict[str, AsyncForwardingTunnel] = {}
-        self._servers: Dict[str, asyncio.AbstractServer] = {}
+        self._tunnels: dict[str, AsyncForwardingTunnel] = {}
+        self._servers: dict[str, asyncio.AbstractServer] = {}
         self._logger = logging.getLogger(__name__)
 
     async def create_tunnel(
@@ -72,7 +68,7 @@ class AsyncLocalPortForwarder:
         local_host: str = "127.0.0.1",
     ) -> str:
         tunnel_id = f"local_{local_host}_{local_port}_{remote_host}_{remote_port}"
-        
+
         if tunnel_id in self._tunnels:
             raise SSHException(f"Tunnel already exists: {tunnel_id}")
 
@@ -123,29 +119,35 @@ class AsyncLocalPortForwarder:
             # Start bidirectional relay
             relay1 = asyncio.create_task(self._relay_stream_to_channel(reader, channel))
             relay2 = asyncio.create_task(self._relay_channel_to_stream(channel, writer))
-            
+
             tunnel.tasks.extend([relay1, relay2])
 
             # Wait for either relay to finish
             done, pending = await asyncio.wait(
                 [relay1, relay2], return_when=asyncio.FIRST_COMPLETED
             )
-            
+
             # Cancel remaining relay
             for task in pending:
                 task.cancel()
 
         except Exception as e:
-            self._logger.error(f"Error handling local connection in tunnel {tunnel.tunnel_id}: {e}")
+            self._logger.error(
+                f"Error handling local connection in tunnel {tunnel.tunnel_id}: {e}"
+            )
         finally:
             writer.close()
             try:
                 await writer.wait_closed()
             except Exception:
                 pass
-            self._logger.debug(f"Local client connection closed for tunnel {tunnel.tunnel_id}")
+            self._logger.debug(
+                f"Local client connection closed for tunnel {tunnel.tunnel_id}"
+            )
 
-    async def _relay_stream_to_channel(self, reader: asyncio.StreamReader, channel: Any) -> None:
+    async def _relay_stream_to_channel(
+        self, reader: asyncio.StreamReader, channel: Any
+    ) -> None:
         try:
             while True:
                 data = await reader.read(8192)
@@ -160,7 +162,9 @@ class AsyncLocalPortForwarder:
             except Exception:
                 pass
 
-    async def _relay_channel_to_stream(self, channel: Any, writer: asyncio.StreamWriter) -> None:
+    async def _relay_channel_to_stream(
+        self, channel: Any, writer: asyncio.StreamWriter
+    ) -> None:
         try:
             while True:
                 data = await channel.recv(8192)
@@ -177,7 +181,7 @@ class AsyncLocalPortForwarder:
         if tunnel_id in self._tunnels:
             await self._tunnels[tunnel_id].close()
             del self._tunnels[tunnel_id]
-        
+
         if tunnel_id in self._servers:
             self._servers[tunnel_id].close()
             await self._servers[tunnel_id].wait_closed()
@@ -195,14 +199,14 @@ class AsyncRemotePortForwarder:
 
     def __init__(self, transport: Any) -> None:
         self._transport = transport
-        self._tunnels: Dict[str, AsyncForwardingTunnel] = {}
+        self._tunnels: dict[str, AsyncForwardingTunnel] = {}
         self._logger = logging.getLogger(__name__)
 
     async def create_tunnel(
         self, remote_port: int, local_host: str, local_port: int, remote_host: str = ""
     ) -> str:
         tunnel_id = f"remote_{remote_host}_{remote_port}_{local_host}_{local_port}"
-        
+
         if tunnel_id in self._tunnels:
             raise SSHException(f"Tunnel already exists: {tunnel_id}")
 
@@ -241,18 +245,19 @@ class AsyncRemotePortForwarder:
             # Parse data
             connected_addr_bytes, offset = read_string(type_specific_data, 0)
             connected_port, offset = read_uint32(type_specific_data, offset)
-            
+
             # Find tunnel
             tunnel = None
             for t in self._tunnels.values():
                 if t.remote_addr[1] == connected_port:
                     tunnel = t
                     break
-            
+
             if not tunnel or not tunnel.active:
                 raise SSHException(f"No active tunnel for remote port {connected_port}")
 
             from .async_channel import AsyncChannel
+
             channel = AsyncChannel(self._transport, sender_channel)
             # Need to register it in transport channels so it receives packets
             async with self._transport._state_lock:
@@ -260,7 +265,7 @@ class AsyncRemotePortForwarder:
                 # We use our own next_channel_id for local mapping.
                 local_id = self._transport._next_channel_id
                 self._transport._next_channel_id += 1
-                channel._channel_id = local_id # Update instance ID
+                channel._channel_id = local_id  # Update instance ID
                 channel._remote_channel_id = sender_channel
                 channel._remote_window_size = initial_window_size
                 channel._remote_max_packet_size = maximum_packet_size
@@ -268,6 +273,7 @@ class AsyncRemotePortForwarder:
 
             # Confirm channel open
             from ..protocol.messages import ChannelOpenConfirmationMessage
+
             confirm = ChannelOpenConfirmationMessage(
                 recipient_channel=sender_channel,
                 sender_channel=local_id,
@@ -282,15 +288,16 @@ class AsyncRemotePortForwarder:
             # Start relay
             relay1 = asyncio.create_task(self._relay_stream_to_channel(reader, channel))
             relay2 = asyncio.create_task(self._relay_channel_to_stream(channel, writer))
-            
+
             tunnel.tasks.extend([relay1, relay2])
 
         except Exception as e:
             self._logger.error(f"Failed to handle remote forwarded connection: {e}")
             # Should send ChannelOpenFailureMessage but we need the sender_channel
             try:
-                from ..protocol.messages import ChannelOpenFailureMessage
                 from ..protocol.constants import SSH_OPEN_CONNECT_FAILED
+                from ..protocol.messages import ChannelOpenFailureMessage
+
                 fail = ChannelOpenFailureMessage(
                     recipient_channel=sender_channel,
                     reason_code=SSH_OPEN_CONNECT_FAILED,
@@ -300,7 +307,9 @@ class AsyncRemotePortForwarder:
             except Exception:
                 pass
 
-    async def _relay_stream_to_channel(self, reader: asyncio.StreamReader, channel: Any) -> None:
+    async def _relay_stream_to_channel(
+        self, reader: asyncio.StreamReader, channel: Any
+    ) -> None:
         try:
             while True:
                 data = await reader.read(8192)
@@ -315,7 +324,9 @@ class AsyncRemotePortForwarder:
             except Exception:
                 pass
 
-    async def _relay_channel_to_stream(self, channel: Any, writer: asyncio.StreamWriter) -> None:
+    async def _relay_channel_to_stream(
+        self, channel: Any, writer: asyncio.StreamWriter
+    ) -> None:
         try:
             while True:
                 data = await channel.recv(8192)
@@ -335,11 +346,11 @@ class AsyncRemotePortForwarder:
             request_data = bytearray()
             request_data.extend(write_string(tunnel.remote_addr[0]))
             request_data.extend(write_uint32(tunnel.remote_addr[1]))
-            
+
             await self._transport._send_global_request_async(
                 "cancel-tcpip-forward", True, bytes(request_data)
             )
-            
+
             await tunnel.close()
             del self._tunnels[tunnel_id]
 
@@ -359,7 +370,11 @@ class AsyncPortForwardingManager:
         self.remote_forwarder = AsyncRemotePortForwarder(transport)
 
     async def create_local_tunnel(
-        self, local_port: int, remote_host: str, remote_port: int, local_host: str = "127.0.0.1"
+        self,
+        local_port: int,
+        remote_host: str,
+        remote_port: int,
+        local_host: str = "127.0.0.1",
     ) -> str:
         return await self.local_forwarder.create_tunnel(
             local_port, remote_host, remote_port, local_host
@@ -393,7 +408,7 @@ class AsyncPortForwardingManager:
         await self.local_forwarder.close_all()
         await self.remote_forwarder.close_all()
 
-    def get_all_tunnels(self) -> Dict[str, AsyncForwardingTunnel]:
+    def get_all_tunnels(self) -> dict[str, Any]:
         tunnels = {}
         tunnels.update(self.local_forwarder._tunnels)
         tunnels.update(self.remote_forwarder._tunnels)
