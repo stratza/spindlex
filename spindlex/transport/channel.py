@@ -8,7 +8,7 @@ with support for different channel types and operations.
 import threading
 import time
 from collections import deque
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 from ..exceptions import ChannelException
 from ..protocol.constants import (
@@ -88,7 +88,7 @@ class Channel:
         """
         return self._timeout
 
-    def send(self, data: bytes | str) -> int:
+    def send(self, data: Union[bytes, str]) -> int:
         """
         Send data through channel.
 

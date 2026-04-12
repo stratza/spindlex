@@ -5,7 +5,7 @@ Provides asynchronous SSH channel functionality for command execution and data t
 """
 
 import asyncio
-from typing import Any
+from typing import Any, Union
 
 from ..exceptions import ChannelException
 from ..protocol.constants import *
@@ -52,7 +52,7 @@ class AsyncChannel(Channel):
         """Handle incoming channel EOF."""
         self._eof_received = True
 
-    async def send(self, data: bytes | str) -> int:  # type: ignore[override]
+    async def send(self, data: Union[bytes, str]) -> int:  # type: ignore[override]
         """
         Send data through channel asynchronously.
 
@@ -320,7 +320,7 @@ class AsyncChannel(Channel):
                 raise
             raise ChannelException(f"Subsystem invocation failed: {e}") from e
 
-    async def send_exit_status(self, status: int) -> None:
+    async def send_exit_status(self, status: int) -> None:  # type: ignore[override]
         """
         Send command exit status to remote side asynchronously.
 
