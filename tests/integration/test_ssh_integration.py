@@ -36,6 +36,7 @@ def ssh_server(docker_ip, docker_services):
 
     # Short extra wait to ensure internal services are ready
     import time
+
     time.sleep(5)
 
     return docker_ip, port
