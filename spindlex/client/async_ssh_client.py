@@ -5,11 +5,13 @@ Provides asynchronous SSH client functionality for high-concurrency applications
 """
 
 import asyncio
+import logging
 import socket
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
-from ..exceptions import AuthenticationException, SSHException
-from ..hostkeys.policy import AutoAddPolicy, MissingHostKeyPolicy
+from ..exceptions import AuthenticationException, BadHostKeyException, SSHException
+from ..hostkeys.policy import AutoAddPolicy, MissingHostKeyPolicy, RejectPolicy
+from ..hostkeys.storage import HostKeyStorage
 from ..transport.async_transport import AsyncTransport
 from .async_sftp_client import AsyncSFTPClient
 
@@ -28,7 +30,9 @@ class AsyncSSHClient:
         self._hostname: Optional[str] = None
         self._port: int = 22
         self._username: Optional[str] = None
-        self._host_key_policy: MissingHostKeyPolicy = AutoAddPolicy()
+        self._host_key_policy: MissingHostKeyPolicy = RejectPolicy()
+        self._host_key_storage = HostKeyStorage()
+        self._logger = logging.getLogger(__name__)
         self._connected = False
 
     async def connect(
@@ -91,17 +95,10 @@ class AsyncSSHClient:
             # Start client transport
             await self._transport.start_client(timeout)
 
-            # Authenticate if credentials provided
-            if username:
-                # Authenticate
-                if password:
-                    await self.auth_password(username, password)
-                elif pkey:
-                    await self.auth_publickey(username, pkey)
-                else:
-                    raise AuthenticationException(
-                        "No authentication credentials provided"
-                    )
+            # Verify host key
+            self._verify_host_key()
+
+            # Remove specific auth calls from connect() flow as they are moved to _authenticate()
 
             # Store connection info
             self._hostname = hostname
@@ -109,14 +106,77 @@ class AsyncSSHClient:
             self._username = username
             self._connected = True
 
+            # Perform authentication if credentials provided
+            if username:
+                await self._authenticate(
+                    username,
+                    password=password,
+                    pkey=pkey,
+                    gss_auth=gss_auth,
+                    gss_host=gss_host,
+                    gss_deleg_creds=gss_deleg_creds,
+                )
+
         except Exception as e:
             if self._transport:
                 await self._transport.close()
                 self._transport = None
 
-            if isinstance(e, (SSHException, AuthenticationException)):
+            if isinstance(e, (SSHException, AuthenticationException, BadHostKeyException)):
                 raise
             raise SSHException(f"Connection failed: {e}") from e
+
+    def _verify_host_key(self) -> None:
+        """
+        Verify server host key according to policy.
+
+        Raises:
+            BadHostKeyException: If host key verification fails
+        """
+        if not self._transport:
+            raise SSHException("No transport available")
+
+        hostname = self._hostname or "unknown"
+
+        try:
+            # Get actual server host key from transport
+            server_key = self._transport.get_server_host_key()
+
+            if server_key is None:
+                self._logger.warning("No host key received from server")
+                return
+
+            # Check if we have a known host key for this hostname
+            known_key = self._host_key_storage.get(hostname)
+
+            if known_key is None:
+                # No known key - apply missing host key policy
+                self._logger.debug(f"No known host key for {hostname}")
+
+                try:
+                    self._host_key_policy.missing_host_key(self, hostname, server_key)
+                except BadHostKeyException:
+                    # Policy rejected the key
+                    raise
+                except Exception as e:
+                    # Policy had an error but didn't reject
+                    self._logger.warning(f"Host key policy error: {e}")
+            else:
+                # We have a known key - compare with the actual server key
+                self._logger.debug(f"Found known host key for {hostname}")
+
+                if (
+                    known_key.get_public_key_bytes()
+                    != server_key.get_public_key_bytes()
+                ):
+                    # Key mismatch!
+                    raise BadHostKeyException(hostname, server_key, known_key)
+
+        except BadHostKeyException:
+            raise
+        except Exception as e:
+            self._logger.error(f"Host key verification error: {e}")
+            raise BadHostKeyException(hostname, None)
 
     async def _create_connection(
         self, hostname: str, port: int, timeout: Optional[float]
@@ -277,14 +337,112 @@ class AsyncSSHClient:
         if not await self._transport.auth_publickey(username, pkey):
             raise AuthenticationException("Public key authentication failed")
 
+    async def auth_keyboard_interactive(
+        self,
+        username: str,
+        handler: Optional[Callable[[str, str, list[tuple[str, bool]]], Any]] = None,
+    ) -> None:
+        """Authenticate using keyboard-interactive method asynchronously."""
+        if not self._transport:
+            raise SSHException("No transport available")
+
+        # Use console_handler by default
+        from ..auth.keyboard_interactive import console_handler
+
+        handler = handler or console_handler
+
+        if not await self._transport.auth_keyboard_interactive(username, handler):
+            raise AuthenticationException("Keyboard-interactive authentication failed")
+
+    async def auth_gssapi(
+        self,
+        username: str,
+        gss_host: Optional[str] = None,
+        gss_deleg_creds: bool = False,
+    ) -> None:
+        """Authenticate using GSSAPI (Kerberos) asynchronously."""
+        if not self._transport:
+            raise SSHException("No transport available")
+
+        if not await self._transport.auth_gssapi(username, gss_host, gss_deleg_creds):
+            raise AuthenticationException("GSSAPI authentication failed")
+
+    async def _authenticate(
+        self,
+        username: str,
+        password: Optional[str] = None,
+        pkey: Optional[Any] = None,
+        gss_auth: bool = False,
+        gss_host: Optional[str] = None,
+        gss_deleg_creds: bool = False,
+    ) -> None:
+        """Internal helper to guide authentication flow."""
+        if not self._transport:
+            raise SSHException("No transport available")
+
+        authenticated = False
+
+        # Try GSSAPI if requested
+        if gss_auth and not authenticated:
+            try:
+                await self.auth_gssapi(username, gss_host, gss_deleg_creds)
+                authenticated = True
+            except Exception as e:
+                self._logger.debug(f"GSSAPI authentication failed: {e}")
+
+        # Try Public Key
+        if pkey and not authenticated:
+            try:
+                await self.auth_publickey(username, pkey)
+                authenticated = True
+            except Exception as e:
+                self._logger.debug(f"Public key authentication failed: {e}")
+
+        # Try Password
+        if password and not authenticated:
+            try:
+                await self.auth_password(username, password)
+                authenticated = True
+            except Exception as e:
+                self._logger.debug(f"Password authentication failed: {e}")
+
+        # Try Keyboard-Interactive if nothing else worked
+        if not authenticated:
+            try:
+                await self.auth_keyboard_interactive(username)
+                authenticated = True
+            except Exception as e:
+                self._logger.debug(f"Keyboard-interactive authentication failed: {e}")
+
+        if not authenticated:
+            raise AuthenticationException(f"Authentication failed for user {username}")
+
     def set_missing_host_key_policy(self, policy: MissingHostKeyPolicy) -> None:
         """
-        Set policy for handling missing host keys.
+        Set policy for handling unknown host keys.
 
         Args:
             policy: Host key policy instance
         """
         self._host_key_policy = policy
+
+    def set_host_key_storage(self, storage: HostKeyStorage) -> None:
+        """
+        Set host key storage instance.
+
+        Args:
+            storage: Host key storage to use
+        """
+        self._host_key_storage = storage
+
+    def get_host_key_storage(self) -> HostKeyStorage:
+        """
+        Get host key storage instance.
+
+        Returns:
+            Current host key storage
+        """
+        return self._host_key_storage
 
     async def close(self) -> None:
         """Close SSH connection and cleanup resources."""
