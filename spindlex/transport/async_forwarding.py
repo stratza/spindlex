@@ -5,6 +5,8 @@ Provides local and remote port forwarding functionality for AsyncSSHClient.
 Handles tunnel creation, data relay, and connection management using asyncio.
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 from typing import Any
