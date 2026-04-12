@@ -4,6 +4,8 @@ GSSAPI Authentication Implementation
 Implements SSH GSSAPI authentication method for Kerberos integration.
 """
 
+import socket
+import sys
 from typing import Any, Optional
 
 from ..exceptions import AuthenticationException
@@ -12,6 +14,7 @@ from ..protocol.constants import (
     MSG_USERAUTH_GSSAPI_RESPONSE,
     MSG_USERAUTH_GSSAPI_TOKEN,
     SERVICE_CONNECTION,
+    SSH_STRING_ENCODING,
 )
 from ..protocol.messages import (
     Message,
@@ -21,16 +24,31 @@ from ..protocol.messages import (
 )
 from ..protocol.utils import read_string, write_string, write_uint32
 
+# Global flags
+GSSAPI_AVAILABLE = False
+
+# We use a trick to define these names in a way that Mypy won't complain about re-definition
+# or re-assignment to types, while still making them available for patches in tests.
+class _GSSAPIDefs:
+    gssapi: Any = None
+    Credentials: Any = None
+    Name: Any = None
+    SecurityContext: Any = None
+
+_defs = _GSSAPIDefs()
+
 try:
-    import gssapi as _gssapi
-    from gssapi import Credentials as _Credentials
-    from gssapi import Name as _Name
-    from gssapi import SecurityContext as _SecurityContext
+    import gssapi as real_gssapi
+    from gssapi import Credentials as real_Credentials
+    from gssapi import Name as real_Name
+    from gssapi import SecurityContext as real_SecurityContext
 
     GSSAPI_AVAILABLE = True
+    _defs.gssapi = real_gssapi
+    _defs.Credentials = real_Credentials
+    _defs.Name = real_Name
+    _defs.SecurityContext = real_SecurityContext
 except (ImportError, OSError):
-    GSSAPI_AVAILABLE = False
-
     # Create mock classes for testing when gssapi is not available
     class MockCredentials:
         def __init__(self, usage: Optional[str] = None) -> None:
@@ -59,22 +77,22 @@ except (ImportError, OSError):
         def step(self, token: Optional[bytes] = None) -> bytes:
             return b""
 
-    # Create a mock gssapi module with RequirementFlag
     class MockGSSAPIModule:
         class RequirementFlag:
             mutual_authentication = 1
             delegate_to_peer = 2
 
-    _gssapi = MockGSSAPIModule()  # type: ignore
-    _Credentials = MockCredentials  # type: ignore
-    _Name = MockName  # type: ignore
-    _SecurityContext = MockSecurityContext  # type: ignore
+    _defs.gssapi = MockGSSAPIModule()
+    _defs.Credentials = MockCredentials
+    _defs.Name = MockName
+    _defs.SecurityContext = MockSecurityContext
 
-# Expose the internal names for use in the rest of the module
-gssapi = _gssapi
-Credentials = _Credentials
-Name = _Name
-SecurityContext = _SecurityContext
+# Export names to module level for existing tests and code to work
+# We use this way to avoid Mypy errors
+gssapi = _defs.gssapi
+Credentials = _defs.Credentials
+Name = _defs.Name
+SecurityContext = _defs.SecurityContext
 
 
 class GSSAPIAuth:
@@ -93,8 +111,8 @@ class GSSAPIAuth:
             transport: SSH transport instance
         """
         self._transport = transport
-        self._gss_context: Optional[SecurityContext] = None
-        self._gss_credentials: Optional[Credentials] = None
+        self._gss_context: Optional[Any] = None
+        self._gss_credentials: Optional[Any] = None
 
     def authenticate(
         self,
@@ -142,7 +160,7 @@ class GSSAPIAuth:
                 raise
             raise AuthenticationException(f"GSSAPI authentication failed: {e}") from e
 
-    def _get_target_name(self, gss_host: Optional[str]) -> Name:
+    def _get_target_name(self, gss_host: Optional[str]) -> Any:
         """
         Get GSSAPI target name for the SSH service.
 
@@ -154,7 +172,10 @@ class GSSAPIAuth:
         """
         if gss_host is None:
             # Use hostname from transport socket
-            hostname = self._transport._socket.getpeername()[0]
+            try:
+                hostname = self._transport._socket.getpeername()[0]
+            except (socket.error, IndexError):
+                hostname = "localhost"
         else:
             hostname = gss_host
 
@@ -166,9 +187,9 @@ class GSSAPIAuth:
             return Name(service_name, name_type=NameType.hostbased_service)
         else:
             # In mock mode, Name is MockName
-            return Name(service_name, name_type=Name.NameType.hostbased_service)  # type: ignore[attr-defined]
+            return Name(service_name, name_type=Name.NameType.hostbased_service)
 
-    def _init_gss_context(self, target_name: Name, delegate_creds: bool) -> None:
+    def _init_gss_context(self, target_name: Any, delegate_creds: bool) -> None:
         """
         Initialize GSSAPI security context.
 
@@ -373,7 +394,7 @@ class GSSAPIAuth:
         except Exception as e:
             raise AuthenticationException(f"Failed to parse GSSAPI token: {e}") from e
 
-    def get_gss_context(self) -> Optional[SecurityContext]:
+    def get_gss_context(self) -> Optional[Any]:
         """
         Get the GSSAPI security context.
 
@@ -382,7 +403,7 @@ class GSSAPIAuth:
         """
         return self._gss_context
 
-    def get_gss_credentials(self) -> Optional[Credentials]:
+    def get_gss_credentials(self) -> Optional[Any]:
         """
         Get the GSSAPI credentials.
 

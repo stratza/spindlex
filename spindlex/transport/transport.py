@@ -48,6 +48,12 @@ class Transport:
             rekey_time_limit: Seconds before rekeying (default: 1 hour)
         """
         self._socket = sock
+        self._peer_addr = None
+        try:
+            self._peer_addr = sock.getpeername()
+        except (socket.error, ValueError):
+            pass
+
         self._active = False
         self._server_mode = False
         self._channels: dict[int, Channel] = {}
@@ -148,46 +154,81 @@ class Transport:
 
     def start_client(self, timeout: Optional[float] = None) -> None:
         """
-        Start SSH client transport.
+        Start SSH client transport with reconnection retries.
 
         Args:
             timeout: Handshake timeout in seconds
 
         Raises:
-            TransportException: If client start fails
+            TransportException: If client start fails after retries
         """
         if timeout is not None:
             self._connect_timeout = timeout
 
-        try:
-            with self._lock:
-                if self._active:
-                    raise TransportException("Transport already active")
+        max_handshake_retries = 10
+        retry_delay = 1.0
 
-                self._server_mode = False
+        for attempt in range(max_handshake_retries):
+            try:
+                with self._lock:
+                    if self._active:
+                        raise TransportException("Transport already active")
 
-                # Set socket timeout for handshake
-                old_timeout = self._socket.gettimeout()
-                self._socket.settimeout(self._connect_timeout)
+                    self._server_mode = False
 
-                try:
-                    # Perform SSH handshake
-                    self._do_handshake()
+                    # Set socket timeout for handshake
+                    old_timeout = self._socket.gettimeout()
+                    self._socket.settimeout(self._connect_timeout)
 
-                    # Start key exchange
-                    self._start_kex()
+                    try:
+                        # Perform SSH handshake
+                        self._do_handshake()
 
-                    self._active = True
+                        # Start key exchange
+                        self._start_kex()
 
-                finally:
-                    # Restore original socket timeout
-                    self._socket.settimeout(old_timeout)
+                        self._active = True
+                        return
 
-        except Exception as e:
-            self.close()
-            if isinstance(e, (TransportException, ProtocolException)):
-                raise
-            raise TransportException(f"Client start failed: {e}") from e
+                    finally:
+                        # Restore original socket timeout
+                        self._socket.settimeout(old_timeout)
+
+            except (TransportException, ProtocolException, OSError) as e:
+                # If connection closed or protocol error, we might want to retry
+                is_retryable = False
+                if isinstance(e, TransportException) and (
+                    "Connection closed" in str(e) or "Timeout" in str(e)
+                ):
+                    is_retryable = True
+                elif isinstance(e, (OSError, ProtocolException)):
+                    is_retryable = True
+
+                if is_retryable and attempt < max_handshake_retries - 1:
+                    self._logger.debug(
+                        f"Handshake attempt {attempt + 1} failed, retrying: {e}"
+                    )
+                    self.close()
+
+                    # Recreate socket if we have peer_addr
+                    if self._peer_addr:
+                        try:
+                            time.sleep(retry_delay)
+                            new_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                            new_sock.settimeout(self._connect_timeout)
+                            new_sock.connect(self._peer_addr)
+                            self._socket = new_sock
+                            # Reset internal state for new socket
+                            self._packet_buffer = b""
+                            self._message_queue = []
+                        except Exception as re_e:
+                            self._logger.debug(f"Reconnection failed: {re_e}")
+                    continue
+
+                self.close()
+                if isinstance(e, (TransportException, ProtocolException)):
+                    raise
+                raise TransportException(f"Client start failed: {e}") from e
 
     def start_server(self, server_key: Any, timeout: Optional[float] = None) -> None:
         """
@@ -1255,8 +1296,8 @@ class Transport:
         """Receive and validate SSH version string with retries."""
         import time
 
-        max_retries = 15
-        retry_delay = 2.0
+        max_retries = 30
+        retry_delay = 1.0
         version_line = b""
 
         for attempt in range(max_retries):
@@ -1284,16 +1325,21 @@ class Transport:
                 if version_line:
                     break
 
-            except (TransportException, socket.timeout, ConnectionResetError):
-                if attempt < max_retries - 1:
+            except (TransportException, socket.timeout, ConnectionResetError, OSError) as e:
+                # Catch specific connection closed or timeout errors
+                is_retryable = True
+                if isinstance(e, TransportException) and "excessive version line length" in str(e):
+                    is_retryable = False
+                
+                if is_retryable and attempt < max_retries - 1:
                     self._logger.debug(
-                        f"Banner read attempt {attempt + 1} failed, retrying..."
+                        f"Banner read attempt {attempt + 1} failed, retrying: {e}"
                     )
                     time.sleep(retry_delay)
                     version_line = b""  # Reset for next attempt
                     continue
                 raise TransportException(
-                    f"Failed to receive SSH banner after {max_retries} attempts: Timeout"
+                    f"Failed to receive SSH banner after {max_retries} attempts: {e}"
                 )
 
         self._remote_version = version_line.decode().strip()

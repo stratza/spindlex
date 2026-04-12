@@ -24,18 +24,28 @@ def ssh_server(docker_ip, docker_services):
 
     def check():
         try:
-            with socket.create_connection((docker_ip, port), timeout=2):
-                return True
+            # First check TCP connectivity
+            with socket.create_connection((docker_ip, port), timeout=1):
+                # Then attempt a basic handshake check
+                with SSHClient() as client:
+                    client.set_missing_host_key_policy(AutoAddPolicy())
+                    # A very short timeout here, we just want to see if it starts to talk
+                    try:
+                        client.connect(
+                            hostname=docker_ip,
+                            port=port,
+                            username="testuser",
+                            password="password123",
+                            timeout=5.0,
+                        )
+                        return True
+                    except Exception:
+                        return False
         except Exception:
             return False
 
-    # Wait for SSH server to be responsive (increase timeout for CI)
-    docker_services.wait_until_responsive(timeout=180.0, pause=3.0, check=check)
-
-    # Increased wait to ensure server is fully ready (generating keys, etc.)
-    import time
-
-    time.sleep(20)
+    # Wait for SSH server to be fully responsive (increase timeout for CI)
+    docker_services.wait_until_responsive(timeout=180.0, pause=5.0, check=check)
 
     return docker_ip, port
 
