@@ -88,12 +88,12 @@ class Channel:
         """
         return self._timeout
 
-    def send(self, data: bytes) -> int:
+    def send(self, data: bytes | str) -> int:
         """
         Send data through channel.
 
         Args:
-            data: Data to send
+            data: Data to send (bytes or string)
 
         Returns:
             Number of bytes sent
@@ -103,6 +103,10 @@ class Channel:
         """
         if not data:
             return 0
+
+        # Convert string to bytes if needed
+        if isinstance(data, str):
+            data = data.encode(SSH_STRING_ENCODING)
 
         with self._lock:
             if self._closed:
@@ -323,6 +327,24 @@ class Channel:
             Exit status code, or -1 if not available
         """
         return self._exit_status if self._exit_status is not None else -1
+
+    def send_exit_status(self, status: int) -> None:
+        """
+        Send command exit status to remote side.
+
+        Args:
+            status: Exit status code (typically 0 for success)
+
+        Raises:
+            ChannelException: If send fails
+        """
+        from ..protocol.utils import write_uint32
+
+        # Build exit-status request data (4-byte unsigned integer)
+        request_data = write_uint32(status)
+
+        # Send exit-status request (no reply wanted for this type)
+        self.send_channel_request("exit-status", want_reply=False, data=request_data)
 
     def send_channel_request(
         self, request_type: str, want_reply: bool = True, data: bytes = b""
