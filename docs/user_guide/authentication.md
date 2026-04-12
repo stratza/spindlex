@@ -117,24 +117,25 @@ Keyboard-interactive authentication is used when the server requires the user to
     ```python
     from spindlex import SSHClient
 
-    def my_handler(title, instruction, prompts):
-        responses = []
-        for prompt, echo in prompts:
-            if echo:
-                responses.append(input(prompt))
-            else:
-                import getpass
-                responses.append(getpass.getpass(prompt))
-        return responses
-
     with SSHClient() as client:
         client.connect(
             hostname="server.example.com",
             username="user"
         )
-        # Authentication will trigger keyboard-interactive if required
-        # or you can explicitly use auth_keyboard_interactive
-        client.auth_keyboard_interactive("user", my_handler)
+        # If handler is omitted, SpindleX uses a default terminal-based handler
+        client.auth_keyboard_interactive("user")
+    ```
+
+    You can also provide a custom handler for more complex scenarios:
+
+    ```python
+    def my_handler(title, instruction, prompts):
+        responses = []
+        for prompt, echo in prompts:
+            responses.append(input(prompt) if echo else getpass.getpass(prompt))
+        return responses
+
+    client.auth_keyboard_interactive("user", my_handler)
     ```
 
 ## Security Best Practices
