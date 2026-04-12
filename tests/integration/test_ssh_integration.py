@@ -20,7 +20,7 @@ def docker_compose_file(pytestconfig):
 @pytest.fixture(scope="session")
 def ssh_server(docker_ip, docker_services):
     """Ensure that SSH server is up and responsive."""
-    port = docker_services.port_for("openssh-server", 22)
+    port = docker_services.port_for("openssh-server", 2222)
 
     def check():
         try:

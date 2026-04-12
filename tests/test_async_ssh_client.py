@@ -14,7 +14,11 @@ def async_ssh_client():
 @pytest.mark.asyncio
 async def test_async_ssh_client_connect(async_ssh_client):
     from spindlex.hostkeys.policy import AutoAddPolicy
+    from spindlex.hostkeys.storage import HostKeyStorage
+    import os
 
+    # Use a temporary empty storage for the test
+    async_ssh_client._host_key_storage = HostKeyStorage(os.devnull)
     async_ssh_client.set_missing_host_key_policy(AutoAddPolicy())
 
     with patch("asyncio.open_connection", new_callable=AsyncMock) as mock_open:
@@ -26,6 +30,10 @@ async def test_async_ssh_client_connect(async_ssh_client):
         with patch("spindlex.client.async_ssh_client.AsyncTransport") as mock_trans_cls:
             mock_trans = AsyncMock()
             mock_trans_cls.return_value = mock_trans
+            # Ensure synchronous methods return values, not coroutines
+            mock_trans.get_server_host_key = MagicMock()
+            mock_trans.get_server_host_key.return_value = MagicMock()
+            
             # No need to explicitly mock start_client as AsyncMock() is already a coroutine
             # but we can do it for clarity
             mock_trans.start_client = AsyncMock()
@@ -77,7 +85,8 @@ async def test_async_ssh_client_host_key_verification_fail(async_ssh_client):
             mock_trans.connect_existing = AsyncMock()
             mock_trans.close = AsyncMock()
 
-            # Mock host key mismatch
+            # Mock host key mismatch - ensure it returns a value, not a coroutine
+            mock_trans.get_server_host_key = MagicMock()
             mock_trans.get_server_host_key.return_value = MagicMock()
 
             with pytest.raises(BadHostKeyException):

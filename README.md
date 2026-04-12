@@ -12,16 +12,9 @@
 [![Security Status](https://img.shields.io/badge/socket-security-brightgreen?style=for-the-badge&logo=socket.io)](https://badge.socket.dev/pypi/package/spindlex)
 
   <br />
-  <a href="https://spindlex.readthedocs.io/"><strong>Explore the Docs »</strong></a>
-  <br />
-  <br />
   <a href="#-quick-start">Quick Start</a>
   •
-  <a href="https://spindlex.readthedocs.io/migration/paramiko/">Migration Guide</a>
-  •
-  <a href="https://spindlex.readthedocs.io/cookbook/">Cookbook</a>
-  •
-  <a href="#-performance">Performance</a>
+  <a href="https://spindlex.readthedocs.io/">Docs</a>
   •
   <a href="#-security">Security</a>
   •
