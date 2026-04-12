@@ -7,7 +7,10 @@ Provides asynchronous SSH transport functionality for high-concurrency applicati
 import asyncio
 import socket
 import struct
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
+
+if TYPE_CHECKING:
+    from .async_forwarding import AsyncPortForwardingManager
 
 from ..exceptions import ProtocolException, TransportException
 from ..protocol.constants import *
@@ -38,6 +41,7 @@ class AsyncTransport(Transport):
         self._reader: Optional[asyncio.StreamReader] = None
         self._writer: Optional[asyncio.StreamWriter] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._port_forwarding_manager: Optional["AsyncPortForwardingManager"] = None  # type: ignore[assignment]
         try:
             self._loop = asyncio.get_event_loop()
         except RuntimeError:
@@ -112,7 +116,7 @@ class AsyncTransport(Transport):
         # Reset progress flag
         self._kex_in_progress = False
 
-    def get_port_forwarding_manager(self) -> Any:
+    def get_port_forwarding_manager(self) -> "AsyncPortForwardingManager":  # type: ignore[override]
         """Get port forwarding manager."""
         if self._port_forwarding_manager is None:
             from .async_forwarding import AsyncPortForwardingManager

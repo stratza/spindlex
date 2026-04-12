@@ -7,10 +7,13 @@ Provides asynchronous SSH client functionality for high-concurrency applications
 import asyncio
 import logging
 import socket
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Optional
+
+if TYPE_CHECKING:
+    pass
 
 from ..exceptions import AuthenticationException, BadHostKeyException, SSHException
-from ..hostkeys.policy import AutoAddPolicy, MissingHostKeyPolicy, RejectPolicy
+from ..hostkeys.policy import MissingHostKeyPolicy, RejectPolicy
 from ..hostkeys.storage import HostKeyStorage
 from ..transport.async_transport import AsyncTransport
 from .async_sftp_client import AsyncSFTPClient
@@ -122,7 +125,9 @@ class AsyncSSHClient:
                 await self._transport.close()
                 self._transport = None
 
-            if isinstance(e, (SSHException, AuthenticationException, BadHostKeyException)):
+            if isinstance(
+                e, (SSHException, AuthenticationException, BadHostKeyException)
+            ):
                 raise
             raise SSHException(f"Connection failed: {e}") from e
 
@@ -482,7 +487,7 @@ class AsyncSSHClient:
             manager = self._transport.get_port_forwarding_manager()
             await manager.close_tunnel(tunnel_id)
 
-    def get_port_forwards(self) -> Dict[str, Any]:
+    def get_port_forwards(self) -> dict[str, Any]:
         """
         Get all active port forwarding tunnels.
 
