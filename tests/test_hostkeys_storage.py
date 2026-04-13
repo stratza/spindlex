@@ -113,5 +113,3 @@ class TestHostKeyStorage:
 
         # Test unsupported type
         assert storage._create_key_from_type_and_data("unknown-type", b"data") is None
-
-

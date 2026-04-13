@@ -732,11 +732,11 @@ class Transport:
             if not isinstance(msg, ChannelOpenMessage):
                 msg = ChannelOpenMessage.unpack(msg.pack())
 
-            channel_type = msg.channel_type
-            sender_channel = msg.sender_channel
-            initial_window_size = msg.initial_window_size
-            maximum_packet_size = msg.maximum_packet_size
-            type_specific_data = msg.type_specific_data
+            channel_type = msg.channel_type  # type: ignore[attr-defined]
+            sender_channel = msg.sender_channel  # type: ignore[attr-defined]
+            initial_window_size = msg.initial_window_size  # type: ignore[attr-defined]
+            maximum_packet_size = msg.maximum_packet_size  # type: ignore[attr-defined]
+            type_specific_data = msg.type_specific_data  # type: ignore[attr-defined]
 
             if channel_type == CHANNEL_SESSION:
                 self._handle_session_open(
@@ -1465,7 +1465,7 @@ class Transport:
             raise TransportException(f"Rekeying failed or timed out: {e}") from e
         finally:
             self._kex_in_progress = False
-            self._kex_thread = None
+            self._kex_thread = None  # type: ignore[assignment]
             # Reset byte count after successful rekey
             with self._lock:
                 self._bytes_since_rekey = 0
@@ -1613,7 +1613,7 @@ class Transport:
             ):
                 # We should not be here if called from _recv_message or _expect_message
                 # as they have their own yielding loops, but for safety:
-                return None
+                return None  # type: ignore[return-value]
 
             try:
                 # We need to hold the read_lock while reading from the socket to ensure
@@ -1732,7 +1732,7 @@ class Transport:
         if msg is None:
             # Should only happen if we yielded and then read_message returned None
             # because rekeying is still in progress (unlikely given the break above)
-            return self._recv_message()
+            return self._recv_message()  # type: ignore[unreachable]
         return msg
 
     def _expect_message(self, *allowed_types: int) -> Message:
@@ -1762,7 +1762,7 @@ class Transport:
             # 2. Not in queue, read from socket
             msg = self._read_message()
             if msg is None:
-                continue
+                continue  # type: ignore[unreachable]
 
             if msg.msg_type in allowed_types:
                 return msg

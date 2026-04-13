@@ -480,7 +480,7 @@ class KeyExchange:
             )
 
             # 6. Sign exchange hash
-            signature_blob = self._sign_exchange_hash(self._exchange_hash)
+            signature_blob = self._sign_exchange_hash(self._exchange_hash)  # type: ignore[arg-type]
 
             # 7. Send KEX_ECDH_REPLY (31)
             reply_msg = Message(31)  # MSG_KEX_ECDH_REPLY
@@ -553,7 +553,7 @@ class KeyExchange:
             self._dh_public_key_mpint = orig_client_mpint
 
             # 7. Sign exchange hash
-            signature_blob = self._sign_exchange_hash(self._exchange_hash)
+            signature_blob = self._sign_exchange_hash(self._exchange_hash)  # type: ignore[arg-type]
 
             # 8. Send MSG_KEXDH_REPLY (31)
             reply_msg = Message(MSG_KEXDH_REPLY)
@@ -583,7 +583,7 @@ class KeyExchange:
         signature = server_key.sign(exchange_hash)
         if signature is None:
             raise CryptoException("Failed to sign exchange hash")
-        return signature
+        return signature  # type: ignore[no-any-return]
 
     def _perform_curve25519_sha256(self) -> None:
         """Perform client-side Curve25519 SHA256 key exchange."""
@@ -647,12 +647,12 @@ class KeyExchange:
         hash_data.extend(
             write_string(self._transport._server_version or "SSH-2.0-Unknown")
         )
-        hash_data.extend(write_string(self._client_kexinit))
-        hash_data.extend(write_string(self._server_kexinit))
+        hash_data.extend(write_string(self._client_kexinit))  # type: ignore[arg-type]
+        hash_data.extend(write_string(self._server_kexinit))  # type: ignore[arg-type]
         hash_data.extend(write_string(server_host_key))
         hash_data.extend(write_string(client_public_key))
         hash_data.extend(write_string(server_public_key))
-        hash_data.extend(self._shared_secret)
+        hash_data.extend(self._shared_secret)  # type: ignore[arg-type]
 
         self._exchange_hash = default_crypto_backend.hash_data(
             "sha256", bytes(hash_data)
