@@ -74,11 +74,3 @@ jobs:
         run: |
           if [ ! -f CLONE.md ]; then
             cat > CLONE.md << 'EOF'
-### GitHub Clone Count
-
-[![GitHub Clones](https://img.shields.io/badge/dynamic/json?color=success&label=Clones&query=count&url=https://gist.githubusercontent.com/${{ github.actor }}/${{ secrets.GIST_ID }}/raw/clone.json&logo=github)](https://github.com/MShawon/github-clone-count-badge)
-EOF
-            git add CLONE.md
-            git commit -m "Add clone count badge" || echo "No changes"
-            git push
-          fi
