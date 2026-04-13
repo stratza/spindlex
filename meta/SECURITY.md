@@ -36,7 +36,7 @@ A good security report should include:
 
 SpindleX follows these security principles:
 
-- **Modern Cryptography**: Only supports secure, modern algorithms (Ed25519, ChaCha20-Poly1305, etc.).
+- **Modern Cryptography**: Only supports secure, modern algorithms (Ed25519, AES-256-CTR, HMAC-SHA2, etc.).
 - **Secure Defaults**: Insecure algorithms and protocols are disabled by default.
 - **Input Validation**: Rigorous validation of all protocol inputs.
 - **Dependency Scanning**: Regular automated scanning for vulnerable dependencies.

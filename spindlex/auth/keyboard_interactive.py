@@ -4,7 +4,6 @@ Keyboard-Interactive Authentication Implementation
 Implements SSH keyboard-interactive authentication method according to RFC 4256.
 """
 
-import getpass
 from typing import Any, Callable, cast
 
 from ..exceptions import AuthenticationException
@@ -186,10 +185,10 @@ def console_handler(
     title: str, instruction: str, prompts: list[tuple[str, bool]]
 ) -> list[str]:
     """
-    Default terminal-based handler for keyboard-interactive authentication.
+    Default handler for keyboard-interactive authentication.
 
-    Uses input() and getpass.getpass() to collect responses from the user
-    in the console.
+    By default, interactive prompts are disabled to prevent hanging headless
+    or GUI applications. Callers MUST provide their own handler implementation.
 
     Args:
         title: Authentication title from server
@@ -198,17 +197,11 @@ def console_handler(
 
     Returns:
         List of strings containing the user's responses
+
+    Raises:
+        NotImplementedError: Always raised unless overridden.
     """
-    if title:
-        print(f"\n{title}")
-    if instruction:
-        print(instruction)
-
-    responses = []
-    for prompt, echo in prompts:
-        if echo:
-            responses.append(input(prompt))
-        else:
-            responses.append(getpass.getpass(prompt))
-
-    return responses
+    raise NotImplementedError(
+        "Interactive console handler is disabled by default. "
+        "Please provide a custom handler function to handle keyboard-interactive prompts."
+    )

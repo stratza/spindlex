@@ -9,7 +9,11 @@ import logging
 import socket
 import threading
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Optional, Union
+
+if TYPE_CHECKING:
+    from .transport import Transport
+    from .channel import Channel
 
 from ..exceptions import SSHException
 from ..protocol.constants import CHANNEL_DIRECT_TCPIP
@@ -45,7 +49,7 @@ class ForwardingTunnel:
         self.remote_addr = remote_addr
         self.tunnel_type = tunnel_type
         self.active = False
-        self.connections: dict[str, Any] = {}
+        self.connections: dict[str, dict[str, Union[socket.socket, "Channel", tuple[str, int]]]] = {}
         self._lock = threading.RLock()
         self._logger = logging.getLogger(__name__)
 
@@ -74,14 +78,14 @@ class LocalPortForwarder:
     to remote destination.
     """
 
-    def __init__(self, transport: Any) -> None:
+    def __init__(self, transport: "Transport") -> None:
         """
         Initialize local port forwarder.
 
         Args:
             transport: SSH transport instance
         """
-        self._transport = transport
+        self._transport: "Transport" = transport
         self._tunnels: dict[str, ForwardingTunnel] = {}
         self._servers: dict[str, socket.socket] = {}
         self._lock = threading.RLock()
@@ -269,15 +273,18 @@ class LocalPortForwarder:
 
             with tunnel._lock:
                 if conn_id in tunnel.connections:
-                    try:
-                        tunnel.connections[conn_id]["channel"].close()
-                    except Exception:
-                        pass
+                    chan = tunnel.connections[conn_id].get("channel")
+                    if chan and hasattr(chan, "close"):
+                        try:
+                            # Use getattr to satisfy mypy's strictness about Unions and hasattr
+                            getattr(chan, "close")()
+                        except Exception:
+                            pass
                     del tunnel.connections[conn_id]
 
             self._logger.debug(f"Local connection {conn_id} closed")
 
-    def _relay_data(self, source: Any, destination: Any, relay_id: str) -> None:
+    def _relay_data(self, source: Union[socket.socket, "Channel"], destination: Union[socket.socket, "Channel"], relay_id: str) -> None:
         """
         Relay data between source and destination.
 
@@ -299,11 +306,10 @@ class LocalPortForwarder:
                     break
 
                 # Write data to destination
-                if hasattr(destination, "send"):
-                    destination.send(data)
-                else:
-                    # Assume it's a socket
+                if isinstance(destination, socket.socket):
                     destination.sendall(data)
+                else:
+                    destination.send(data)
 
         except (OSError, EOFError, SSHException) as e:
             self._logger.info(f"Data relay {relay_id} closed: {e}")
@@ -361,14 +367,14 @@ class RemotePortForwarder:
     connections back through SSH to local destination.
     """
 
-    def __init__(self, transport: Any) -> None:
+    def __init__(self, transport: "Transport") -> None:
         """
         Initialize remote port forwarder.
 
         Args:
             transport: SSH transport instance
         """
-        self._transport = transport
+        self._transport: "Transport" = transport
         self._tunnels: dict[str, ForwardingTunnel] = {}
         self._lock = threading.RLock()
         self._logger = logging.getLogger(__name__)
@@ -459,7 +465,7 @@ class RemotePortForwarder:
             return False
 
     def handle_forwarded_connection(
-        self, channel: Any, origin_addr: tuple[str, int], dest_addr: tuple[str, int]
+        self, channel: "Channel", origin_addr: tuple[str, int], dest_addr: tuple[str, int]
     ) -> None:
         """
         Handle incoming forwarded connection from remote server.
@@ -535,7 +541,7 @@ class RemotePortForwarder:
 
             self._logger.debug(f"Remote forwarded connection {conn_id} closed")
 
-    def _relay_data(self, source: Any, destination: Any, relay_id: str) -> None:
+    def _relay_data(self, source: Union[socket.socket, "Channel"], destination: Union[socket.socket, "Channel"], relay_id: str) -> None:
         """
         Relay data between source and destination.
 
@@ -557,11 +563,10 @@ class RemotePortForwarder:
                     break
 
                 # Write data to destination
-                if hasattr(destination, "send"):
-                    destination.send(data)
-                else:
-                    # Assume it's a socket
+                if isinstance(destination, socket.socket):
                     destination.sendall(data)
+                else:
+                    destination.send(data)
 
         except (OSError, EOFError, SSHException) as e:
             self._logger.info(f"Data relay {relay_id} closed: {e}")
@@ -651,14 +656,14 @@ class PortForwardingManager:
     port forwarding tunnels.
     """
 
-    def __init__(self, transport: Any) -> None:
+    def __init__(self, transport: "Transport") -> None:
         """
         Initialize port forwarding manager.
 
         Args:
             transport: SSH transport instance
         """
-        self._transport = transport
+        self._transport: "Transport" = transport
         self.local_forwarder = LocalPortForwarder(transport)
         self.remote_forwarder = RemotePortForwarder(transport)
         self._logger = logging.getLogger(__name__)
@@ -738,7 +743,7 @@ class PortForwardingManager:
         self.remote_forwarder.close_all()
 
     def handle_forwarded_connection(
-        self, channel: Any, origin_addr: tuple[str, int], dest_addr: tuple[str, int]
+        self, channel: "Channel", origin_addr: tuple[str, int], dest_addr: tuple[str, int]
     ) -> None:
         """
         Handle incoming forwarded connection from remote server.

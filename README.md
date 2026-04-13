@@ -23,15 +23,15 @@
 
 ---
 
-SpindleX is a modern SSH protocol implementation engineered for **speed**, **security**, and a **seamless developer experience**. It provides a significantly more performant and cleaner alternative to legacy Python SSH libraries.
+SpindleX is a modern SSH protocol implementation engineered for **speed**, **security**, and a **seamless developer experience**. It provides a clean, performant alternative to legacy Python SSH libraries.
 
 ## ✨ Key Features
 
 *   🚀 **High Performance**: Optimized protocol implementation with internal buffering designed for high-throughput SFTP and command execution.
 *   📦 **Modern Architecture**: Clean, modular codebase built from the ground up for maintainability. Leverages the industry-standard `cryptography` library for robust, hardware-accelerated security.
 *   🔄 **Native Async**: First-class support for `asyncio` with `AsyncSSHClient` and `AsyncSFTPClient`.
-*   🛡️ **Secure by Default**: Modern algorithms like Ed25519, ECDSA, and ChaCha20-Poly1305 are prioritized. Legacy SHA-1 and weak ciphers are disabled in the default configuration.
-*   🏷️ **Fully Typed**: 100% type-hinted codebase for robust IDE integration.
+*   🛡️ **Secure by Default**: Modern algorithms like Ed25519, ECDSA, and AES-256-CTR with HMAC-SHA2 are prioritized. Legacy SHA-1 and weak ciphers are disabled in the default configuration.
+*   🏷️ **Fully Typed**: Comprehensive type hints across the codebase for robust IDE integration and static analysis.
 
 ---
 
@@ -87,7 +87,7 @@ asyncio.run(run())
 ## 📺 Demos
 
 > [!TIP]
-> **View Live Execution Results**: See the [Verified Demo Outputs](demo_results.md) from the latest run.
+> **View Live Execution Results**: See the [Verified Demo Outputs](docs/demo_results.md) from the latest run.
 
 
 See SpindleX in action across various high-performance scenarios:
@@ -109,24 +109,24 @@ See SpindleX in action across various high-performance scenarios:
 | **Async Concurrency** | **Benchmark vs Paramiko** |
 |:---:|:---:|
 | ![Async Demo](demo/gifs/async-demo.gif) | ![Benchmark](demo/gifs/benchmark.gif) |
-| *Native asyncio integration* | *2.6x faster connection speeds* |
-
+| *Native asyncio integration* | *Up to ~2.6x faster (results vary by environment)* |
 
 
 ---
 
 ## ⚡ Performance
 
-SpindleX is designed for high-throughput, low-latency environments. It utilizes internal read buffering (32KB chunks) and optimized packet handling to reduce system call overhead and improve protocol efficiency.
+SpindleX is designed for high-throughput, low-latency environments. It utilizes internal read buffering (32KB chunks) and optimized packet handling to reduce system call overhead and improve protocol efficiency. Actual performance gains are environment-dependent.
 
 ### 📊 Benchmark vs Paramiko
-SpindleX consistently outperforms legacy libraries in connection establishment and bulk SFTP transfers.
+In testing, SpindleX has been observed to outperform legacy libraries in connection establishment and bulk SFTP transfers. Results are environment-dependent — run the included benchmark to verify on your setup.
 
-| Library | Connection Time (Avg) | Overhead |
+| Library | Connection Time (Avg)* | Overhead |
 |:---|:---:|:---:|
 | **SpindleX** | **0.32s** | **Low** |
 | Paramiko | 0.85s | High |
-| *Improvement* | *~2.6x Faster* | |
+
+*\*Results from a sample run. Your numbers will vary based on network, server, and hardware.*
 
 > [!TIP]
 > Run the included benchmark script to compare performance in your environment:

@@ -9,7 +9,17 @@ import struct
 from typing import Any, Optional
 
 from ..exceptions import SFTPError
-from ..protocol.sftp_constants import *
+from ..protocol.sftp_constants import (
+    SFTP_VERSION,
+    SSH_FX_EOF,
+    SSH_FX_OK,
+    SSH_FXF_APPEND,
+    SSH_FXF_CREAT,
+    SSH_FXF_EXCL,
+    SSH_FXF_READ,
+    SSH_FXF_TRUNC,
+    SSH_FXF_WRITE,
+)
 from ..protocol.sftp_messages import (
     SFTPAttributes,
     SFTPAttrsMessage,

@@ -4,9 +4,18 @@ This script demonstrates the asynchronous capabilities of SpindleX.
 """
 
 import asyncio
+import os
+import sys
 import time
 
+import logging
+logging.basicConfig(level=logging.DEBUG)
+
+# Ensure local 'spindlex' module is used instead of any installed package
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from spindlex import AsyncSSHClient
+from spindlex.hostkeys.policy import AutoAddPolicy
 
 # --- CONFIGURATION ---
 SSH_HOST = "my.server.com"
@@ -23,6 +32,7 @@ async def run_demo():
     print("=" * 50)
 
     client = AsyncSSHClient()
+    client.set_missing_host_key_policy(AutoAddPolicy())
 
     try:
         print(f"🔗 Connecting to {SSH_USER}@{SSH_HOST} asynchronously...")

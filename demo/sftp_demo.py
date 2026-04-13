@@ -3,10 +3,17 @@ SpindleX SFTP Demo - File Operations
 This script demonstrates basic SFTP operations like listing files, uploading, and downloading.
 """
 
+import logging
 import os
+import sys
 import time
 
+# Ensure local 'spindlex' module is used instead of any installed package
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from spindlex import SSHClient
+import logging
+logging.basicConfig(level=logging.DEBUG)
 
 # --- CONFIGURATION ---
 SSH_HOST = "my.server.com"

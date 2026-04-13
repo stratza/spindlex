@@ -8,7 +8,7 @@ from collections import defaultdict, deque
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from functools import wraps
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Iterator, ContextManager, Optional, Union
 
 from .logger import get_logger
 
@@ -85,7 +85,7 @@ class PerformanceMonitor:
         self.logger.performance_metric(operation, duration, **metadata)
 
     @contextmanager
-    def time_operation(self, operation: str, **metadata: Any) -> Any:
+    def time_operation(self, operation: str, **metadata: Any) -> Iterator[None]:
         """
         Context manager for timing operations.
 
@@ -116,7 +116,7 @@ class PerformanceMonitor:
             return self.connection_metrics[connection_id]
 
     def update_connection_metric(
-        self, connection_id: str, metric_name: str, value: Any
+        self, connection_id: str, metric_name: str, value: Union[float, int, str]
     ) -> None:
         """
         Update a specific connection metric.
@@ -227,7 +227,7 @@ def get_performance_monitor() -> PerformanceMonitor:
     return _performance_monitor
 
 
-def timed_operation(operation_name: str, **metadata: Any) -> Callable:
+def timed_operation(operation_name: str, **metadata: Any) -> Callable[..., Any]:
     """
     Decorator for timing function execution.
 
@@ -236,7 +236,7 @@ def timed_operation(operation_name: str, **metadata: Any) -> Callable:
         **metadata: Additional metadata to record
     """
 
-    def decorator(func: Callable) -> Callable:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             with _performance_monitor.time_operation(operation_name, **metadata):
@@ -267,7 +267,7 @@ class CryptoTimer:
         algorithm: str,
         key_size: Optional[int] = None,
         **metadata: Any,
-    ) -> Any:
+    ) -> Iterator[None]:
         """
         Time a cryptographic operation.
 
@@ -285,27 +285,27 @@ class CryptoTimer:
         with self.monitor.time_operation(f"crypto_{operation}", **crypto_metadata):
             yield
 
-    def time_key_generation(self, algorithm: str, key_size: int) -> Any:
+    def time_key_generation(self, algorithm: str, key_size: int) -> ContextManager[None]:
         """Time key generation operation."""
         return self.time_crypto_operation("keygen", algorithm, key_size)
 
-    def time_key_exchange(self, algorithm: str) -> Any:
+    def time_key_exchange(self, algorithm: str) -> ContextManager[None]:
         """Time key exchange operation."""
         return self.time_crypto_operation("kex", algorithm)
 
-    def time_encryption(self, cipher: str, data_size: int) -> Any:
+    def time_encryption(self, cipher: str, data_size: int) -> ContextManager[None]:
         """Time encryption operation."""
         return self.time_crypto_operation("encrypt", cipher, data_size=data_size)
 
-    def time_decryption(self, cipher: str, data_size: int) -> Any:
+    def time_decryption(self, cipher: str, data_size: int) -> ContextManager[None]:
         """Time decryption operation."""
         return self.time_crypto_operation("decrypt", cipher, data_size=data_size)
 
-    def time_signature(self, algorithm: str, key_size: int) -> Any:
+    def time_signature(self, algorithm: str, key_size: int) -> ContextManager[None]:
         """Time signature operation."""
         return self.time_crypto_operation("sign", algorithm, key_size)
 
-    def time_verification(self, algorithm: str, key_size: int) -> Any:
+    def time_verification(self, algorithm: str, key_size: int) -> ContextManager[None]:
         """Time signature verification operation."""
         return self.time_crypto_operation("verify", algorithm, key_size)
 

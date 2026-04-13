@@ -3,7 +3,12 @@ SpindleX SSH Demo - Command Execution
 This script demonstrates basic SSH connection and command execution using SpindleX.
 """
 
+import os
+import sys
 import time
+
+# Ensure local 'spindlex' module is used instead of any installed package
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from spindlex import SSHClient
 

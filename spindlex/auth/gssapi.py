@@ -30,10 +30,10 @@ if TYPE_CHECKING:
 
         GSSAPI_AVAILABLE = True
     except ImportError:
-        gssapi = Any
-        Credentials = Any
-        Name = Any
-        SecurityContext = Any
+        gssapi = Any  # type: ignore
+        Credentials = Any  # type: ignore
+        Name = Any  # type: ignore
+        SecurityContext = Any  # type: ignore
         GSSAPI_AVAILABLE = False
 else:
     try:
@@ -181,7 +181,7 @@ class GSSAPIAuth:
             return Name(service_name, name_type=NameType.hostbased_service)
         else:
             # In mock mode, Name is MockName
-            return Name(service_name, name_type=Name.NameType.hostbased_service)
+            return Name(service_name, name_type=Name.NameType.hostbased_service)  # type: ignore
 
     def _init_gss_context(self, target_name: Name, delegate_creds: bool) -> None:
         """

@@ -9,15 +9,55 @@ from __future__ import annotations
 import asyncio
 import socket
 import struct
+import threading
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .async_forwarding import AsyncPortForwardingManager
 
 from ..exceptions import ProtocolException, TransportException
-from ..protocol.constants import *
-from ..protocol.messages import *
-from ..protocol.utils import *
+from ..protocol.constants import (
+    AUTH_KEYBOARD_INTERACTIVE,
+    AUTH_PASSWORD,
+    AUTH_PUBLICKEY,
+    DEFAULT_MAX_PACKET_SIZE,
+    DEFAULT_WINDOW_SIZE,
+    MSG_CHANNEL_OPEN_CONFIRMATION,
+    MSG_CHANNEL_OPEN_FAILURE,
+    MSG_KEXDH_INIT,
+    MSG_KEXDH_REPLY,
+    MSG_KEXINIT,
+    MSG_NEWKEYS,
+    MSG_REQUEST_FAILURE,
+    MSG_REQUEST_SUCCESS,
+    MSG_SERVICE_ACCEPT,
+    MSG_USERAUTH_FAILURE,
+    MSG_USERAUTH_PK_OK,
+    MSG_USERAUTH_SUCCESS,
+    SERVICE_CONNECTION,
+    SERVICE_USERAUTH,
+    SSH_OPEN_CONNECT_FAILED,
+    SSH_STRING_ENCODING,
+    create_version_string,
+)
+from ..protocol.messages import (
+    ChannelCloseMessage,
+    ChannelDataMessage,
+    ChannelEOFMessage,
+    ChannelOpenConfirmationMessage,
+    ChannelOpenFailureMessage,
+    ChannelOpenMessage,
+    ChannelRequestMessage,
+    ChannelWindowAdjustMessage,
+    GlobalRequestMessage,
+    KexInitMessage,
+    Message,
+    ServiceRequestMessage,
+    UserAuthFailureMessage,
+    UserAuthRequestMessage,
+    UserAuthSuccessMessage,
+)
+from ..protocol.utils import write_string
 from .transport import Transport
 
 
@@ -53,6 +93,7 @@ class AsyncTransport(Transport):
         self._send_lock = asyncio.Lock()
         self._recv_lock = asyncio.Lock()
         self._state_lock = asyncio.Lock()
+        self._is_async = True
 
     async def connect_existing(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
@@ -110,13 +151,17 @@ class AsyncTransport(Transport):
 
     def _run_kex_threadsafe(self) -> None:
         """Thread-safe KEX execution bridging."""
-        # This runs in a separate thread, safe to block on .result()
-        self._send_kexinit()
-        self._recv_kexinit()
-        self._kex.start_kex()
-
-        # Reset progress flag
-        self._kex_in_progress = False
+        # Record thread so _read_message receives packets
+        self._kex_thread = threading.current_thread()
+        try:
+            # This runs in a separate thread, safe to block on .result()
+            self._send_kexinit()
+            self._recv_kexinit()
+            self._kex.start_kex()
+        finally:
+            self._kex_thread = None
+            # Reset progress flag
+            self._kex_in_progress = False
 
     def get_port_forwarding_manager(self) -> AsyncPortForwardingManager:  # type: ignore[override]
         """Get port forwarding manager."""
@@ -238,11 +283,13 @@ class AsyncTransport(Transport):
                     return self._message_queue.pop(0)
 
         async with self._recv_lock:
-            # We call the base _read_message which calls our overridden _recv_bytes
-            # to handle the actual reading from the asyncio reader.
-            # Base _read_message also handles dispatching to channels.
-            msg = await asyncio.to_thread(super()._read_message)
-            return msg
+            while True:
+                # We call the base _read_message which calls our overridden _recv_bytes
+                # to handle the actual reading from the asyncio reader.
+                # Base _read_message also handles dispatching to channels.
+                msg = await asyncio.to_thread(super()._read_message)
+                if msg is not None:
+                    return msg
 
     async def _pump_async(self) -> None:
         """

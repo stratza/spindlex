@@ -11,7 +11,7 @@ Welcome to SpindleX's documentation! SpindleX is a modern, high-performance SSHv
 ## Features
 
 *   **:zap: High Performance**: Optimized protocol implementation with internal read buffering.
-*   **:shield: Modern Security**: Supports Ed25519, ECDSA, ChaCha20-Poly1305, and other modern algorithms.
+*   **:shield: Modern Security**: Supports Ed25519, ECDSA, AES-256-CTR, and other modern algorithms.
 *   **:package: Lean Design**: Minimal dependencies, leveraging the industry-standard `cryptography` library.
 *   **:link: Full SSH & SFTP**: Both client and server implementations for SSHv2 and SFTP.
 *   **:cyclone: Native Async**: First-class support for `asyncio` with `AsyncSSHClient` and `AsyncSFTPClient`.
