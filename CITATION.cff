@@ -1,8 +1,9 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 authors:
-- family-names: "Di3Z1E"
-  given-names: ""
+- family-names: "Zilberstein"
+  given-names: "David"
+  alias: "Di3Z1E"
 title: "SpindleX"
 version: 0.5.1
 date-released: 2026-04-12
@@ -14,4 +15,8 @@ keywords:
   - automation
   - python
   - security
+  - cryptography
+  - asyncio
 license: MIT
+repository-code: "https://github.com/Di3Z1E/spindlex"
+type: software

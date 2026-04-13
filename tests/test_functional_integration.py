@@ -129,4 +129,7 @@ def test_rekeying(ssh_server, temp_host_keys):
         stdout.read()
 
     # Rekeying should have happened (total data > 50KB)
+    import time
+
+    time.sleep(1)
     client.close()

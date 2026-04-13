@@ -1364,3 +1364,39 @@ class ChannelFailureMessage(Message):
         """Unpack channel failure message data."""
         recipient_channel, _ = read_uint32(data, 0)
         return cls(recipient_channel)
+
+
+__all__ = [
+    "ChannelCloseMessage",
+    "ChannelDataMessage",
+    "ChannelEOFMessage",
+    "ChannelExtendedDataMessage",
+    "ChannelFailureMessage",
+    "ChannelOpenConfirmationMessage",
+    "ChannelOpenFailureMessage",
+    "ChannelOpenMessage",
+    "ChannelRequestMessage",
+    "ChannelSuccessMessage",
+    "ChannelWindowAdjustMessage",
+    "DebugMessage",
+    "DisconnectMessage",
+    "GlobalRequestMessage",
+    "IgnoreMessage",
+    "KexDHInitMessage",
+    "KexDHReplyMessage",
+    "KexInitMessage",
+    "Message",
+    "NewKeysMessage",
+    "RequestFailureMessage",
+    "RequestSuccessMessage",
+    "ServiceAcceptMessage",
+    "ServiceRequestMessage",
+    "UnimplementedMessage",
+    "UserAuthBannerMessage",
+    "UserAuthFailureMessage",
+    "UserAuthInfoRequestMessage",
+    "UserAuthInfoResponseMessage",
+    "UserAuthPKOKMessage",
+    "UserAuthRequestMessage",
+    "UserAuthSuccessMessage",
+]

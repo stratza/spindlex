@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from spindlex.auth.keyboard_interactive import (
@@ -170,14 +170,7 @@ class TestAsyncKeyboardInteractiveAuth:
 
 
 def test_console_handler():
-    with (
-        patch("builtins.input", return_value="user_input"),
-        patch("getpass.getpass", return_value="secret_input"),
-        patch("builtins.print") as mock_print,
+    with pytest.raises(
+        NotImplementedError, match="Interactive console handler is disabled by default"
     ):
-        prompts = [("Username: ", True), ("Password: ", False)]
-        responses = console_handler("My Title", "My Instruction", prompts)
-
-        assert responses == ["user_input", "secret_input"]
-        mock_print.assert_any_call("\nMy Title")
-        mock_print.assert_any_call("My Instruction")
+        console_handler("My Title", "My Instruction", [("Username: ", True)])

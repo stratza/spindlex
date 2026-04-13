@@ -10,8 +10,12 @@ This script demonstrates a complex real-world workflow:
 """
 
 import os
+import subprocess
 import sys
 import time
+
+# Ensure local 'spindlex' module is used instead of any installed package
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Fix for Windows console emoji support
 if sys.platform == "win32":

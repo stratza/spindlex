@@ -139,16 +139,7 @@ async def test_async_keyboard_interactive_auth_loop():
 
 
 def test_console_handler():
-    with (
-        patch("builtins.print") as mock_print,
-        patch("builtins.input", return_value="answer1") as mock_input,
-        patch("getpass.getpass", return_value="answer2") as mock_getpass,
+    with pytest.raises(
+        NotImplementedError, match="Interactive console handler is disabled by default"
     ):
-        prompts = [("Prompt 1:", True), ("Prompt 2:", False)]
-        responses = console_handler("Title", "Instruction", prompts)
-
-        assert responses == ["answer1", "answer2"]
-        mock_print.assert_any_call("\nTitle")
-        mock_print.assert_any_call("Instruction")
-        mock_input.assert_called_with("Prompt 1:")
-        mock_getpass.assert_called_with("Prompt 2:")
+        console_handler("Title", "Instruction", [("Prompt 1:", True)])

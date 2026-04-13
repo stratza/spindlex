@@ -17,10 +17,99 @@ if TYPE_CHECKING:
 
 from ..crypto.backend import default_crypto_backend
 from ..exceptions import AuthenticationException, ProtocolException, TransportException
-from ..protocol.constants import *
-from ..protocol.constants import create_version_string
-from ..protocol.messages import *
-from ..protocol.utils import *
+from ..protocol.constants import (
+    AUTH_FAILED,
+    AUTH_KEYBOARD_INTERACTIVE,
+    AUTH_PASSWORD,
+    AUTH_PUBLICKEY,
+    AUTH_SUCCESSFUL,
+    CHANNEL_DIRECT_TCPIP,
+    CHANNEL_FORWARDED_TCPIP,
+    CHANNEL_SESSION,
+    CIPHER_AES128_CTR,
+    CIPHER_AES192_CTR,
+    CIPHER_AES256_CTR,
+    COMPRESS_NONE,
+    DEFAULT_AUTH_TIMEOUT,
+    DEFAULT_CONNECT_TIMEOUT,
+    DEFAULT_MAX_PACKET_SIZE,
+    DEFAULT_WINDOW_SIZE,
+    HOSTKEY_ECDSA_SHA2_NISTP256,
+    HOSTKEY_ED25519,
+    HOSTKEY_RSA_SHA2_256,
+    KEX_COOKIE_SIZE,
+    KEX_CURVE25519_SHA256,
+    KEX_DH_GROUP14_SHA256,
+    KEX_ECDH_SHA2_NISTP256,
+    MAC_HMAC_SHA2_256,
+    MAC_HMAC_SHA2_512,
+    MAX_CHANNELS,
+    MAX_PACKET_SIZE,
+    MIN_PACKET_SIZE,
+    MIN_PADDING_SIZE,
+    MSG_CHANNEL_CLOSE,
+    MSG_CHANNEL_DATA,
+    MSG_CHANNEL_EOF,
+    MSG_CHANNEL_EXTENDED_DATA,
+    MSG_CHANNEL_FAILURE,
+    MSG_CHANNEL_OPEN,
+    MSG_CHANNEL_OPEN_CONFIRMATION,
+    MSG_CHANNEL_OPEN_FAILURE,
+    MSG_CHANNEL_REQUEST,
+    MSG_CHANNEL_SUCCESS,
+    MSG_CHANNEL_WINDOW_ADJUST,
+    MSG_DEBUG,
+    MSG_DISCONNECT,
+    MSG_GLOBAL_REQUEST,
+    MSG_IGNORE,
+    MSG_KEXDH_INIT,
+    MSG_KEXDH_REPLY,
+    MSG_KEXINIT,
+    MSG_NEWKEYS,
+    MSG_REQUEST_FAILURE,
+    MSG_REQUEST_SUCCESS,
+    MSG_SERVICE_ACCEPT,
+    MSG_SERVICE_REQUEST,
+    MSG_USERAUTH_FAILURE,
+    MSG_USERAUTH_PK_OK,
+    MSG_USERAUTH_REQUEST,
+    MSG_USERAUTH_SUCCESS,
+    PACKET_LENGTH_SIZE,
+    PADDING_LENGTH_SIZE,
+    SERVICE_CONNECTION,
+    SERVICE_USERAUTH,
+    SSH_OPEN_CONNECT_FAILED,
+    SSH_OPEN_UNKNOWN_CHANNEL_TYPE,
+    SSH_STRING_ENCODING,
+    create_version_string,
+    is_supported_version,
+    parse_version_string,
+)
+from ..protocol.messages import (
+    ChannelCloseMessage,
+    ChannelDataMessage,
+    ChannelOpenConfirmationMessage,
+    ChannelOpenFailureMessage,
+    ChannelOpenMessage,
+    DisconnectMessage,
+    KexInitMessage,
+    Message,
+    ServiceAcceptMessage,
+    ServiceRequestMessage,
+    UserAuthFailureMessage,
+    UserAuthRequestMessage,
+    UserAuthSuccessMessage,
+)
+from ..protocol.utils import (
+    extract_message_from_packet,
+    read_boolean,
+    read_string,
+    read_uint32,
+    write_boolean,
+    write_byte,
+    write_string,
+    write_uint32,
+)
 from .channel import Channel
 from .kex import KeyExchange
 
@@ -1498,9 +1587,6 @@ class Transport:
             CIPHER_AES256_CTR,
             CIPHER_AES192_CTR,
             CIPHER_AES128_CTR,
-            CIPHER_CHACHA20_POLY1305,
-            CIPHER_AES256_GCM,
-            CIPHER_AES128_GCM,
         ]
 
         mac_algorithms = [
@@ -1600,7 +1686,7 @@ class Transport:
         except Exception as e:
             raise TransportException(f"Failed to send message: {e}") from e
 
-    def _read_message(self) -> Message:
+    def _read_message(self, single_pump: bool = False) -> Optional[Message]:
         """
         Read next message from socket and dispatch if needed.
         Does NOT check the message queue.
@@ -1608,12 +1694,14 @@ class Transport:
         while True:
             # If rekeying is in progress, only the rekeying thread is allowed to read from the socket.
             # Other threads must wait and check the queue (handled in _recv_message and _expect_message).
-            if self._kex_in_progress and threading.current_thread() != getattr(
-                self, "_kex_thread", None
+            if (
+                self._kex_in_progress
+                and not getattr(self, "_is_async", False)
+                and threading.current_thread() != getattr(self, "_kex_thread", None)
             ):
                 # We should not be here if called from _recv_message or _expect_message
                 # as they have their own yielding loops, but for safety:
-                return None  # type: ignore[return-value]
+                return None
 
             try:
                 # We need to hold the read_lock while reading from the socket to ensure
@@ -1642,6 +1730,8 @@ class Transport:
                         # Handle internal messages and extensions
                         # 7 = MSG_EXT_INFO (RFC 8308)
                         if msg.msg_type in [MSG_IGNORE, MSG_DEBUG, 7]:
+                            if single_pump:
+                                return None
                             continue
 
                         if msg.msg_type == MSG_DISCONNECT:
@@ -1671,25 +1761,31 @@ class Transport:
                             threading.Thread(
                                 target=self._start_kex, daemon=True
                             ).start()
+                            if single_pump:
+                                return None
                             continue
 
-                        # Dispatch messages that need background handling (80, 90, 93-98)
-                        # Return response messages (81, 82, 91, 92, 99, 100) to callers
                         if (
                             msg.msg_type == MSG_GLOBAL_REQUEST  # 80
                             or msg.msg_type == MSG_CHANNEL_OPEN  # 90
                             or (msg.msg_type >= 93 and msg.msg_type <= 98)
                         ):
                             self._handle_channel_message(msg)
+                            if single_pump:
+                                return None
                             continue
 
                         # Server-side specific messages
                         if self._server_mode:
                             if msg.msg_type == MSG_SERVICE_REQUEST:
                                 self._handle_service_request(msg)
+                                if single_pump:
+                                    return None
                                 continue
                             if msg.msg_type == MSG_USERAUTH_REQUEST:
                                 self._handle_userauth_request(msg)
+                                if single_pump:
+                                    return None
                                 continue
 
                         return msg
@@ -1705,7 +1801,7 @@ class Transport:
         This is used for background message processing to ensure no
         messages are lost when multiple threads are waiting for messages.
         """
-        msg = self._read_message()
+        msg = self._read_message(single_pump=True)
         if msg:
             with self._lock:
                 self._message_queue.append(msg)
@@ -1732,7 +1828,7 @@ class Transport:
         if msg is None:
             # Should only happen if we yielded and then read_message returned None
             # because rekeying is still in progress (unlikely given the break above)
-            return self._recv_message()  # type: ignore[unreachable]
+            return self._recv_message()
         return msg
 
     def _expect_message(self, *allowed_types: int) -> Message:
@@ -1760,16 +1856,16 @@ class Transport:
                 time.sleep(0.01)
 
             # 2. Not in queue, read from socket
-            msg = self._read_message()
-            if msg is None:
-                continue  # type: ignore[unreachable]
+            read_msg = self._read_message()
+            if read_msg is None:
+                continue
 
-            if msg.msg_type in allowed_types:
-                return msg
+            if read_msg.msg_type in allowed_types:
+                return read_msg
 
             # 3. Not what we wanted, queue it for others
             with self._lock:
-                self._message_queue.append(msg)
+                self._message_queue.append(read_msg)
 
     def get_server_host_key(self) -> Optional[Any]:
         """
@@ -2001,7 +2097,8 @@ class Transport:
                 # If we need to read from socket, try to read more than requested to buffer it
                 # Read up to 32KB at a time to reduce syscalls and round-trips
                 to_read = max(32768, length - len(data))
-                chunk = self._socket.recv(to_read)
+                with self._read_lock:
+                    chunk = self._socket.recv(to_read)
                 if not chunk:
                     self._logger.debug("Socket closed while receiving")
                     raise TransportException("Connection closed unexpectedly")

@@ -42,9 +42,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-async = [
-    "asyncio-dgram>=2.1.0",
-]
 gssapi = [
     "gssapi>=1.8.0; sys_platform!='win32'",
 ]
@@ -104,7 +101,7 @@ spindlex = ["py.typed"]
 
 [tool.black]
 line-length = 88
-target-version = ['py39', 'py310', 'py311', 'py312', 'py313', 'py314']
+target-version = ['py311']
 include = '\.pyi?$'
 extend-exclude = '''
 /(
