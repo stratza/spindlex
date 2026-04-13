@@ -89,42 +89,28 @@ class KeyExchange:
         """
         try:
             # Get peer KEXINIT from transport (should already be exchanged)
-            if (
-                not hasattr(self._transport, "_peer_kexinit")
-                or self._transport._peer_kexinit is None
-            ):
-                # If not exchanged yet, do it now
+            if not self._transport._peer_kexinit:
                 self._send_kexinit()
                 self._receive_kexinit()
+
+            peer_kexinit_blob = self._transport._peer_kexinit.pack()
+            our_kexinit_blob = self._transport._client_kexinit_blob
+
+            if self._transport._server_mode:
+                self._client_kexinit = peer_kexinit_blob
+                self._server_kexinit = our_kexinit_blob
             else:
-                # Already exchanged, store the blobs
-                self._server_kexinit = self._transport._peer_kexinit.pack()
-                # Use our KEXINIT already sent by transport if available
-                if (
-                    hasattr(self._transport, "_client_kexinit_blob")
-                    and self._transport._client_kexinit_blob
-                ):
-                    self._client_kexinit = self._transport._client_kexinit_blob
-                elif self._client_kexinit is None:
-                    self._send_kexinit()
+                self._client_kexinit = our_kexinit_blob
+                self._server_kexinit = peer_kexinit_blob
 
             # Negotiate algorithms
             self._negotiate_algorithms()
 
             # Perform key exchange based on negotiated algorithm
-            if self._kex_algorithm in [
-                KEX_CURVE25519_SHA256,
-                "curve25519-sha256@libssh.org",
-            ]:
-                self._perform_curve25519_sha256()
-            elif self._kex_algorithm == KEX_ECDH_SHA2_NISTP256:
-                self._perform_ecdh_sha2_nistp256()
-            elif self._kex_algorithm == KEX_DH_GROUP14_SHA256:
-                self._perform_dh_group14_sha256()
+            if self._transport._server_mode:
+                self._perform_server_kex()
             else:
-                # Default to DH Group 14 SHA256 for compatibility
-                self._kex_algorithm = KEX_DH_GROUP14_SHA256
-                self._perform_dh_group14_sha256()
+                self._perform_client_kex()
 
             # Generate session keys
             self._generate_session_keys()
@@ -139,6 +125,36 @@ class KeyExchange:
             if isinstance(e, (CryptoException, ProtocolException)):
                 raise
             raise CryptoException(f"Key exchange failed: {e}") from e
+
+    def _perform_client_kex(self) -> None:
+        """Perform client-side key exchange."""
+        if self._kex_algorithm in [
+            KEX_CURVE25519_SHA256,
+            "curve25519-sha256@libssh.org",
+        ]:
+            self._perform_curve25519_sha256()
+        elif self._kex_algorithm == KEX_ECDH_SHA2_NISTP256:
+            self._perform_ecdh_sha2_nistp256()
+        elif self._kex_algorithm == KEX_DH_GROUP14_SHA256:
+            self._perform_dh_group14_sha256()
+        else:
+            self._kex_algorithm = KEX_DH_GROUP14_SHA256
+            self._perform_dh_group14_sha256()
+
+    def _perform_server_kex(self) -> None:
+        """Perform server-side key exchange."""
+        if self._kex_algorithm in [
+            KEX_CURVE25519_SHA256,
+            "curve25519-sha256@libssh.org",
+        ]:
+            self._perform_curve25519_sha256_server()
+        elif self._kex_algorithm == KEX_ECDH_SHA2_NISTP256:
+            self._perform_ecdh_sha2_nistp256_server()
+        elif self._kex_algorithm == KEX_DH_GROUP14_SHA256:
+            self._perform_dh_group14_sha256_server()
+        else:
+            self._kex_algorithm = KEX_DH_GROUP14_SHA256
+            self._perform_dh_group14_sha256_server()
 
     def _send_kexinit(self) -> None:
         """Send KEXINIT message with supported algorithms."""
@@ -426,40 +442,178 @@ class KeyExchange:
             "sha256", bytes(hash_data)
         )
 
-    def _perform_curve25519_sha256(self) -> None:
-        """Perform Curve25519 SHA256 key exchange (modern, preferred)."""
+    def _perform_curve25519_sha256_server(self) -> None:
+        """Perform Curve25519 SHA256 key exchange on the server side."""
         try:
-            from cryptography.hazmat.primitives import serialization
+            from cryptography.hazmat.primitives.asymmetric import x25519
+
+            # 1. Receive KEX_ECDH_INIT (30)
+            init_msg = self._transport._expect_message(30)  # MSG_KEX_ECDH_INIT
+            client_public_key_blob, _ = read_string(init_msg._data, 0)
+
+            # 2. Generate server Curve25519 key pair
+            self._curve25519_private_key = x25519.X25519PrivateKey.generate()
+            server_public_key = self._curve25519_private_key.public_key()
+            server_public_key_bytes = server_public_key.public_bytes(
+                encoding=serialization.Encoding.Raw,
+                format=serialization.PublicFormat.Raw,
+            )
+
+            # 3. Compute shared secret
+            client_public_key = x25519.X25519PublicKey.from_public_bytes(
+                client_public_key_blob
+            )
+            shared_secret_bytes = self._curve25519_private_key.exchange(
+                client_public_key
+            )
+            self._shared_secret = write_mpint(
+                int.from_bytes(shared_secret_bytes, "big")
+            )
+
+            # 4. Get server host key blob
+            server_host_key = self._transport._server_key
+            server_host_key_blob = server_host_key.get_public_key_bytes()
+
+            # 5. Compute exchange hash H
+            self._compute_curve25519_exchange_hash(
+                server_host_key_blob, client_public_key_blob, server_public_key_bytes
+            )
+
+            # 6. Sign exchange hash
+            signature_blob = self._sign_exchange_hash(self._exchange_hash)
+
+            # 7. Send KEX_ECDH_REPLY (31)
+            reply_msg = Message(31)  # MSG_KEX_ECDH_REPLY
+            reply_msg.add_string(server_host_key_blob)
+            reply_msg.add_string(server_public_key_bytes)
+            reply_msg.add_string(signature_blob)
+            self._transport._send_message(reply_msg)
+
+            # Set session ID
+            if self._session_id is None:
+                self._session_id = self._exchange_hash
+
+        except Exception as e:
+            raise CryptoException(f"Curve25519 server KEX failed: {e}") from e
+
+    def _perform_dh_group14_sha256_server(self) -> None:
+        """Perform server-side Diffie-Hellman Group 14 SHA256 key exchange."""
+        try:
+            # 1. Receive MSG_KEXDH_INIT (30)
+            init_msg = self._transport._expect_message(MSG_KEXDH_INIT)
+            client_public_key_int, _ = read_mpint(init_msg._data, 0)
+
+            # 2. Generate DH parameters and private key
+            parameters = dh.DHParameterNumbers(
+                self.DH_GROUP14_P, self.DH_GROUP14_G
+            ).parameters(default_backend())
+            self._dh_private_key = parameters.generate_private_key()
+
+            # 3. Get server public key (f)
+            server_public_key = self._dh_private_key.public_key()
+            server_public_numbers = server_public_key.public_numbers()
+            self._dh_public_key = server_public_numbers.y
+            self._dh_public_key_mpint = write_mpint(server_public_numbers.y)
+
+            # 4. Compute shared secret (K)
+            client_public_numbers = dh.DHPublicNumbers(
+                client_public_key_int, parameters.parameter_numbers()
+            )
+            client_public_key_obj = client_public_numbers.public_key(default_backend())
+            shared_secret_int = self._dh_private_key.exchange(client_public_key_obj)
+            self._shared_secret = write_mpint(int.from_bytes(shared_secret_int, "big"))
+
+            # 5. Get server host key blob (K_S)
+            server_host_key = self._transport._server_key
+            server_host_key_blob = server_host_key.get_public_key_bytes()
+
+            # 6. Compute exchange hash H
+            # In our generic _compute_exchange_hash, arguments are: host_key, server_dh_public, signature
+            # Wait! We need server_dh_public as the payload for the mpint.
+            # And we need to make sure client public is stored correctly in the object.
+
+            # Temporary hack: manually set object state for _compute_exchange_hash
+            # This is slightly ugly but matches current structure.
+            # Need to store CLIENT key in e and SERVER key in f for hash
+            # Wait! _compute_exchange_hash expects CLIENT pub in self._dh_public_key_mpint
+            # and SERVER pub as argument.
+
+            orig_client_mpint = self._dh_public_key_mpint
+            self._dh_public_key_mpint = write_mpint(client_public_key_int)
+
+            self._compute_exchange_hash(
+                server_host_key_blob,
+                write_mpint(server_public_numbers.y)[
+                    4:
+                ],  # Extract payload to match read_string behavior
+                b"",  # signature not used during hash computation itself
+            )
+
+            # Restore state
+            self._dh_public_key_mpint = orig_client_mpint
+
+            # 7. Sign exchange hash
+            signature_blob = self._sign_exchange_hash(self._exchange_hash)
+
+            # 8. Send MSG_KEXDH_REPLY (31)
+            reply_msg = Message(MSG_KEXDH_REPLY)
+            reply_msg.add_string(server_host_key_blob)
+            reply_msg.add_string(write_mpint(server_public_numbers.y))
+            reply_msg.add_string(signature_blob)
+            self._transport._send_message(reply_msg)
+
+            # Set session ID
+            if self._session_id is None:
+                self._session_id = self._exchange_hash
+
+        except Exception as e:
+            raise CryptoException(f"DH Group 14 server KEX failed: {e}") from e
+
+    def _perform_ecdh_sha2_nistp256_server(self) -> None:
+        """Perform server-side ECDH NIST P-256 SHA256 key exchange."""
+        # Implementation of ECDH server side would go here.
+        # For now, let's at least have the method to avoid AttributeError.
+        raise CryptoException(
+            "ECDH NIST P-256 server-side key exchange not yet fully implemented"
+        )
+
+    def _sign_exchange_hash(self, exchange_hash: bytes) -> bytes:
+        """Sign exchange hash using server private key."""
+        server_key = self._transport._server_key
+        signature = server_key.sign(exchange_hash)
+        if signature is None:
+            raise CryptoException("Failed to sign exchange hash")
+        return signature
+
+    def _perform_curve25519_sha256(self) -> None:
+        """Perform client-side Curve25519 SHA256 key exchange."""
+        try:
             from cryptography.hazmat.primitives.asymmetric import x25519
 
             # Generate Curve25519 key pair
             self._curve25519_private_key = x25519.X25519PrivateKey.generate()
             public_key = self._curve25519_private_key.public_key()
-
-            # Get public key bytes (32 bytes for Curve25519)
-            self._curve25519_public_key_bytes = public_key.public_bytes(
+            client_public_key_bytes = public_key.public_bytes(
                 encoding=serialization.Encoding.Raw,
                 format=serialization.PublicFormat.Raw,
             )
 
-            # Send KEX_ECDH_INIT message (message type 30)
-            kex_ecdh_init = Message(30)  # MSG_KEX_ECDH_INIT
-            kex_ecdh_init.add_string(self._curve25519_public_key_bytes)
+            # Send KEX_ECDH_INIT (30)
+            kex_ecdh_init = Message(30)
+            kex_ecdh_init.add_string(client_public_key_bytes)
             self._transport._send_message(kex_ecdh_init)
 
-            # Receive KEX_ECDH_REPLY message
-            reply_msg = self._transport._expect_message(MSG_KEX_ECDH_REPLY)
-
-            # Parse KEX_ECDH_REPLY
+            # Receive KEX_REPLY (31)
+            reply_msg = self._transport._expect_message(31)
             offset = 0
             server_host_key_blob, offset = read_string(reply_msg._data, offset)
             server_public_key_blob, offset = read_string(reply_msg._data, offset)
             signature_blob, offset = read_string(reply_msg._data, offset)
 
-            # Store server host key for verification
+            # Store host key blob for transport
             self._transport._server_host_key_blob = server_host_key_blob
 
-            # Perform key exchange
+            # Perform DH
             server_public_key = x25519.X25519PublicKey.from_public_bytes(
                 server_public_key_blob
             )
@@ -470,57 +624,36 @@ class KeyExchange:
                 int.from_bytes(shared_secret_bytes, "big")
             )
 
-            # Compute exchange hash using SHA256
+            # Compute hash (Client order: host_key, client_pub, server_pub)
             self._compute_curve25519_exchange_hash(
-                server_host_key_blob, server_public_key_blob, signature_blob
+                server_host_key_blob, client_public_key_bytes, server_public_key_blob
             )
 
-            # Set session ID (first exchange hash)
             if self._session_id is None:
                 self._session_id = self._exchange_hash
 
-            # Verify server signature
             self._verify_server_signature(server_host_key_blob, signature_blob)
-
-        except Exception:
-            raise
+        except Exception as e:
+            raise CryptoException(f"Curve25519 client KEX failed: {e}") from e
 
     def _compute_curve25519_exchange_hash(
-        self, server_host_key: bytes, server_public_key: bytes, signature: bytes
+        self, server_host_key: bytes, client_public_key: bytes, server_public_key: bytes
     ) -> None:
         """Compute the exchange hash H for Curve25519."""
         hash_data = bytearray()
-
-        # Client version string
-        client_version = self._transport._client_version or "SSH-2.0-SpindleX_1.0"
-        hash_data.extend(write_string(client_version))
-
-        # Server version string
-        server_version = self._transport._server_version or "SSH-2.0-Unknown"
-        hash_data.extend(write_string(server_version))
-
-        # Client KEXINIT
-        assert self._client_kexinit is not None
+        hash_data.extend(
+            write_string(self._transport._client_version or "SSH-2.0-SpindleX_1.0")
+        )
+        hash_data.extend(
+            write_string(self._transport._server_version or "SSH-2.0-Unknown")
+        )
         hash_data.extend(write_string(self._client_kexinit))
-
-        # Server KEXINIT
-        assert self._server_kexinit is not None
         hash_data.extend(write_string(self._server_kexinit))
-
-        # Server host key
         hash_data.extend(write_string(server_host_key))
-
-        # Client public key
-        hash_data.extend(write_string(self._curve25519_public_key_bytes))
-
-        # Server public key
+        hash_data.extend(write_string(client_public_key))
         hash_data.extend(write_string(server_public_key))
-
-        # Shared secret
-        assert self._shared_secret is not None
         hash_data.extend(self._shared_secret)
 
-        # Compute SHA256 hash
         self._exchange_hash = default_crypto_backend.hash_data(
             "sha256", bytes(hash_data)
         )
@@ -554,8 +687,8 @@ class KeyExchange:
         assert self._dh_public_key_mpint is not None
         hash_data.extend(self._dh_public_key_mpint)
 
-        # Server DH public key
-        hash_data.extend(server_dh_public)
+        # Server DH public key (f) - must be encoded as mpint/string
+        hash_data.extend(write_string(server_dh_public))
 
         # Shared secret
         assert self._shared_secret is not None

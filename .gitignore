@@ -21,7 +21,7 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
-
+code-review.md
 # --- Installer logs ---
 pip-log.txt
 pip-delete-this-directory.txt

@@ -6,8 +6,8 @@ Only the latest version of SpindleX is currently supported for security updates.
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.3.x   | :white_check_mark: |
-| < 0.3   | :x:                |
+| 0.5.x   | :white_check_mark: |
+| < 0.5   | :x:                |
 
 ## Reporting a Vulnerability
 

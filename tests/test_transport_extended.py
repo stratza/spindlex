@@ -51,7 +51,7 @@ def test_handshake_server(mock_socket):
 
     transport._do_handshake()
 
-    assert transport._server_version == "SSH-2.0-TestClient"
+    assert transport._client_version == "SSH-2.0-TestClient"
     # Check that server version was sent (server sends first in _do_handshake logic if server_mode)
     sent_data = b"".join(call[0][0] for call in mock_socket.sendall.call_args_list)
     assert sent_data.startswith(b"SSH-2.0-spindlex")
@@ -67,9 +67,12 @@ def test_handshake_timeout(mock_socket):
 
 def test_handshake_invalid_version(mock_socket):
     transport = Transport(mock_socket)
-    mock_socket.recv.side_effect = [bytes([b]) for b in b"INVALID\r\n"]
+    # Banner starts with SSH- but has invalid content
+    mock_socket.recv.side_effect = [bytes([b]) for b in b"SSH-INVALID\r\n"]
 
-    with pytest.raises(ProtocolException, match="Invalid version string"):
+    with pytest.raises(
+        ProtocolException, match="Unsupported protocol version: INVALID"
+    ):
         transport._do_handshake()
 
 

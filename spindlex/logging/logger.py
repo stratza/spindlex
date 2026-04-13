@@ -136,9 +136,10 @@ def get_logger(name: str) -> SSHLogger:
     Returns:
         SSHLogger instance
     """
-    if name not in _loggers:
-        _loggers[name] = SSHLogger(name)
-    return _loggers[name]
+    full_name = f"spindlex.{name}" if not name.startswith("spindlex") else name
+    if full_name not in _loggers:
+        _loggers[full_name] = SSHLogger(full_name)
+    return _loggers[full_name]
 
 
 def configure_logging(

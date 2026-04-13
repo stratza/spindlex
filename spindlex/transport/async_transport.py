@@ -131,25 +131,23 @@ class AsyncTransport(Transport):
 
     def _send_message(self, message: Message) -> None:
         """Bridge sync calls to async send."""
-        if not self._loop:
+        if not self._loop or not self._loop.is_running():
             return super()._send_message(message)
 
+        # Use run_coroutine_threadsafe to schedule and wait for the result
+        # This ensures we have backpressure and catch exceptions.
+        # This must be called from a thread OTHER than the event loop thread.
         try:
-            # If we're already on the loop thread, we can't block with .result()
-            # but we also shouldn't be here if we want synchronous behavior.
-            # However, for KEX and other sync-bridged parts, it's called from threads.
-            asyncio.get_running_loop()
-
-            # On the loop: schedule it.
-            self._loop.call_soon_threadsafe(
-                lambda: asyncio.create_task(self._send_message_async(message))
-            )
-        except RuntimeError:
-            # Safe to block from other threads
             fut = asyncio.run_coroutine_threadsafe(
                 self._send_message_async(message), self._loop
             )
             fut.result()
+        except Exception as e:
+            if isinstance(e, TransportException):
+                raise
+            raise TransportException(
+                f"Failed to send message via async bridge: {e}"
+            ) from e
 
     def _recv_message(self, allowed_types: list[int] | None = None) -> Message:
         """Bridge sync calls to async recv."""
@@ -217,6 +215,14 @@ class AsyncTransport(Transport):
 
             self._writer.write(packet)
             await self._writer.drain()
+
+            # Track bytes sent for rekeying
+            if message.msg_type not in [
+                MSG_KEXINIT,
+                MSG_NEWKEYS,
+            ] and not (MSG_KEXDH_INIT <= message.msg_type <= MSG_KEXDH_REPLY):
+                self._bytes_since_rekey += len(packet)
+                self._check_rekey()
 
             # If this was a NEWKEYS message, activate encryption AFTER sending it
             if message.msg_type == MSG_NEWKEYS:

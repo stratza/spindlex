@@ -13,7 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 *   **Verified Demo Results**: Integrated a new [demo_results.md](demo_results.md) tracking actual execution metrics.
 
 ### Changed
-*   **Performance**: Optimized internal buffering in `AsyncTransport` for 15% better throughput on high-latency networks.
+*   **Performance**: Optimized internal buffering in `AsyncTransport` for high-throughput scenarios. Connection establishment is ~2.6x faster than legacy libraries.
 
 ### Fixed
 *   **Protocol Stability**: Resolved several race conditions in `AsyncTransport` during high-concurrency SFTP transfers.

@@ -12,6 +12,7 @@ from typing import Any, Optional
 
 from ..crypto.pkey import PKey
 from ..exceptions import TransportException
+from ..logging.logger import get_logger
 from ..protocol.constants import (
     AUTH_FAILED,
     CHANNEL_SESSION,
@@ -580,6 +581,7 @@ class SSHServerManager:
         self._total_connections = 0
         self._active_connections = 0
         self._failed_connections = 0
+        self._logger = get_logger("spindlex.server.ssh_server")
 
     def set_max_connections(self, max_connections: int) -> None:
         """
@@ -618,6 +620,9 @@ class SSHServerManager:
         with self._lock:
             if self._running:
                 raise TransportException("Server is already running")
+
+            # Ensure server interface has the host key
+            self._server_interface.set_server_key(self._server_key)
 
             try:
                 # Create and bind server socket
@@ -694,10 +699,10 @@ class SSHServerManager:
 
                 connection_thread.start()
 
-            except Exception:
+            except Exception as e:
                 if self._running:
-                    # Log error but continue accepting connections
-                    pass
+                    self._logger.error(f"Error accepting connection: {e}")
+                    time.sleep(0.1)  # Avoid tight loop on persistent error
                 else:
                     # Server is shutting down
                     break  # type: ignore[unreachable]
@@ -729,11 +734,27 @@ class SSHServerManager:
             with self._lock:
                 self._connections[connection_id] = transport
 
-            # Keep connection alive until it's closed
+            # Keep connection alive and process messages
             while transport.active:
-                time.sleep(0.1)
+                try:
+                    # _pump will handle internal messages (auth, service, channels)
+                    # and queue any other messages for other threads to pick up.
+                    transport._pump()
+                except (socket.timeout, TransportException):
+                    # Check if still active
+                    if not transport.active:
+                        break
+                    continue
+                except Exception as e:
+                    self._logger.debug(
+                        f"Connection loop error for {connection_id}: {e}"
+                    )
+                    break
 
-        except Exception:
+        except Exception as e:
+            self._logger.error(
+                f"Error handling connection {connection_id}: {e}", exc_info=True
+            )
             with self._lock:
                 self._failed_connections += 1
 

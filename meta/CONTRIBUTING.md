@@ -13,7 +13,7 @@ By participating in this project, you agree to abide by the project's Code of Co
 1. **Fork and Clone**
    ```bash
    git clone https://github.com/Di3Z1E/spindlex.git
-   cd spindle
+   cd spindlex
    ```
 
 2. **Create Virtual Environment**

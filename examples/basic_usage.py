@@ -7,7 +7,11 @@ This module demonstrates fundamental SSH operations using SpindleX.
 
 from spindlex import AutoAddPolicy, RejectPolicy, SSHClient
 from spindlex.crypto.pkey import PKey
-from spindlex.exceptions import AuthenticationException, SSHException
+from spindlex.exceptions import (
+    AuthenticationException,
+    ChannelException,
+    SSHException,
+)
 
 
 def basic_connection_example():
@@ -115,6 +119,7 @@ def interactive_shell_example():
 
         # Start interactive shell
         shell = client.invoke_shell()
+        shell.settimeout(1.0)  # Set a short timeout for reading
 
         # Send commands
         commands = ["ls\n", "pwd\n", "exit\n"]
@@ -128,9 +133,12 @@ def interactive_shell_example():
             time.sleep(1)
 
             # Read available output
-            if shell.recv_ready():
+            try:
                 output = shell.recv(1024).decode("utf-8")
                 print(f"Shell output: {output}")
+            except (SSHException, ChannelException):
+                # Timeout or other error, ignore
+                pass
 
         shell.close()
 

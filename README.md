@@ -1,7 +1,7 @@
 <div align="center">
   <img src="docs/_static/figure.png" width="160" height="160" alt="SpindleX - High-Performance SSH and SFTP Library for Python">
   <h1>SpindleX</h1>
-  <p><strong>Modern, pure-Python SSH library for secure automation, recursive SFTP, and zero-dependency deployments.</strong></p>
+  <p><strong>Modern, pure-Python SSH library for secure automation, recursive SFTP, and minimal-dependency deployments.</strong></p>
 
 [![CI Status](https://img.shields.io/github/actions/workflow/status/Di3Z1E/spindlex/ci.yml?branch=main&style=for-the-badge&logo=github)](https://github.com/Di3Z1E/spindlex/actions)
 [![Coverage](https://img.shields.io/codecov/c/github/Di3Z1E/spindlex?style=for-the-badge&logo=codecov)](https://codecov.io/gh/Di3Z1E/spindlex)
@@ -9,7 +9,7 @@
 [![Python Support](https://img.shields.io/pypi/pyversions/spindlex?style=for-the-badge&logo=python&logoColor=white)](https://pypi.org/project/spindlex/)
 [![License](https://img.shields.io/pypi/l/spindlex?style=for-the-badge&color=blue)](https://github.com/Di3Z1E/spindlex/blob/main/LICENSE)
 [![PyPI Downloads](https://img.shields.io/pypi/dm/spindlex?style=for-the-badge&logo=pypi&logoColor=white&color=brightgreen)](https://pypi.org/project/spindlex/)
-[![Security Status](https://img.shields.io/badge/socket-security-brightgreen?style=for-the-badge&logo=socket.io)](https://badge.socket.dev/pypi/package/spindlex)
+[![Security Status](https://img.shields.io/badge/socket-security-brightgreen?style=for-the-badge&logo=socket.io)](https://badge.socket.dev/pypi/package/spindlex/0.5.1)
 
   <br />
   <a href="#-quick-start">Quick Start</a>
@@ -160,5 +160,5 @@ SpindleX is released under the **MIT License**. See [LICENSE](LICENSE) for the f
 <div align="center">
   <sub>Developed with precision by <strong>Di3Z1E</strong>.</sub>
   <br/>
-  <sub>&copy; 2024 SpindleX Project</sub>
+  <sub>&copy; 2026 SpindleX Project</sub>
 </div>

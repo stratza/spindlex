@@ -38,9 +38,6 @@ class CipherSuite:
         "aes256-ctr",
         "aes192-ctr",
         "aes128-ctr",
-        "chacha20-poly1305@openssh.com",
-        "aes256-gcm@openssh.com",
-        "aes128-gcm@openssh.com",
     ]
 
     # Supported MAC algorithms (in preference order)
@@ -51,9 +48,6 @@ class CipherSuite:
 
     # Cipher key and IV lengths
     CIPHER_INFO = {
-        "chacha20-poly1305@openssh.com": {"key_len": 64, "iv_len": 12, "aead": True},
-        "aes256-gcm@openssh.com": {"key_len": 32, "iv_len": 12, "aead": True},
-        "aes128-gcm@openssh.com": {"key_len": 16, "iv_len": 12, "aead": True},
         "aes256-ctr": {"key_len": 32, "iv_len": 16, "aead": False},
         "aes192-ctr": {"key_len": 24, "iv_len": 16, "aead": False},
         "aes128-ctr": {"key_len": 16, "iv_len": 16, "aead": False},

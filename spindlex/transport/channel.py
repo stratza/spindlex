@@ -12,6 +12,7 @@ from typing import Any, Optional, Union
 
 from ..exceptions import ChannelException
 from ..protocol.constants import (
+    DEFAULT_WINDOW_SIZE,
     MSG_CHANNEL_FAILURE,
     MSG_CHANNEL_SUCCESS,
     SSH_STRING_ENCODING,
@@ -168,12 +169,15 @@ class Channel:
 
                     if len(data_chunk) <= nbytes:
                         # Return entire chunk
-                        return bytes(data_chunk)
+                        result = bytes(data_chunk)
+                        self._adjust_window(len(result))
+                        return result
                     else:
                         # Split chunk and put remainder back
                         result = data_chunk[:nbytes]
                         remainder = data_chunk[nbytes:]
                         self._recv_buffer.appendleft(remainder)
+                        self._adjust_window(len(result))
                         return bytes(result)
 
                 # No data available in buffer
@@ -199,8 +203,11 @@ class Channel:
             if not self._data_event.wait(timeout=wait_timeout):
                 # We timed out waiting for the event, poll transport
                 try:
-                    # _recv_message will handle the message and set _data_event if it's channel data
-                    self._transport._recv_message()
+                    # _pump will handle the message and set _data_event if it's channel data
+                    self._transport._logger.debug(
+                        f"DEBUG: Channel {self._channel_id} polling transport via _pump (EOF={self._eof_received}, KEX={self._transport._kex_in_progress})"
+                    )
+                    self._transport._pump()
                 except Exception as e:
                     # If it's a timeout from the socket, we just loop again and check our own timeout
                     if "Timeout" not in str(e):
@@ -226,7 +233,7 @@ class Channel:
         request_data = write_string(command)
 
         # Send exec request
-        success = self.send_channel_request("exec", want_reply=False, data=request_data)
+        success = self.send_channel_request("exec", want_reply=True, data=request_data)
 
         if not success:
             raise ChannelException(f"Failed to execute command: {command}")
@@ -446,27 +453,61 @@ class Channel:
         if nbytes <= 0:
             return b""
 
-        with self._lock:
-            if self._closed:
-                raise ChannelException("Channel is closed")
+        start_time = time.time()
+        while True:
+            with self._lock:
+                if self._closed:
+                    raise ChannelException("Channel is closed")
 
-            # Check if we have stderr data in buffer
-            if self._stderr_buffer:
-                # Get data from buffer
-                data_chunk = self._stderr_buffer.popleft()
+                # Check if we have stderr data in buffer
+                if self._stderr_buffer:
+                    # Get data from buffer
+                    data_chunk = self._stderr_buffer.popleft()
 
-                if len(data_chunk) <= nbytes:
-                    # Return entire chunk
-                    return bytes(data_chunk)
-                else:
-                    # Split chunk and put remainder back
-                    result = data_chunk[:nbytes]
-                    remainder = data_chunk[nbytes:]
-                    self._stderr_buffer.appendleft(remainder)
-                    return bytes(result)
+                    if len(data_chunk) <= nbytes:
+                        # Return entire chunk
+                        result = bytes(data_chunk)
+                        self._adjust_window(len(result))
+                        return result
+                    else:
+                        # Split chunk and put remainder back
+                        result = data_chunk[:nbytes]
+                        remainder = data_chunk[nbytes:]
+                        self._stderr_buffer.appendleft(remainder)
+                        self._adjust_window(len(result))
+                        return bytes(result)
 
-            # No stderr data available
-            return b""
+                # No stderr data available in buffer
+                if self._eof_received:
+                    return b""  # EOF reached and buffer is empty
+
+                # Check total timeout
+                if self._timeout is not None:
+                    elapsed = time.time() - start_time
+                    if elapsed >= self._timeout:
+                        raise ChannelException("Timeout receiving stderr data")
+
+                # Clear event before we start waiting
+                self._data_event.clear()
+
+            # Calculate wait timeout
+            wait_timeout = 0.1
+            if self._timeout is not None:
+                elapsed = time.time() - start_time
+                wait_timeout = max(0, min(0.1, self._timeout - elapsed))
+
+            # Wait for data or timeout
+            if not self._data_event.wait(timeout=wait_timeout):
+                # We timed out waiting for the event, poll transport
+                try:
+                    # _pump will handle the message and set _data_event if it's channel data
+                    # _pump will handle the message and set _data_event if it's channel data
+                    self._transport._pump()
+                except Exception as e:
+                    # If it's a timeout from the socket, we just loop again and check our own timeout
+                    if "Timeout" not in str(e):
+                        raise
+                    pass
 
     def close(self) -> None:
         """Close channel and cleanup resources."""
@@ -475,6 +516,24 @@ class Channel:
                 self._closed = True
                 # Notify transport to close channel
                 self._transport._close_channel(self._channel_id)
+
+    def _adjust_window(self, bytes_consumed: int) -> None:
+        """
+        Adjust local window size.
+
+        Args:
+            bytes_consumed: Number of bytes consumed from buffer
+        """
+        with self._lock:
+            self._local_window_size -= bytes_consumed
+
+            # Send window adjust if needed
+            if self._local_window_size < DEFAULT_WINDOW_SIZE // 2:
+                bytes_to_add = DEFAULT_WINDOW_SIZE - self._local_window_size
+                self._transport._send_channel_window_adjust(
+                    self._channel_id, bytes_to_add
+                )
+                self._local_window_size += bytes_to_add
 
     def _handle_data(self, data: bytes) -> None:
         """
@@ -487,12 +546,6 @@ class Channel:
             if not self._closed:
                 self._recv_buffer.append(data)
                 self._data_event.set()
-
-                # Send window adjust if buffer is getting full
-                if len(self._recv_buffer) > 10:  # Simple flow control
-                    self._transport._send_channel_window_adjust(
-                        self._channel_id, len(data)
-                    )
 
     def _handle_extended_data(self, data_type: int, data: bytes) -> None:
         """
