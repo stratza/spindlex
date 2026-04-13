@@ -11,11 +11,12 @@ class LogSanitizer:
 
     # Patterns for sensitive data that should be redacted
     SENSITIVE_PATTERNS: list[Pattern[str]] = [
-        # Passwords and secrets (with = or : or space)
-        re.compile(r'password["\s]*[:=\s]["\s]*[^"\s,}]+', re.IGNORECASE),
-        re.compile(r'secret["\s]*[:=\s]["\s]*[^"\s,}]+', re.IGNORECASE),
-        re.compile(r'token["\s]*[:=\s]["\s]*[^"\s,}]+', re.IGNORECASE),
-        re.compile(r'key["\s]*[:=\s]["\s]*[^"\s,}]+', re.IGNORECASE),
+        # Passwords and secrets (Captured prefix and value) - handles multiple separators
+        re.compile(r'(?i)(password(?:\s+|[:=]|is\b)+)([^\s,"}]+)'),
+        re.compile(r'(?i)(secret(?:\s+|[:=]|is\b)+)([^\s,"}]+)'),
+        re.compile(r'(?i)(token(?:\s+|[:=]|is\b)+)([^\s,"}]+)'),
+        re.compile(r'(?i)(key(?:\s+|[:=]|is\b)+)([^\s,"}]+)'),
+        re.compile(r'(?i)(passphrase(?:\s+|[:=]|is\b)+)([^\s,"}]+)'),
         # SSH key material (base64 encoded)
         re.compile(r"AAAA[A-Za-z0-9+/]{20,}={0,2}"),
         # Private key headers/footers
@@ -35,6 +36,7 @@ class LogSanitizer:
         "secret": "[SECRET_REDACTED]",
         "token": "[TOKEN_REDACTED]",
         "key": "[KEY_REDACTED]",
+        "passphrase": "[PASSPHRASE_REDACTED]",
         "ssh_key": "[SSH_KEY_REDACTED]",
         "private_key": "[PRIVATE_KEY_REDACTED]",
         "ip_partial": r"\1***",
@@ -54,49 +56,31 @@ class LogSanitizer:
         """
         sanitized = message
 
-        # Apply password/secret patterns
-        for pattern_type in ["password", "secret", "token", "key"]:
+        # Apply password/secret patterns using groups
+        for pattern_type in ["password", "secret", "token", "key", "passphrase"]:
             pattern = next(
                 p for p in cls.SENSITIVE_PATTERNS if pattern_type in p.pattern.lower()
             )
 
-            def replace_sensitive(match: re.Match[str]) -> str:
-                matched_text = match.group()
-                if "=" in matched_text:
-                    return (
-                        matched_text.split("=")[0]
-                        + "="
-                        + cls.REPLACEMENTS[pattern_type]
-                    )
-                elif ":" in matched_text:
-                    return (
-                        matched_text.split(":")[0]
-                        + ": "
-                        + cls.REPLACEMENTS[pattern_type]
-                    )
-                else:
-                    # Handle space-separated case like "password secret123"
-                    parts = matched_text.split()
-                    if len(parts) >= 2:
-                        return parts[0] + " " + cls.REPLACEMENTS[pattern_type]
-                    return cls.REPLACEMENTS[pattern_type]
+            def replace_with_group(match: re.Match[str]) -> str:
+                return match.group(1) + cls.REPLACEMENTS[pattern_type]
 
-            sanitized = pattern.sub(replace_sensitive, sanitized)
+            sanitized = pattern.sub(replace_with_group, sanitized)
 
         # SSH key material
-        ssh_key_pattern = cls.SENSITIVE_PATTERNS[4]  # AAAA pattern
+        ssh_key_pattern = cls.SENSITIVE_PATTERNS[5]  # Adjusted index
         sanitized = ssh_key_pattern.sub(cls.REPLACEMENTS["ssh_key"], sanitized)
 
         # Private key blocks
-        private_key_pattern = cls.SENSITIVE_PATTERNS[5]
+        private_key_pattern = cls.SENSITIVE_PATTERNS[6]
         sanitized = private_key_pattern.sub(cls.REPLACEMENTS["private_key"], sanitized)
 
         # IP addresses (keep first 3 octets)
-        ip_pattern = cls.SENSITIVE_PATTERNS[6]
+        ip_pattern = cls.SENSITIVE_PATTERNS[7]
         sanitized = ip_pattern.sub(cls.REPLACEMENTS["ip_partial"], sanitized)
 
         # Internal hostnames
-        hostname_pattern = cls.SENSITIVE_PATTERNS[7]
+        hostname_pattern = cls.SENSITIVE_PATTERNS[8]
         sanitized = hostname_pattern.sub(
             cls.REPLACEMENTS["hostname_partial"], sanitized
         )

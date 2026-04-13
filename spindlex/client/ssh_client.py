@@ -79,8 +79,11 @@ class ChannelFile:
                     result.extend(chunk)
                 except Exception as e:
                     # If we have some data, return it. Otherwise, raise the exception.
-                    if "Timeout" in str(e) and result:
+                    # Also return if the channel is closed.
+                    if ("Timeout" in str(e) or "closed" in str(e).lower()) and result:
                         return bytes(result)
+                    if "closed" in str(e).lower() and not result:
+                        return b""
                     raise
             return bytes(result)
 

@@ -73,10 +73,10 @@ class Transport:
         self._mac_s2c: Optional[str] = None
 
         # Active crypto state (updated only on NEWKEYS)
-        self._mac_key_c2s_active: Optional[bytes] = None
-        self._mac_key_s2c_active: Optional[bytes] = None
-        self._mac_c2s_active: Optional[str] = None
-        self._mac_s2c_active: Optional[str] = None
+        self._mac_key_in_active: Optional[bytes] = None
+        self._mac_key_out_active: Optional[bytes] = None
+        self._mac_in_active: Optional[str] = None
+        self._mac_out_active: Optional[str] = None
 
         # Rekeying policy (configurable)
         self._rekey_bytes_limit = rekey_bytes_limit or (
@@ -171,6 +171,7 @@ class Transport:
                     raise TransportException("Transport already active")
 
                 self._server_mode = False
+                self._client_version = create_version_string()
 
                 # Set socket timeout for handshake
                 old_timeout = self._socket.gettimeout()
@@ -224,6 +225,7 @@ class Transport:
 
                 self._server_mode = True
                 self._server_key = server_key
+                self._server_version = create_version_string()
 
                 # Set socket timeout for handshake
                 old_timeout = self._socket.gettimeout()
@@ -587,33 +589,34 @@ class Transport:
             channel_id = self._next_channel_id
             self._next_channel_id += 1
 
-            try:
-                # Create channel instance
-                channel = Channel(self, channel_id)
+            # Create channel instance
+            channel = Channel(self, channel_id)
 
-                # Build channel open message
-                type_specific_data = b""
-                if kind == CHANNEL_DIRECT_TCPIP and dest_addr:
-                    type_specific_data = self._build_direct_tcpip_data(dest_addr)
+        try:
+            # Build channel open message
+            type_specific_data = b""
+            if kind == CHANNEL_DIRECT_TCPIP and dest_addr:
+                type_specific_data = self._build_direct_tcpip_data(dest_addr)
 
-                open_msg = ChannelOpenMessage(
-                    channel_type=kind,
-                    sender_channel=channel_id,
-                    initial_window_size=DEFAULT_WINDOW_SIZE,
-                    maximum_packet_size=DEFAULT_MAX_PACKET_SIZE,
-                    type_specific_data=type_specific_data,
-                )
+            open_msg = ChannelOpenMessage(
+                channel_type=kind,
+                sender_channel=channel_id,
+                initial_window_size=DEFAULT_WINDOW_SIZE,
+                maximum_packet_size=DEFAULT_MAX_PACKET_SIZE,
+                type_specific_data=type_specific_data,
+            )
 
-                # Send channel open request
-                self._send_message(open_msg)
+            # Send channel open request
+            self._send_message(open_msg)
 
-                # Wait for response
-                response = self._expect_message(
-                    MSG_CHANNEL_OPEN_CONFIRMATION, MSG_CHANNEL_OPEN_FAILURE
-                )
+            # Wait for response (CRITICAL: release lock before calling _expect_message)
+            response = self._expect_message(
+                MSG_CHANNEL_OPEN_CONFIRMATION, MSG_CHANNEL_OPEN_FAILURE
+            )
 
-                if isinstance(response, ChannelOpenConfirmationMessage):
-                    # Channel opened successfully
+            if isinstance(response, ChannelOpenConfirmationMessage):
+                # Channel opened successfully
+                with self._lock:
                     channel._remote_channel_id = response.sender_channel
                     channel._remote_window_size = response.initial_window_size
                     channel._remote_max_packet_size = response.maximum_packet_size
@@ -623,23 +626,23 @@ class Transport:
                     # Add to channels dict
                     self._channels[channel_id] = channel
 
-                    return channel
+                return channel
 
-                elif isinstance(response, ChannelOpenFailureMessage):
-                    # Channel open failed
-                    raise TransportException(
-                        f"Channel open failed: {response.description} (code: {response.reason_code})"
-                    )
+            elif isinstance(response, ChannelOpenFailureMessage):
+                # Channel open failed
+                raise TransportException(
+                    f"Channel open failed: {response.description} (code: {response.reason_code})"
+                )
 
-                else:
-                    raise TransportException(
-                        f"Unexpected response to channel open: {type(response).__name__}"
-                    )
+            else:
+                raise TransportException(
+                    f"Unexpected response to channel open: {type(response).__name__}"
+                )
 
-            except Exception as e:
-                if isinstance(e, TransportException):
-                    raise
-                raise TransportException(f"Failed to open channel: {e}") from e
+        except Exception as e:
+            if isinstance(e, TransportException):
+                raise
+            raise TransportException(f"Failed to open channel: {e}") from e
 
     def _build_direct_tcpip_data(self, dest_addr: tuple[str, int]) -> bytes:
         """Build type-specific data for direct-tcpip channel."""
@@ -706,8 +709,10 @@ class Transport:
                         channel._handle_request_failure()
                     elif msg.msg_type == MSG_CHANNEL_REQUEST:
                         self._handle_channel_request(msg)
-                    elif msg.msg_type == MSG_CHANNEL_OPEN:
-                        self._handle_channel_open(msg)
+
+                # Handle channel open even if channel doesn't exist yet (logical!)
+                if msg.msg_type == MSG_CHANNEL_OPEN:
+                    self._handle_channel_open(msg)
                 else:
                     pass
                     # print(f"DEBUG: Channel {recipient_channel} not found in {list(self._channels.keys())}")
@@ -724,30 +729,35 @@ class Transport:
             msg: Channel open message
         """
         try:
-            if isinstance(msg, ChannelOpenMessage):
-                channel_type = msg.channel_type
-                sender_channel = msg.sender_channel
-                initial_window_size = msg.initial_window_size
-                maximum_packet_size = msg.maximum_packet_size
-                type_specific_data = msg.type_specific_data
+            if not isinstance(msg, ChannelOpenMessage):
+                msg = ChannelOpenMessage.unpack(msg.pack())
 
-                # Handle forwarded-tcpip channels
-                if channel_type == CHANNEL_FORWARDED_TCPIP:
-                    self._handle_forwarded_tcpip_open(
-                        sender_channel,
-                        initial_window_size,
-                        maximum_packet_size,
-                        type_specific_data,
-                    )
-                else:
-                    # Unknown channel type - send failure
-                    failure_msg = ChannelOpenFailureMessage(
-                        recipient_channel=sender_channel,
-                        reason_code=SSH_OPEN_UNKNOWN_CHANNEL_TYPE,
-                        description=f"Unknown channel type: {channel_type}",
-                        language="",
-                    )
-                    self._send_message(failure_msg)
+            channel_type = msg.channel_type
+            sender_channel = msg.sender_channel
+            initial_window_size = msg.initial_window_size
+            maximum_packet_size = msg.maximum_packet_size
+            type_specific_data = msg.type_specific_data
+
+            if channel_type == CHANNEL_SESSION:
+                self._handle_session_open(
+                    sender_channel, initial_window_size, maximum_packet_size
+                )
+            elif channel_type == CHANNEL_FORWARDED_TCPIP:
+                self._handle_forwarded_tcpip_open(
+                    sender_channel,
+                    initial_window_size,
+                    maximum_packet_size,
+                    type_specific_data,
+                )
+            else:
+                # Unknown channel type - send failure
+                failure_msg = ChannelOpenFailureMessage(
+                    recipient_channel=sender_channel,
+                    reason_code=SSH_OPEN_UNKNOWN_CHANNEL_TYPE,
+                    description=f"Unknown channel type: {channel_type}",
+                    language="",
+                )
+                self._send_message(failure_msg)
 
         except Exception as e:
             # Send failure response
@@ -761,6 +771,47 @@ class Transport:
                 self._send_message(failure_msg)
             except Exception:
                 pass
+
+    def _handle_session_open(
+        self, sender_channel: int, initial_window_size: int, maximum_packet_size: int
+    ) -> None:
+        """Handle session channel open request."""
+        # 1. Check with server interface
+        if self._server_interface:
+            result = self._server_interface.check_channel_request(
+                CHANNEL_SESSION, sender_channel
+            )
+            if result != 0:
+                failure_msg = ChannelOpenFailureMessage(
+                    sender_channel, result, "Administratively prohibited", ""
+                )
+                self._send_message(failure_msg)
+                return
+
+        # 2. Create channel
+        with self._lock:
+            channel_id = self._next_channel_id
+            self._next_channel_id += 1
+            channel = Channel(self, channel_id)
+            channel._remote_channel_id = sender_channel
+            channel._remote_window_size = initial_window_size
+            channel._remote_max_packet_size = maximum_packet_size
+            channel._local_window_size = DEFAULT_WINDOW_SIZE
+            channel._local_max_packet_size = MAX_PACKET_SIZE
+            self._channels[channel_id] = channel
+
+        # 3. Send confirmation
+        confirm_msg = ChannelOpenConfirmationMessage(
+            recipient_channel=sender_channel,
+            sender_channel=channel_id,
+            initial_window_size=channel._local_window_size,
+            maximum_packet_size=channel._local_max_packet_size,
+        )
+        self._send_message(confirm_msg)
+
+        # 4. Notify server interface
+        if self._server_interface:
+            self._server_interface.on_channel_opened(channel)
 
     def _handle_forwarded_tcpip_open(
         self,
@@ -1251,14 +1302,10 @@ class Transport:
             ProtocolException: If protocol error occurs
         """
         try:
-            if self._server_mode:
-                # Server sends version first
-                self._send_version()
-                self._recv_version()
-            else:
-                # Client receives version first
-                self._recv_version()
-                self._send_version()
+            # RFC 4253, Section 4.2: Both sides MUST send an identification string.
+            # It is recommended to send it before receiving the peer's string to avoid deadlock.
+            self._send_version()
+            self._recv_version()
 
         except Exception as e:
             if isinstance(e, (TransportException, ProtocolException)):
@@ -1283,30 +1330,71 @@ class Transport:
 
         for attempt in range(max_retries):
             try:
-                # Read version line character by character
+                # Read lines until we find the one starting with SSH-
                 while True:
-                    char = self._recv_bytes(1)
-                    if not char:
-                        raise TransportException("Connection closed")
+                    current_line = b""
+                    # Read character by character until line ending
+                    while True:
+                        char = self._recv_bytes(1)
+                        if not char:
+                            self._logger.debug("Received EOF during banner read")
+                            raise TransportException("Connection closed")
 
-                    version_line += char
+                        self._logger.debug(f"Banner read char: {repr(char)}")
+                        current_line += char
 
-                    # Check for line ending
-                    if version_line.endswith(b"\r\n"):
-                        version_line = version_line[:-2]
+                        # Check for line ending
+                        if current_line.endswith(b"\r\n"):
+                            current_line = current_line[:-2]
+                            self._logger.debug(
+                                f"Banner line completed (CRLF): {repr(current_line)}"
+                            )
+                            break
+                        elif current_line.endswith(b"\n"):
+                            current_line = current_line[:-1]
+                            self._logger.debug(
+                                f"Banner line completed (LF): {repr(current_line)}"
+                            )
+                            break
+
+                        # Prevent excessive version line length
+                        if len(current_line) > 255:
+                            raise ProtocolException("Version line too long")
+
+                    # RFC 4253: The server MAY send other lines of data before
+                    # sending the version string. ... The identification string
+                    # MUST start with 'SSH-'.
+                    if current_line.startswith(b"SSH-"):
+                        version_line = current_line
+                        self._logger.debug(f"Found version line: {repr(version_line)}")
                         break
-                    elif version_line.endswith(b"\n"):
-                        version_line = version_line[:-1]
-                        break
 
-                    # Prevent excessive version line length
-                    if len(version_line) > 255:
-                        raise ProtocolException("Version line too long")
+                    self._logger.debug(f"Ignoring non-SSH line: {repr(current_line)}")
 
                 if version_line:
                     break
 
-            except (TransportException, socket.timeout, ConnectionResetError):
+            except (TransportException, socket.timeout, ConnectionResetError) as e:
+                # If connection closed unexpectedly, no point in retrying
+                # BROADEN CLOSED CHECK: Include common socket error messages and types
+                error_str = str(e).lower()
+                is_closed = any(
+                    term in error_str
+                    for term in ["closed", "10053", "10054", "aborted", "reset"]
+                )
+                if (
+                    isinstance(e, (ConnectionResetError, ConnectionAbortedError))
+                    or is_closed
+                ):
+                    self._logger.debug(
+                        f"Connection closed/reset during banner read: {e}"
+                    )
+                    if isinstance(e, TransportException):
+                        raise
+                    raise TransportException(
+                        f"Connection closed during handshake: {e}"
+                    ) from e
+
                 if attempt < max_retries - 1:
                     self._logger.debug(
                         f"Banner read attempt {attempt + 1} failed, retrying..."
@@ -1335,7 +1423,10 @@ class Transport:
         if not is_supported_version(protocol_version):
             raise ProtocolException(f"Unsupported protocol version: {protocol_version}")
 
-        self._server_version = version_string
+        if self._server_mode:
+            self._client_version = version_string
+        else:
+            self._server_version = version_string
 
     def _start_kex(self) -> None:
         """
@@ -1343,6 +1434,7 @@ class Transport:
         Includes a 30-second watchdog to prevent hanging on stalled connections.
         """
         self._kex_in_progress = True
+        self._kex_thread = threading.current_thread()
         timeout = 30.0
 
         # Set a temporary timeout for key exchange
@@ -1357,10 +1449,9 @@ class Transport:
             self._recv_kexinit()
 
             # Now perform key exchange using KeyExchange class
+            self._logger.debug("Starting DH exchange phase...")
             self._kex.start_kex()
-
-            # Mark KEX as complete
-            self._kex_in_progress = False
+            self._logger.debug("Rekeying handshake complete.")
 
         except Exception as e:
             self._kex_in_progress = False
@@ -1373,6 +1464,12 @@ class Transport:
                 raise
             raise TransportException(f"Rekeying failed or timed out: {e}") from e
         finally:
+            self._kex_in_progress = False
+            self._kex_thread = None
+            # Reset byte count after successful rekey
+            with self._lock:
+                self._bytes_since_rekey = 0
+
             try:
                 if self._socket and self._socket.fileno() != -1:
                     self._socket.settimeout(old_timeout)
@@ -1451,10 +1548,17 @@ class Transport:
                 or self._sequence_number_out >= 0x80000000
                 or self._sequence_number_in >= 0x80000000
             ):
+                self._logger.debug(
+                    f"Triggering rekeying: bytes={self._bytes_since_rekey}, limit={self._rekey_bytes_limit}"
+                )
                 # Trigger rekeying in a separate thread to avoid blocking current I/O
                 # Set flag BEFORE starting thread to avoid race conditions
                 self._kex_in_progress = True
-                threading.Thread(target=self._start_kex, daemon=True).start()
+                kex_thread = threading.Thread(
+                    target=self._start_kex, name="RekeyingThread", daemon=True
+                )
+                self._kex_thread = kex_thread
+                kex_thread.start()
                 self._bytes_since_rekey = 0
                 self._last_rekey_time = time.time()
 
@@ -1502,6 +1606,15 @@ class Transport:
         Does NOT check the message queue.
         """
         while True:
+            # If rekeying is in progress, only the rekeying thread is allowed to read from the socket.
+            # Other threads must wait and check the queue (handled in _recv_message and _expect_message).
+            if self._kex_in_progress and threading.current_thread() != getattr(
+                self, "_kex_thread", None
+            ):
+                # We should not be here if called from _recv_message or _expect_message
+                # as they have their own yielding loops, but for safety:
+                return None
+
             try:
                 # We need to hold the read_lock while reading from the socket to ensure
                 # only one thread reads a complete packet at a time.
@@ -1511,6 +1624,7 @@ class Transport:
 
                     with self._lock:
                         msg = Message.unpack(payload)
+                        self._logger.debug(f"Received message type {msg.msg_type}")
 
                         # Track bytes received for rekeying (unless it's KEX)
                         if msg.msg_type not in [
@@ -1559,11 +1673,24 @@ class Transport:
                             ).start()
                             continue
 
-                        # Dispatch channel messages (80-100) or global requests (80)
+                        # Dispatch messages that need background handling (80, 90, 93-98)
+                        # Return response messages (81, 82, 91, 92, 99, 100) to callers
                         if (
-                            msg.msg_type >= 80 and msg.msg_type <= 100
-                        ) or msg.msg_type == MSG_GLOBAL_REQUEST:
+                            msg.msg_type == MSG_GLOBAL_REQUEST  # 80
+                            or msg.msg_type == MSG_CHANNEL_OPEN  # 90
+                            or (msg.msg_type >= 93 and msg.msg_type <= 98)
+                        ):
                             self._handle_channel_message(msg)
+                            continue
+
+                        # Server-side specific messages
+                        if self._server_mode:
+                            if msg.msg_type == MSG_SERVICE_REQUEST:
+                                self._handle_service_request(msg)
+                                continue
+                            if msg.msg_type == MSG_USERAUTH_REQUEST:
+                                self._handle_userauth_request(msg)
+                                continue
 
                         return msg
 
@@ -1572,15 +1699,41 @@ class Transport:
                     raise
                 raise TransportException(f"Failed to receive message: {e}") from e
 
+    def _pump(self) -> None:
+        """
+        Read next message and either handle it or queue it.
+        This is used for background message processing to ensure no
+        messages are lost when multiple threads are waiting for messages.
+        """
+        msg = self._read_message()
+        if msg:
+            with self._lock:
+                self._message_queue.append(msg)
+
     def _recv_message(self) -> Message:
         """
         Receive SSH message, checking the queue first.
         """
-        with self._lock:
-            if self._message_queue:
-                return self._message_queue.pop(0)
+        while True:
+            with self._lock:
+                if self._message_queue:
+                    return self._message_queue.pop(0)
 
-        return self._read_message()
+                # If no rekeying or we are the rekeying thread, proceed to read
+                if not self._kex_in_progress or threading.current_thread() == getattr(
+                    self, "_kex_thread", None
+                ):
+                    break
+
+            # Yield and wait for rekeying thread to process packets
+            time.sleep(0.01)
+
+        msg = self._read_message()
+        if msg is None:
+            # Should only happen if we yielded and then read_message returned None
+            # because rekeying is still in progress (unlikely given the break above)
+            return self._recv_message()
+        return msg
 
     def _expect_message(self, *allowed_types: int) -> Message:
         """
@@ -1589,13 +1742,28 @@ class Transport:
         """
         while True:
             # 1. Check queue for allowed message
-            with self._lock:
-                for i, msg in enumerate(self._message_queue):
-                    if msg.msg_type in allowed_types:
-                        return self._message_queue.pop(i)
+            while True:
+                with self._lock:
+                    for i, msg in enumerate(self._message_queue):
+                        if msg.msg_type in allowed_types:
+                            return self._message_queue.pop(i)
+
+                    # If no rekeying or we are the rekeying thread, proceed to read
+                    if (
+                        not self._kex_in_progress
+                        or threading.current_thread()
+                        == getattr(self, "_kex_thread", None)
+                    ):
+                        break
+
+                # Yield and wait for rekeying thread to process packets
+                time.sleep(0.01)
 
             # 2. Not in queue, read from socket
             msg = self._read_message()
+            if msg is None:
+                continue
+
             if msg.msg_type in allowed_types:
                 return msg
 
@@ -1622,55 +1790,69 @@ class Transport:
 
     def _activate_outbound_encryption(self) -> None:
         """Activate outbound encryption using negotiated parameters."""
-        if not self._cipher_c2s or not self._encryption_key_c2s:
+        if self._server_mode:
+            cipher_name = self._cipher_s2c
+            key = self._encryption_key_s2c
+            iv = self._iv_s2c
+            mac_name = self._mac_s2c
+            mac_key = self._mac_key_s2c
+        else:
+            cipher_name = self._cipher_c2s
+            key = self._encryption_key_c2s
+            iv = self._iv_c2s
+            mac_name = self._mac_c2s
+            mac_key = self._mac_key_c2s
+
+        if not cipher_name or not key:
             return
 
-        if (
-            self._cipher_c2s is None
-            or self._encryption_key_c2s is None
-            or self._iv_c2s is None
-        ):
+        if iv is None:
             raise TransportException("Encryption parameters not fully negotiated")
 
-        self._encryptor = self._crypto_backend.create_cipher(
-            self._cipher_c2s, self._encryption_key_c2s, self._iv_c2s
-        )
-        if not self._cipher_c2s.endswith(
-            "@openssh.com"
-        ) and not self._cipher_c2s.endswith("-gcm"):
+        self._encryptor = self._crypto_backend.create_cipher(cipher_name, key, iv)
+        if not cipher_name.endswith("@openssh.com") and not cipher_name.endswith(
+            "-gcm"
+        ):
             # It's a standard cipher, needs separate encryptor instance for state
             self._encryptor_instance = self._encryptor.encryptor()
         else:
             self._encryptor_instance = None
 
-        self._mac_c2s_active = self._mac_c2s
-        self._mac_key_c2s_active = self._mac_key_c2s
+        self._mac_out_active = mac_name
+        self._mac_key_out_active = mac_key
 
     def _activate_inbound_encryption(self) -> None:
         """Activate inbound encryption using negotiated parameters."""
-        if not self._cipher_s2c or not self._encryption_key_s2c:
+        if self._server_mode:
+            cipher_name = self._cipher_c2s
+            key = self._encryption_key_c2s
+            iv = self._iv_c2s
+            mac_name = self._mac_c2s
+            mac_key = self._mac_key_c2s
+        else:
+            cipher_name = self._cipher_s2c
+            key = self._encryption_key_s2c
+            iv = self._iv_s2c
+            mac_name = self._mac_s2c
+            mac_key = self._mac_key_s2c
+
+        if not cipher_name or not key:
             return
 
-        if (
-            self._cipher_s2c is None
-            or self._encryption_key_s2c is None
-            or self._iv_s2c is None
-        ):
+        if iv is None:
             raise TransportException("Encryption parameters not fully negotiated")
 
-        self._decryptor = self._crypto_backend.create_cipher(
-            self._cipher_s2c, self._encryption_key_s2c, self._iv_s2c
-        )
-        if not self._cipher_s2c.endswith(
-            "@openssh.com"
-        ) and not self._cipher_s2c.endswith("-gcm"):
+        self._decryptor = self._crypto_backend.create_cipher(cipher_name, key, iv)
+        if not cipher_name.endswith("@openssh.com") and not cipher_name.endswith(
+            "-gcm"
+        ):
             # It's a standard cipher, needs separate decryptor instance for state
             self._decryptor_instance = self._decryptor.decryptor()
         else:
             self._decryptor_instance = None
 
-        self._mac_s2c_active = self._mac_s2c
-        self._mac_key_s2c_active = self._mac_key_s2c
+        self._mac_in_active = mac_name
+        self._mac_key_in_active = mac_key
 
     def _encrypt_packet(self, packet: bytes) -> bytes:
         """Encrypt SSH packet and add MAC if needed."""
@@ -1679,10 +1861,10 @@ class Transport:
             encrypted = self._encryptor_instance.update(packet)
 
             # Add MAC
-            if self._mac_c2s_active and self._mac_key_c2s_active:
+            if self._mac_out_active and self._mac_key_out_active:
                 mac_data = struct.pack(">I", self._sequence_number_out) + packet
                 mac = self._crypto_backend.compute_mac(
-                    self._mac_c2s_active, self._mac_key_c2s_active, mac_data
+                    self._mac_out_active, self._mac_key_out_active, mac_data
                 )
                 return bytes(encrypted + mac)
             return bytes(encrypted)
@@ -1752,9 +1934,9 @@ class Transport:
             packet_payload = self._decryptor_instance.update(encrypted_payload)
 
             # Verify MAC
-            if self._mac_s2c_active and self._mac_key_s2c_active:
+            if self._mac_in_active and self._mac_key_in_active:
                 # Get mac length from CipherSuite
-                mac_info = self._kex._cipher_suite.get_mac_info(self._mac_s2c_active)
+                mac_info = self._kex._cipher_suite.get_mac_info(self._mac_in_active)
                 mac_len = mac_info["digest_len"]
 
                 received_mac = self._recv_bytes(mac_len)
@@ -1764,7 +1946,7 @@ class Transport:
                     + packet_payload
                 )
                 expected_mac = self._crypto_backend.compute_mac(
-                    self._mac_s2c_active, self._mac_key_s2c_active, mac_data
+                    self._mac_in_active, self._mac_key_in_active, mac_data
                 )
 
                 if received_mac != expected_mac:
@@ -1879,6 +2061,57 @@ class Transport:
             Server interface or None if not set
         """
         return self._server_interface
+
+    def _handle_service_request(self, msg: Message) -> None:
+        """Handle service request message (server mode)."""
+        try:
+            service_name_bytes, _ = read_string(msg._data, 0)
+            service_name = service_name_bytes.decode(SSH_STRING_ENCODING)
+
+            if service_name == SERVICE_USERAUTH:
+                accept_msg = ServiceAcceptMessage(SERVICE_USERAUTH)
+                self._send_message(accept_msg)
+            else:
+                self._logger.warning(f"Rejecting unsupported service: {service_name}")
+        except Exception as e:
+            self._logger.error(f"Error handling service request: {e}")
+
+    def _handle_userauth_request(self, msg: Message) -> None:
+        """Handle user authentication request message (server mode)."""
+        if not self._server_interface:
+            return
+
+        try:
+            # Unpack request
+            auth_req = UserAuthRequestMessage._unpack_data(msg._data)
+            username = auth_req.username
+            method = auth_req.method
+
+            result = AUTH_FAILED
+            if method == AUTH_PASSWORD:
+                offset = 0
+                # Read boolean (False) before password
+                change_requested, offset = read_boolean(auth_req.method_data, offset)
+                password_bytes, offset = read_string(auth_req.method_data, offset)
+                password = password_bytes.decode(SSH_STRING_ENCODING)
+                result = self._server_interface.check_auth_password(username, password)
+            elif method == AUTH_PUBLICKEY:
+                # Basic publickey check if implemented
+                result = self._server_interface.check_auth_publickey(username, None)
+
+            # Send response
+            if result == AUTH_SUCCESSFUL:
+                self._authenticated = True
+                self._server_interface.on_authentication_successful(username, method)
+                self._send_message(UserAuthSuccessMessage())
+            else:
+                self._server_interface.on_authentication_failed(username, method)
+                allowed_methods = self._server_interface.get_allowed_auths(username)
+                self._send_message(UserAuthFailureMessage(allowed_methods, False))
+
+        except Exception as e:
+            self._logger.error(f"Error handling userauth request: {e}")
+            self._send_message(UserAuthFailureMessage(["password"], False))
 
     def get_port_forwarding_manager(self) -> "PortForwardingManager":
         """

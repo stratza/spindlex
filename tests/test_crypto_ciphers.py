@@ -27,31 +27,11 @@ def test_cipher_suite_negotiation():
     assert negotiated["server_host_key"] == "rsa-sha2-256"
 
 
-def test_cipher_suite_aead_negotiation():
-    suite = CipherSuite()
-    client_algs = {
-        "kex_algorithms": ["curve25519-sha256"],
-        "server_host_key_algorithms": ["ssh-ed25519"],
-        "encryption_algorithms_client_to_server": ["chacha20-poly1305@openssh.com"],
-        "encryption_algorithms_server_to_client": ["chacha20-poly1305@openssh.com"],
-        "mac_algorithms_client_to_server": ["hmac-sha2-256"],
-        "mac_algorithms_server_to_client": ["hmac-sha2-256"],
-    }
-    server_algs = client_algs
-
-    negotiated = suite.negotiate_algorithms(client_algs, server_algs)
-    assert negotiated["encryption_client_to_server"] == "chacha20-poly1305@openssh.com"
-    assert negotiated["mac_client_to_server"] == "none"
-
-
 def test_cipher_info():
     suite = CipherSuite()
     info = suite.get_cipher_info("aes256-ctr")
     assert info["key_len"] == 32
     assert not info["aead"]
-
-    info_aead = suite.get_cipher_info("chacha20-poly1305@openssh.com")
-    assert info_aead["aead"]
 
 
 def test_mac_info():

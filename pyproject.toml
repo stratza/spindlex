@@ -88,7 +88,7 @@ Homepage = "https://github.com/Di3Z1E/spindlex"
 Documentation = "https://spindlex.readthedocs.io/"
 Repository = "https://github.com/Di3Z1E/spindlex"
 Issues = "https://github.com/Di3Z1E/spindlex/issues"
-Changelog = "https://github.com/Di3Z1E/spindlex/blob/main/meta/CHANGELOG.md"
+Changelog = "https://github.com/Di3Z1E/spindlex/blob/main/docs/changelog.md"
 
 [project.scripts]
 spindlex-keygen = "spindlex.tools.keygen:main"
