@@ -1,4 +1,4 @@
-name: GitHub Clone Count Update Everyday
+name: Update GitHub Clone Count
 
 on:
   schedule:
@@ -6,43 +6,55 @@ on:
   workflow_dispatch:
 
 jobs:
-  update-clone-count:
+  update:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Authenticate with GitHub CLI
-        run: echo "${{ secrets.SECRET_TOKEN }}" | gh auth login --with-token
-
-      - name: Get today's clone data from GitHub API
+      - name: Get today's clone data
         run: |
           curl -L --user "${{ github.actor }}:${{ secrets.SECRET_TOKEN }}" \
             -H "Accept: application/vnd.github.v3+json" \
             https://api.github.com/repos/${{ github.repository }}/traffic/clones \
-            -o clone.json
+            -o today.json
 
-      - name: Prepare previous data
+      - name: Merge with previous data and save
         run: |
-          if [ -f clone-stats.json ]; then
-            cp clone-stats.json clone_before.json
-            echo "Using previous data from clone-stats.json"
-          else
-            echo '{"count":0,"uniques":0,"clones":[]}' > clone_before.json
-            echo "No previous data found → starting fresh"
-          fi
+          python3 - << 'EOF'
+          import json
+          import os
+          
+          # Load today's data
+          with open('today.json') as f:
+              today = json.load(f)
+          
+          # Load previous stats or start fresh
+          if os.path.exists('clone-stats.json'):
+              with open('clone-stats.json') as f:
+                  stats = json.load(f)
+          else:
+              stats = {"count": 0, "uniques": 0, "clones": []}
+          
+          # Simple merge: add new daily entries
+          for day in today.get('clones', []):
+              # Avoid duplicates by timestamp
+              if not any(d['timestamp'] == day['timestamp'] for d in stats['clones']):
+                  stats['clones'].append(day)
+          
+          # Recalculate totals
+          stats['count'] = sum(int(d['count']) for d in stats['clones'])
+          stats['uniques'] = sum(int(d['uniques']) for d in stats['clones'])
+          
+          # Save updated file
+          with open('clone-stats.json', 'w') as f:
+              json.dump(stats, f, indent=2)
+          
+          print("Updated clone-stats.json")
+          print(f"Total clones: {stats['count']}")
+          EOF
 
-      - name: Merge today's data with previous using MShawon's script
-        run: |
-          curl -s https://raw.githubusercontent.com/MShawon/github-clone-count-badge/master/main.py -o main.py
-          python3 main.py
-
-      - name: Save updated stats
-        run: |
-          mv clone.json clone-stats.json
-          echo "Updated clone-stats.json with cumulative count"
-
-      - name: Commit and push updated stats
+      - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -53,6 +65,6 @@ jobs:
             echo "No change in clone count today"
           else
             git commit -m "chore: update clone statistics"
-            git push
-            echo "✅ clone-stats.json updated and pushed successfully"
+            git push https://${{ github.actor }}:${{ secrets.SECRET_TOKEN }}@github.com/${{ github.repository }}.git HEAD:${{ github.ref_name }}
+            echo "✅ clone-stats.json updated and pushed"
           fi
