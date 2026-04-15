@@ -354,7 +354,9 @@ class AsyncSSHClient:
         if key_filename:
             from ..crypto.pkey import PKey
 
-            filenames = [key_filename] if isinstance(key_filename, str) else key_filename
+            filenames = (
+                [key_filename] if isinstance(key_filename, str) else key_filename
+            )
             for filename in filenames:
                 try:
                     # Run in thread as it does I/O
@@ -364,10 +366,14 @@ class AsyncSSHClient:
                     if await self._transport.auth_publickey(username, pkey):
                         return
                 except Exception as e:
-                    self._logger.debug(f"Failed to authenticate with key {filename}: {e}")
+                    self._logger.debug(
+                        f"Failed to authenticate with key {filename}: {e}"
+                    )
 
             if not pkey:
-                raise AuthenticationException(f"Failed to load keys from {key_filename}")
+                raise AuthenticationException(
+                    f"Failed to load keys from {key_filename}"
+                )
 
         if pkey is None:
             raise AuthenticationException("No private key provided")
