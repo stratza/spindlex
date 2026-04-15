@@ -49,7 +49,9 @@ class ForwardingTunnel:
         self.remote_addr = remote_addr
         self.tunnel_type = tunnel_type
         self.active = False
-        self.connections: dict[str, dict[str, Union[socket.socket, Channel, tuple[str, int]]]] = {}
+        self.connections: dict[
+            str, dict[str, Union[socket.socket, Channel, tuple[str, int]]]
+        ] = {}
         self._lock = threading.RLock()
         self._logger = logging.getLogger(__name__)
 
@@ -288,7 +290,12 @@ class LocalPortForwarder:
 
             self._logger.debug(f"Local connection {conn_id} closed")
 
-    def _relay_data(self, source: Union[socket.socket, "Channel"], destination: Union[socket.socket, "Channel"], relay_id: str) -> None:
+    def _relay_data(
+        self,
+        source: Union[socket.socket, "Channel"],
+        destination: Union[socket.socket, "Channel"],
+        relay_id: str,
+    ) -> None:
         """
         Relay data between source and destination.
 
@@ -469,7 +476,10 @@ class RemotePortForwarder:
             return False
 
     def handle_forwarded_connection(
-        self, channel: "Channel", origin_addr: tuple[str, int], dest_addr: tuple[str, int]
+        self,
+        channel: "Channel",
+        origin_addr: tuple[str, int],
+        dest_addr: tuple[str, int],
     ) -> None:
         """
         Handle incoming forwarded connection from remote server.
@@ -545,7 +555,12 @@ class RemotePortForwarder:
 
             self._logger.debug(f"Remote forwarded connection {conn_id} closed")
 
-    def _relay_data(self, source: Union[socket.socket, "Channel"], destination: Union[socket.socket, "Channel"], relay_id: str) -> None:
+    def _relay_data(
+        self,
+        source: Union[socket.socket, "Channel"],
+        destination: Union[socket.socket, "Channel"],
+        relay_id: str,
+    ) -> None:
         """
         Relay data between source and destination.
 
@@ -747,7 +762,10 @@ class PortForwardingManager:
         self.remote_forwarder.close_all()
 
     def handle_forwarded_connection(
-        self, channel: "Channel", origin_addr: tuple[str, int], dest_addr: tuple[str, int]
+        self,
+        channel: "Channel",
+        origin_addr: tuple[str, int],
+        dest_addr: tuple[str, int],
     ) -> None:
         """
         Handle incoming forwarded connection from remote server.

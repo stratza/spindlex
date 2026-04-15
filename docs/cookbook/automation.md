@@ -2,7 +2,7 @@
 
 Solve infrastructure problems with these automation scripts.
 
-## <a name="sudo-execution"></a>Sudo Command Execution
+## Sudo Command Execution {#sudo-execution}
 
 Automate `sudo` commands by providing the password when prompted.
 
@@ -28,7 +28,7 @@ with SSHClient() as client:
     print(result)
 ```
 
-## <a name="parallel-commands"></a>Parallel Command Execution
+## Parallel Command Execution {#parallel-commands}
 
 Run commands on multiple servers concurrently using SpindleX's native async support.
 
@@ -55,7 +55,7 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-## <a name="proxy-jump"></a>SSH ProxyJump (Bastion Hosts)
+## SSH ProxyJump (Bastion Hosts) {#proxy-jump}
 
 Connect to a target host through a bastion (jump) host.
 
@@ -87,7 +87,7 @@ with SSHClient() as bastion:
         print(f"Connected to: {stdout.read().decode()}")
 ```
 
-## <a name="log-tailing"></a>Real-time Log Tailing
+## Real-time Log Tailing {#log-tailing}
 
 Stream remote log files to your local console in real-time.
 
@@ -106,7 +106,7 @@ with SSHClient() as client:
     except KeyboardInterrupt:
         print("Stopping log stream...")
 
-## <a name="rekey-policy"></a>Custom Rekeying Policy
+## Custom Rekeying Policy {#rekey-policy}
 
 For high-security or high-compliance environments, you can tighten the rekeying thresholds.
 
@@ -127,7 +127,7 @@ with SSHClient() as client:
     # ...
 ```
 
-## <a name="interactive-auth"></a>Keyboard-Interactive Authentication
+## Keyboard-Interactive Authentication {#interactive-auth}
 
 Use a custom handler to respond to server-driven authentication challenges.
 
@@ -162,7 +162,7 @@ with SSHClient() as client:
     )
 ```
 
-## <a name="gssapi-auth"></a>GSSAPI/Kerberos Authentication
+## GSSAPI/Kerberos Authentication {#gssapi-auth}
 
 Authenticate using Kerberos tickets (SSO) in enterprise environments.
 
@@ -180,7 +180,7 @@ with SSHClient() as client:
     print("Authenticated via Kerberos!")
 ```
 
-## <a name="key-rotation"></a>SSH Key Rotation
+## SSH Key Rotation {#key-rotation}
 
 Automate the rotation of public keys across multiple servers.
 
@@ -200,7 +200,7 @@ def rotate_key(client, new_key_path):
 # ...
 ```
 
-## <a name="backup-configs"></a>Backing up Network Configs
+## Backing up Network Configs {#backup-configs}
 
 Example of a script that backs up a remote configuration file with timestamping.
 

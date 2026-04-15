@@ -285,7 +285,9 @@ class CryptoTimer:
         with self.monitor.time_operation(f"crypto_{operation}", **crypto_metadata):
             yield
 
-    def time_key_generation(self, algorithm: str, key_size: int) -> ContextManager[None]:
+    def time_key_generation(
+        self, algorithm: str, key_size: int
+    ) -> ContextManager[None]:
         """Time key generation operation."""
         return self.time_crypto_operation("keygen", algorithm, key_size)
 
