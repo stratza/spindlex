@@ -59,7 +59,7 @@ def test_keyboard_interactive_auth_loop():
     info_req.prompts = [("Password:", False)]
 
     with patch(
-        "spindlex.auth.keyboard_interactive.UserAuthInfoRequestMessage.unpack",
+        "spindlex.auth.keyboard_interactive.UserAuthInfoRequestMessage._unpack_data",
         return_value=info_req,
     ):
         # Loop: InfoRequest -> Success
@@ -119,7 +119,7 @@ async def test_async_keyboard_interactive_auth_loop():
     info_req.prompts = [("Code:", True)]
 
     with patch(
-        "spindlex.auth.keyboard_interactive.UserAuthInfoRequestMessage.unpack",
+        "spindlex.auth.keyboard_interactive.UserAuthInfoRequestMessage._unpack_data",
         return_value=info_req,
     ):
         transport._expect_message_async.side_effect = [

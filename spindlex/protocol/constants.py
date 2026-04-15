@@ -91,7 +91,7 @@ SSH_OPEN_RESOURCE_SHORTAGE = 4
 SSH_EXTENDED_DATA_STDERR = 1
 
 # Authentication Method Names
-AUTH_PASSWORD = "password"
+AUTH_PASSWORD = "password"  # nosec
 AUTH_PUBLICKEY = "publickey"
 AUTH_HOSTBASED = "hostbased"
 AUTH_KEYBOARD_INTERACTIVE = "keyboard-interactive"

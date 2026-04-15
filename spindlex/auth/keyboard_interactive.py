@@ -4,7 +4,7 @@ Keyboard-Interactive Authentication Implementation
 Implements SSH keyboard-interactive authentication method according to RFC 4256.
 """
 
-from typing import Any, Callable, cast
+from typing import Any, Callable
 
 from ..exceptions import AuthenticationException
 from ..protocol.constants import (
@@ -94,11 +94,8 @@ class KeyboardInteractiveAuth:
                 return False
             elif msg.msg_type == MSG_USERAUTH_INFO_REQUEST:
                 # MSG_USERAUTH_INFO_REQUEST is message type 60
-                # We need to unpack it properly
-                info_req = cast(
-                    UserAuthInfoRequestMessage,
-                    UserAuthInfoRequestMessage.unpack(msg._data),
-                )
+                # We need to unpack it from generic Message data
+                info_req = UserAuthInfoRequestMessage._unpack_data(msg._data)
 
                 # Call user handler
                 responses = handler(
@@ -154,10 +151,9 @@ class AsyncKeyboardInteractiveAuth(KeyboardInteractiveAuth):
                     )
                 return False
             elif msg.msg_type == MSG_USERAUTH_INFO_REQUEST:
-                info_req = cast(
-                    UserAuthInfoRequestMessage,
-                    UserAuthInfoRequestMessage.unpack(msg._data),
-                )
+                # MSG_USERAUTH_INFO_REQUEST is message type 60
+                # We need to unpack it from generic Message data
+                info_req = UserAuthInfoRequestMessage._unpack_data(msg._data)
 
                 # Call user handler (might be async or sync)
                 import asyncio

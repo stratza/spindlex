@@ -32,13 +32,13 @@ class LogSanitizer:
 
     # Replacement patterns
     REPLACEMENTS = {
-        "password": "[PASSWORD_REDACTED]",
-        "secret": "[SECRET_REDACTED]",
-        "token": "[TOKEN_REDACTED]",
-        "key": "[KEY_REDACTED]",
-        "passphrase": "[PASSPHRASE_REDACTED]",
-        "ssh_key": "[SSH_KEY_REDACTED]",
-        "private_key": "[PRIVATE_KEY_REDACTED]",
+        "password": "[PASSWORD_REDACTED]",  # nosec
+        "secret": "[SECRET_REDACTED]",  # nosec
+        "token": "[TOKEN_REDACTED]",  # nosec
+        "key": "[KEY_REDACTED]",  # nosec
+        "passphrase": "[PASSPHRASE_REDACTED]",  # nosec
+        "ssh_key": "[SSH_KEY_REDACTED]",  # nosec
+        "private_key": "[PRIVATE_KEY_REDACTED]",  # nosec
         "ip_partial": r"\1***",
         "hostname_partial": r"\1[REDACTED]",
     }

@@ -214,6 +214,27 @@ class Channel:
                         raise
                     pass
 
+    def recv_exactly(self, nbytes: int) -> bytes:
+        """
+        Receive exactly nbytes from channel.
+
+        Args:
+            nbytes: Number of bytes to receive
+
+        Returns:
+            Received data
+
+        Raises:
+            ChannelException: If receive fails or channel closed
+        """
+        data = b""
+        while len(data) < nbytes:
+            chunk = self.recv(nbytes - len(data))
+            if not chunk:
+                raise ChannelException("Connection closed while waiting for data")
+            data += chunk
+        return data
+
     def exec_command(self, command: str) -> None:
         """
         Execute command on channel.
@@ -334,6 +355,20 @@ class Channel:
             Exit status code, or -1 if not available
         """
         return self._exit_status if self._exit_status is not None else -1
+
+    def recv_exit_status(self) -> int:
+        """
+        Wait for and return command exit status.
+
+        Returns:
+            Exit status code
+        """
+        while self._exit_status is None and not self._closed:
+            try:
+                self._transport._pump()
+            except Exception:
+                break
+        return self.get_exit_status()
 
     def send_exit_status(self, status: int) -> None:
         """

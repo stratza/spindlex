@@ -9,11 +9,11 @@ import logging
 import socket
 import threading
 import time
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, Union
 
 if TYPE_CHECKING:
-    from .transport import Transport
     from .channel import Channel
+    from .transport import Transport
 
 from ..exceptions import SSHException
 from ..protocol.constants import CHANNEL_DIRECT_TCPIP
@@ -49,7 +49,7 @@ class ForwardingTunnel:
         self.remote_addr = remote_addr
         self.tunnel_type = tunnel_type
         self.active = False
-        self.connections: dict[str, dict[str, Union[socket.socket, "Channel", tuple[str, int]]]] = {}
+        self.connections: dict[str, dict[str, Union[socket.socket, Channel, tuple[str, int]]]] = {}
         self._lock = threading.RLock()
         self._logger = logging.getLogger(__name__)
 
@@ -61,8 +61,13 @@ class ForwardingTunnel:
             # Close all active connections
             for conn_id, connection in list(self.connections.items()):
                 try:
-                    if hasattr(connection, "close"):
-                        connection.close()
+                    # connection is a dict containing 'client_socket' or 'local_socket' and 'channel'
+                    for item in connection.values():
+                        if isinstance(item, (socket.socket, Channel)):
+                            try:
+                                item.close()
+                            except Exception:
+                                pass
                 except Exception as e:
                     self._logger.debug(f"Error closing connection {conn_id}: {e}")
 
@@ -85,7 +90,7 @@ class LocalPortForwarder:
         Args:
             transport: SSH transport instance
         """
-        self._transport: "Transport" = transport
+        self._transport: Transport = transport
         self._tunnels: dict[str, ForwardingTunnel] = {}
         self._servers: dict[str, socket.socket] = {}
         self._lock = threading.RLock()
@@ -274,10 +279,9 @@ class LocalPortForwarder:
             with tunnel._lock:
                 if conn_id in tunnel.connections:
                     chan = tunnel.connections[conn_id].get("channel")
-                    if chan and hasattr(chan, "close"):
+                    if isinstance(chan, Channel):
                         try:
-                            # Use getattr to satisfy mypy's strictness about Unions and hasattr
-                            getattr(chan, "close")()
+                            chan.close()
                         except Exception:
                             pass
                     del tunnel.connections[conn_id]
@@ -374,7 +378,7 @@ class RemotePortForwarder:
         Args:
             transport: SSH transport instance
         """
-        self._transport: "Transport" = transport
+        self._transport: Transport = transport
         self._tunnels: dict[str, ForwardingTunnel] = {}
         self._lock = threading.RLock()
         self._logger = logging.getLogger(__name__)
@@ -663,7 +667,7 @@ class PortForwardingManager:
         Args:
             transport: SSH transport instance
         """
-        self._transport: "Transport" = transport
+        self._transport: Transport = transport
         self.local_forwarder = LocalPortForwarder(transport)
         self.remote_forwarder = RemotePortForwarder(transport)
         self._logger = logging.getLogger(__name__)

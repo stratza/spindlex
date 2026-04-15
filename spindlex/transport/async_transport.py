@@ -54,6 +54,7 @@ from ..protocol.messages import (
     Message,
     ServiceRequestMessage,
     UserAuthFailureMessage,
+    UserAuthPKOKMessage,
     UserAuthRequestMessage,
     UserAuthSuccessMessage,
 )
@@ -159,7 +160,7 @@ class AsyncTransport(Transport):
             self._recv_kexinit()
             self._kex.start_kex()
         finally:
-            self._kex_thread = None
+            self._kex_thread = None  # type: ignore[assignment]
             # Reset progress flag
             self._kex_in_progress = False
 
@@ -416,6 +417,13 @@ class AsyncTransport(Transport):
 
         if isinstance(res, UserAuthFailureMessage):
             return False
+
+        # If it's type 60, it's a generic Message that we need to unpack
+        if not isinstance(res, UserAuthPKOKMessage):
+            try:
+                res = UserAuthPKOKMessage._unpack_data(res._data)
+            except Exception as e:
+                raise ProtocolException(f"Failed to unpack PK_OK message: {e}") from e
 
         # 2. Key accepted, send signature
         auth_msg = UserAuthRequestMessage(

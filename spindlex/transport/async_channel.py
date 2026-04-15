@@ -160,7 +160,7 @@ class AsyncChannel(Channel):
                 raise
             raise ChannelException(f"Receive failed: {e}") from e
 
-    async def recv_exactly(self, nbytes: int) -> bytes:
+    async def recv_exactly(self, nbytes: int) -> bytes:  # type: ignore[override]
         """
         Receive exactly nbytes from channel asynchronously.
 
@@ -347,6 +347,20 @@ class AsyncChannel(Channel):
         except Exception as e:
             raise ChannelException(f"Failed to send exit status: {e}") from e
 
+    async def recv_exit_status(self) -> int:  # type: ignore[override]
+        """
+        Wait for and return command exit status asynchronously.
+
+        Returns:
+            Exit status code
+        """
+        while self._exit_status is None and not self._closed:
+            try:
+                await self._transport._pump_async()
+            except Exception:
+                break
+        return self.get_exit_status()
+
     async def close(self) -> None:  # type: ignore[override]
         """Close channel asynchronously."""
         if not self._closed:
@@ -481,6 +495,11 @@ class AsyncChannelFile:
             raise ValueError("I/O operation on closed file")
 
         return await self._channel.send(data)
+
+    @property
+    def channel(self) -> "AsyncChannel":
+        """Get underlying SSH channel."""
+        return self._channel
 
     async def close(self) -> None:
         """Close file object."""

@@ -253,14 +253,16 @@ class SFTPClient:
             raise SFTPError("SFTP channel not available")
 
         try:
-            # Read message length first
-            length_data = self._channel.recv(4)
-            if len(length_data) != 4:
-                raise SFTPError("Failed to read message length")
-
-            # Read message content
+            # Read message length first (4 bytes)
+            length_data = self._channel.recv_exactly(4)
             msg_length = int.from_bytes(length_data, "big")
-            msg_data = length_data + self._channel.recv(msg_length)
+
+            # Read message content (msg_length bytes)
+            # The payload does NOT include the length itself in SFTP packets
+            # but SFTPMessage.unpack expects the length-prefixed data or just the payload?
+            # Let's check SFTPMessage.unpack.
+            payload = self._channel.recv_exactly(msg_length)
+            msg_data = length_data + payload
 
             return SFTPMessage.unpack(msg_data)
         except Exception as e:
