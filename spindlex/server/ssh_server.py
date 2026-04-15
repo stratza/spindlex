@@ -565,6 +565,9 @@ class SSHServerManager:
         self._bind_address = bind_address
         self._port = port
 
+        # Ensure server interface has the host key immediately
+        self._server_interface.set_server_key(self._server_key)
+
         self._server_socket: Optional[socket.socket] = None
         self._running = False
         self._connections: dict[str, Transport] = {}  # connection_id -> transport
@@ -620,9 +623,6 @@ class SSHServerManager:
         with self._lock:
             if self._running:
                 raise TransportException("Server is already running")
-
-            # Ensure server interface has the host key
-            self._server_interface.set_server_key(self._server_key)
 
             try:
                 # Create and bind server socket
