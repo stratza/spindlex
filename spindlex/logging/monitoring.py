@@ -8,7 +8,7 @@ from collections import defaultdict, deque
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from functools import wraps
-from typing import Any, Callable, Iterator, ContextManager, Optional, Union
+from typing import Any, Callable, ContextManager, Iterator, Optional, Union
 
 from .logger import get_logger
 

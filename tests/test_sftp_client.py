@@ -194,7 +194,7 @@ def test_sftp_file_read_write(sftp_client):
 
 def test_sftp_client_receive_message_error(sftp_client, mock_channel):
     # Mock short read for length
-    mock_channel.recv.side_effect = [b"a"]
+    mock_channel.recv_exactly.side_effect = Exception("Failed to read message length")
     with pytest.raises(SFTPError, match="Failed to read message length"):
         sftp_client._receive_message()
 

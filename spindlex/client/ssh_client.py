@@ -108,6 +108,11 @@ class ChannelFile:
 
         return self._channel.send(data)
 
+    @property
+    def channel(self) -> "Channel":
+        """Get underlying SSH channel."""
+        return self._channel
+
     def close(self) -> None:
         """Close the file."""
         self._closed = True

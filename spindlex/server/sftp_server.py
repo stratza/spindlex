@@ -189,13 +189,16 @@ class SFTPServer:
     to implement custom SFTP server behavior and authorization.
     """
 
-    def __init__(self, channel: Channel, root_path: str = "/") -> None:
+    def __init__(
+        self, channel: "Channel", root_path: str = "/", start_thread: bool = True
+    ) -> None:
         """
         Initialize SFTP server with channel and root path.
 
         Args:
             channel: SSH channel for SFTP communication
             root_path: Root directory for SFTP operations (default: "/")
+            start_thread: Whether to start the message processing thread (default: True)
         """
         self._channel = channel
         self._root_path = os.path.abspath(root_path)
@@ -206,8 +209,22 @@ class SFTPServer:
         self._client_version: Optional[int] = None
         self._client_extensions: dict[str, str] = {}
 
-        # Start SFTP session
-        self._start_sftp_session()
+        if start_thread:
+            # Start SFTP session in a separate thread to avoid blocking
+            self._thread = threading.Thread(
+                target=self._run_server,
+                name=f"SFTPServer-{channel.channel_id}",
+                daemon=True,
+            )
+            self._thread.start()
+
+    def _run_server(self) -> None:
+        """Run the SFTP server session."""
+        try:
+            self._start_sftp_session()
+        except Exception as e:
+            self._logger.error(f"SFTP server session error: {e}")
+            self.close()
 
     def _start_sftp_session(self) -> None:
         """
@@ -277,14 +294,13 @@ class SFTPServer:
             SFTPError: If message receiving fails
         """
         try:
-            # Read message length first
-            length_data = self._channel.recv(4)
-            if len(length_data) != 4:
-                raise SFTPError("Failed to read message length")
-
-            # Read message content
+            # Read message length first (4 bytes)
+            length_data = self._channel.recv_exactly(4)
             msg_length = int.from_bytes(length_data, "big")
-            msg_data = length_data + self._channel.recv(msg_length)
+
+            # Read message content (msg_length bytes)
+            payload = self._channel.recv_exactly(msg_length)
+            msg_data = length_data + payload
 
             return SFTPMessage.unpack(msg_data)
         except Exception as e:

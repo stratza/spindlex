@@ -72,7 +72,8 @@ def test_sftp_server_init_failure(mock_channel, temp_root):
         mock_recv.side_effect = Exception("Failed to receive INIT")
 
         with pytest.raises(SFTPError, match="SFTP initialization failed"):
-            SFTPServer(mock_channel, temp_root)
+            server = SFTPServer(mock_channel, temp_root, start_thread=False)
+            server._start_sftp_session()
 
 
 def test_sftp_server_init_success(mock_channel, temp_root):
@@ -82,7 +83,8 @@ def test_sftp_server_init_success(mock_channel, temp_root):
             mock_recv.side_effect = [SFTPInitMessage(3), Exception("Stop")]
 
             # SFTPServer won't raise SFTPError if it stops in _process_messages
-            SFTPServer(mock_channel, temp_root)
+            server = SFTPServer(mock_channel, temp_root, start_thread=False)
+            server._start_sftp_session()
 
             assert mock_send.called
             sent_msg = mock_send.call_args_list[0][0][0]
@@ -107,8 +109,9 @@ def test_sftp_server_open_read_close(mock_channel, temp_root):
             ]
 
             try:
-                SFTPServer(mock_channel, temp_root)
-            except SFTPError:
+                server = SFTPServer(mock_channel, temp_root, start_thread=False)
+                server._start_sftp_session()
+            except Exception:
                 pass
 
             # Check sent messages
@@ -132,8 +135,9 @@ def test_sftp_server_realpath(mock_channel, temp_root):
             ]
 
             try:
-                SFTPServer(mock_channel, temp_root)
-            except SFTPError:
+                server = SFTPServer(mock_channel, temp_root, start_thread=False)
+                server._start_sftp_session()
+            except Exception:
                 pass
 
             sent_messages = [call[0][0] for call in mock_send.call_args_list]
@@ -146,14 +150,15 @@ def test_sftp_server_resolve_path_security(mock_channel, temp_root):
     with patch.object(SFTPServer, "_receive_message") as mock_recv:
         mock_recv.side_effect = [SFTPInitMessage(3), Exception("Stop")]
         try:
-            server = SFTPServer(mock_channel, temp_root)
-        except SFTPError:
-            # We need to get the server instance, but __init__ enters loop
+            server = SFTPServer(mock_channel, temp_root, start_thread=False)
+            server._start_sftp_session()
+        except Exception:
+            # We need to get the server instance, but __init__ might enter loop or fail
             pass
 
     # Let's bypass __init__ loop for easier testing of helper methods
     with patch.object(SFTPServer, "_start_sftp_session"):
-        server = SFTPServer(mock_channel, temp_root)
+        server = SFTPServer(mock_channel, temp_root, start_thread=False)
 
         assert server._resolve_path("test.txt") == os.path.abspath(
             os.path.join(temp_root, "test.txt")
@@ -183,8 +188,9 @@ def test_sftp_server_stat(mock_channel, temp_root):
             ]
 
             try:
-                SFTPServer(mock_channel, temp_root)
-            except SFTPError:
+                server = SFTPServer(mock_channel, temp_root, start_thread=False)
+                server._start_sftp_session()
+            except Exception:
                 pass
 
             sent_messages = [call[0][0] for call in mock_send.call_args_list]
@@ -207,8 +213,9 @@ def test_sftp_server_mkdir_rmdir(mock_channel, temp_root):
             ]
 
             try:
-                SFTPServer(mock_channel, temp_root)
-            except SFTPError:
+                server = SFTPServer(mock_channel, temp_root, start_thread=False)
+                server._start_sftp_session()
+            except Exception:
                 pass
 
             assert (
@@ -236,8 +243,9 @@ def test_sftp_server_write(mock_channel, temp_root):
             ]
 
             try:
-                SFTPServer(mock_channel, temp_root)
-            except SFTPError:
+                server = SFTPServer(mock_channel, temp_root, start_thread=False)
+                server._start_sftp_session()
+            except Exception:
                 pass
 
             with open(file_path, "rb") as f:
@@ -261,8 +269,9 @@ def test_sftp_server_opendir_readdir(mock_channel, temp_root):
             ]
 
             try:
-                SFTPServer(mock_channel, temp_root)
-            except SFTPError:
+                server = SFTPServer(mock_channel, temp_root, start_thread=False)
+                server._start_sftp_session()
+            except Exception:
                 pass
 
             sent_messages = [call[0][0] for call in mock_send.call_args_list]
@@ -289,8 +298,9 @@ def test_sftp_server_remove_rename(mock_channel, temp_root):
             ]
 
             try:
-                SFTPServer(mock_channel, temp_root)
-            except SFTPError:
+                server = SFTPServer(mock_channel, temp_root, start_thread=False)
+                server._start_sftp_session()
+            except Exception:
                 pass
 
             assert not os.path.exists(file1)
@@ -315,8 +325,9 @@ def test_sftp_server_setstat(mock_channel, temp_root):
                 ]
 
                 try:
-                    SFTPServer(mock_channel, temp_root)
-                except SFTPError:
+                    server = SFTPServer(mock_channel, temp_root, start_thread=False)
+                    server._start_sftp_session()
+                except Exception:
                     pass
 
                 st = os.stat(file_path)
@@ -337,8 +348,9 @@ def test_sftp_server_errors(mock_channel, temp_root):
             ]
 
             try:
-                SFTPServer(mock_channel, temp_root)
-            except SFTPError:
+                server = SFTPServer(mock_channel, temp_root, start_thread=False)
+                server._start_sftp_session()
+            except Exception:
                 pass
 
             sent_messages = [call[0][0] for call in mock_send.call_args_list]

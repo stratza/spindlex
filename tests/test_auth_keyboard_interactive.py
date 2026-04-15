@@ -74,7 +74,8 @@ class TestKeyboardInteractiveAuth:
         # We need to set the msg_type and _data correctly for unpack
         info_req_msg = MagicMock()
         info_req_msg.msg_type = MSG_USERAUTH_INFO_REQUEST
-        info_req_msg._data = info_req.pack()
+        # Generic Message.unpack returns payload[1:], so _data should not have the type byte
+        info_req_msg._data = info_req._data
 
         # 2. Success
         success_msg = UserAuthSuccessMessage()
@@ -118,7 +119,8 @@ class TestAsyncKeyboardInteractiveAuth:
         )
         info_req_msg = MagicMock()
         info_req_msg.msg_type = MSG_USERAUTH_INFO_REQUEST
-        info_req_msg._data = info_req.pack()
+        # Generic Message.unpack returns payload[1:], so _data should not have the type byte
+        info_req_msg._data = info_req._data
 
         success_msg = UserAuthSuccessMessage()
 
@@ -149,7 +151,8 @@ class TestAsyncKeyboardInteractiveAuth:
         )
         info_req_msg = MagicMock()
         info_req_msg.msg_type = MSG_USERAUTH_INFO_REQUEST
-        info_req_msg._data = info_req.pack()
+        # Generic Message.unpack returns payload[1:], so _data should not have the type byte
+        info_req_msg._data = info_req._data
 
         success_msg = UserAuthSuccessMessage()
 

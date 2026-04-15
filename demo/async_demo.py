@@ -4,11 +4,11 @@ This script demonstrates the asynchronous capabilities of SpindleX.
 """
 
 import asyncio
+import logging
 import os
 import sys
 import time
 
-import logging
 logging.basicConfig(level=logging.DEBUG)
 
 # Ensure local 'spindlex' module is used instead of any installed package

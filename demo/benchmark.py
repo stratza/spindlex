@@ -3,8 +3,8 @@ SpindleX vs Paramiko Benchmark
 Compare the performance of connection times and SFTP transfers.
 """
 
-import statistics
 import os
+import statistics
 import sys
 import time
 

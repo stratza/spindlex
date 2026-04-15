@@ -10,7 +10,6 @@ This script demonstrates a complex real-world workflow:
 """
 
 import os
-import subprocess
 import sys
 import time
 

@@ -47,6 +47,7 @@ class AsyncSSHClient:
         username: str | None = None,
         password: str | None = None,
         pkey: Any | None = None,
+        key_filename: str | list[str] | None = None,
         timeout: float | None = None,
         compress: bool = False,
         gss_auth: bool = False,
@@ -65,6 +66,7 @@ class AsyncSSHClient:
             username: Username for authentication
             password: Password for authentication
             pkey: Private key for authentication
+            key_filename: Path to private key file(s)
             timeout: Connection timeout in seconds
             rekey_bytes_limit: Number of bytes before rekeying (default: 1GB)
             rekey_time_limit: Seconds before rekeying (default: 1 hour)
@@ -103,8 +105,6 @@ class AsyncSSHClient:
             # Verify host key
             self._verify_host_key()
 
-            # Remove specific auth calls from connect() flow as they are moved to _authenticate()
-
             # Store connection info
             self._hostname = hostname
             self._port = port
@@ -117,6 +117,7 @@ class AsyncSSHClient:
                     username,
                     password=password,
                     pkey=pkey,
+                    key_filename=key_filename,
                     gss_auth=gss_auth,
                     gss_host=gss_host,
                     gss_deleg_creds=gss_deleg_creds,
@@ -327,19 +328,49 @@ class AsyncSSHClient:
         if not await self._transport.auth_password(username, password):
             raise AuthenticationException("Password authentication failed")
 
-    async def auth_publickey(self, username: str, pkey: Any) -> None:
+    async def auth_publickey(
+        self,
+        username: str,
+        pkey: Any | None = None,
+        key_filename: str | list[str] | None = None,
+        password: str | None = None,
+    ) -> None:
         """
         Authenticate using public key asynchronously.
 
         Args:
             username: Username for authentication
             pkey: Private key instance
+            key_filename: Path to private key file(s)
+            password: Optional password for encrypted private keys
 
         Raises:
             AuthenticationException: If authentication fails
         """
         if not self._transport:
             raise SSHException("No transport available")
+
+        # Load key(s) from file if provided
+        if key_filename:
+            from ..crypto.pkey import PKey
+
+            filenames = [key_filename] if isinstance(key_filename, str) else key_filename
+            for filename in filenames:
+                try:
+                    # Run in thread as it does I/O
+                    pkey = await asyncio.to_thread(
+                        PKey.from_private_key_file, filename, password
+                    )
+                    if await self._transport.auth_publickey(username, pkey):
+                        return
+                except Exception as e:
+                    self._logger.debug(f"Failed to authenticate with key {filename}: {e}")
+
+            if not pkey:
+                raise AuthenticationException(f"Failed to load keys from {key_filename}")
+
+        if pkey is None:
+            raise AuthenticationException("No private key provided")
 
         if not await self._transport.auth_publickey(username, pkey):
             raise AuthenticationException("Public key authentication failed")
@@ -379,6 +410,7 @@ class AsyncSSHClient:
         username: str,
         password: str | None = None,
         pkey: Any | None = None,
+        key_filename: str | list[str] | None = None,
         gss_auth: bool = False,
         gss_host: str | None = None,
         gss_deleg_creds: bool = False,
@@ -398,9 +430,11 @@ class AsyncSSHClient:
                 self._logger.debug(f"GSSAPI authentication failed: {e}")
 
         # Try Public Key
-        if pkey and not authenticated:
+        if (pkey or key_filename) and not authenticated:
             try:
-                await self.auth_publickey(username, pkey)
+                await self.auth_publickey(
+                    username, pkey=pkey, key_filename=key_filename, password=password
+                )
                 authenticated = True
             except Exception as e:
                 self._logger.debug(f"Public key authentication failed: {e}")

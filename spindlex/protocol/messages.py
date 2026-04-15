@@ -108,9 +108,11 @@ class Message:
             MSG_USERAUTH_FAILURE: UserAuthFailureMessage,
             MSG_USERAUTH_SUCCESS: UserAuthSuccessMessage,
             MSG_USERAUTH_BANNER: UserAuthBannerMessage,
-            MSG_USERAUTH_PK_OK: UserAuthPKOKMessage,
-            MSG_USERAUTH_INFO_REQUEST: UserAuthInfoRequestMessage,
-            MSG_USERAUTH_INFO_RESPONSE: UserAuthInfoResponseMessage,
+            # Method-specific messages (60-79) should be handled manually by the auth method
+            # to avoid disambiguation issues.
+            # MSG_USERAUTH_PK_OK: UserAuthPKOKMessage,
+            # MSG_USERAUTH_INFO_REQUEST: UserAuthInfoRequestMessage,
+            # MSG_USERAUTH_INFO_RESPONSE: UserAuthInfoResponseMessage,
             MSG_GLOBAL_REQUEST: GlobalRequestMessage,
             MSG_REQUEST_SUCCESS: RequestSuccessMessage,
             MSG_REQUEST_FAILURE: RequestFailureMessage,
