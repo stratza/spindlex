@@ -97,5 +97,5 @@ Comparing SpindleX against Paramiko for connection and throughput.
 | Sequential Exec (s) | 4.2s | 1.8s | **2.3x** |
 
 ---
-**Build Status: v0.5.1**
+**Build Status: v0.5.2**
 All tests passing (266/266).
