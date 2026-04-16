@@ -12,11 +12,11 @@ class LogSanitizer:
     # Patterns for sensitive data that should be redacted
     SENSITIVE_PATTERNS: list[Pattern[str]] = [
         # Passwords and secrets (Captured prefix and value) - handles multiple separators
-        re.compile(r'(?i)(password(?:\s+|[:=]|is\b)+)([^\s,"}]+)'),
-        re.compile(r'(?i)(secret(?:\s+|[:=]|is\b)+)([^\s,"}]+)'),
-        re.compile(r'(?i)(token(?:\s+|[:=]|is\b)+)([^\s,"}]+)'),
-        re.compile(r'(?i)(key(?:\s+|[:=]|is\b)+)([^\s,"}]+)'),
-        re.compile(r'(?i)(passphrase(?:\s+|[:=]|is\b)+)([^\s,"}]+)'),
+        re.compile(r'(?i)(password(?:[\s:=]|is\b)+)([^\s,"}]+)'),
+        re.compile(r'(?i)(secret(?:[\s:=]|is\b)+)([^\s,"}]+)'),
+        re.compile(r'(?i)(token(?:[\s:=]|is\b)+)([^\s,"}]+)'),
+        re.compile(r'(?i)(key(?:[\s:=]|is\b)+)([^\s,"}]+)'),
+        re.compile(r'(?i)(passphrase(?:[\s:=]|is\b)+)([^\s,"}]+)'),
         # SSH key material (base64 encoded)
         re.compile(r"AAAA[A-Za-z0-9+/]{20,}={0,2}"),
         # Private key headers/footers
