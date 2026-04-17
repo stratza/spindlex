@@ -399,33 +399,32 @@ class SFTPServer:
             SFTPError: If path is outside root directory
         """
         # Normalize SFTP path (always use forward slashes in SFTP)
+        path = path.replace("\\", "/")
 
         # Check if this is an SFTP absolute path (starts with /)
-        is_sftp_absolute = path.startswith("/")
-
-        if is_sftp_absolute:
+        if path.startswith("/"):
             # Strip leading slash and treat as relative to root
             path = path.lstrip("/")
 
         # Join with root path
-        resolved = os.path.join(self._root_path, path)
+        full_path = os.path.normpath(os.path.join(self._root_path, path))
 
-        # Normalize the path
-        resolved = os.path.abspath(resolved)
-        root_abs = os.path.abspath(self._root_path)
-
-        # Ensure both paths use consistent case and separators for comparison
-        resolved_norm = os.path.normcase(os.path.normpath(resolved))
-        root_norm = os.path.normcase(os.path.normpath(root_abs))
+        # Fully resolve path (resolve symlinks and ..)
+        resolved = os.path.realpath(full_path)
+        root_real = os.path.realpath(self._root_path)
 
         # Check if resolved path is within root
-        # Use commonpath to check if they share the same root
         try:
+            # Use normcase to ensure case-insensitive comparison on Windows
+            resolved_norm = os.path.normcase(resolved)
+            root_norm = os.path.normcase(root_real)
+
+            # commonpath expects original strings but compares their parts
             common = os.path.commonpath([resolved_norm, root_norm])
             if os.path.normcase(common) != root_norm:
                 raise SFTPError("Path outside root directory", SSH_FX_PERMISSION_DENIED)
-        except ValueError:
-            # Paths are on different drives (Windows)
+        except (ValueError, OSError):
+            # Paths are on different drives (Windows) or other error
             raise SFTPError("Path outside root directory", SSH_FX_PERMISSION_DENIED)
 
         return resolved
@@ -516,46 +515,54 @@ class SFTPServer:
                 mode = "rb"  # Read only
 
             # Open file
+            file_obj = None
             try:
                 file_obj = open(resolved_path, mode)
-            except FileNotFoundError:
-                error_msg = SFTPStatusMessage(
-                    int(message.request_id), SSH_FX_NO_SUCH_FILE, "File not found"
+
+                # Create handle
+                handle_id = self._generate_handle()
+                from typing import BinaryIO, cast
+
+                handle = SFTPHandle(
+                    handle_id,
+                    resolved_path,
+                    message.pflags,
+                    file_obj=cast(BinaryIO, file_obj),
                 )
+
+                with self._handle_lock:
+                    self._handles[handle_id] = handle
+
+                # Send handle response
+                handle_msg = SFTPHandleMessage(message.request_id, handle_id)
+                self._send_message(handle_msg)
+
+            except Exception as e:
+                if file_obj:
+                    try:
+                        file_obj.close()
+                    except Exception:
+                        pass
+                if isinstance(e, FileNotFoundError):
+                    error_msg = SFTPStatusMessage(
+                        int(message.request_id), SSH_FX_NO_SUCH_FILE, "File not found"
+                    )
+                elif isinstance(e, PermissionError):
+                    error_msg = SFTPStatusMessage(
+                        int(message.request_id),
+                        SSH_FX_PERMISSION_DENIED,
+                        "Permission denied",
+                    )
+                elif isinstance(e, FileExistsError):
+                    error_msg = SFTPStatusMessage(
+                        int(message.request_id), SSH_FX_FAILURE, "File already exists"
+                    )
+                else:
+                    error_msg = SFTPStatusMessage(
+                        int(message.request_id), SSH_FX_FAILURE, f"Open failed: {e}"
+                    )
                 self._send_message(error_msg)
                 return
-            except PermissionError:
-                error_msg = SFTPStatusMessage(
-                    int(message.request_id),
-                    SSH_FX_PERMISSION_DENIED,
-                    "Permission denied",
-                )
-                self._send_message(error_msg)
-                return
-            except FileExistsError:
-                error_msg = SFTPStatusMessage(
-                    int(message.request_id), SSH_FX_FAILURE, "File already exists"
-                )
-                self._send_message(error_msg)
-                return
-
-            # Create handle
-            handle_id = self._generate_handle()
-            from typing import BinaryIO, cast
-
-            handle = SFTPHandle(
-                handle_id,
-                resolved_path,
-                message.pflags,
-                file_obj=cast(BinaryIO, file_obj),
-            )
-
-            with self._handle_lock:
-                self._handles[handle_id] = handle
-
-            # Send handle response
-            handle_msg = SFTPHandleMessage(message.request_id, handle_id)
-            self._send_message(handle_msg)
 
         except SFTPError as e:
             assert message.request_id is not None

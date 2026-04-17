@@ -689,25 +689,29 @@ class KeyExchange:
         hash_data.extend(write_string(server_version))
 
         # Client KEXINIT
-        assert self._client_kexinit is not None
+        if self._client_kexinit is None:
+            raise CryptoException("Missing client KEXINIT")
         hash_data.extend(write_string(self._client_kexinit))
 
         # Server KEXINIT
-        assert self._server_kexinit is not None
+        if self._server_kexinit is None:
+            raise CryptoException("Missing server KEXINIT")
         hash_data.extend(write_string(self._server_kexinit))
 
         # Server host key
         hash_data.extend(write_string(server_host_key))
 
         # Client DH public key
-        assert self._dh_public_key_mpint is not None
+        if self._dh_public_key_mpint is None:
+            raise CryptoException("Missing DH public key")
         hash_data.extend(self._dh_public_key_mpint)
 
         # Server DH public key (f) - must be encoded as mpint/string
         hash_data.extend(write_string(server_dh_public))
 
         # Shared secret
-        assert self._shared_secret is not None
+        if self._shared_secret is None:
+            raise CryptoException("Missing shared secret")
         hash_data.extend(self._shared_secret)
 
         # Compute SHA256 hash
@@ -717,12 +721,16 @@ class KeyExchange:
 
     def _generate_session_keys(self) -> None:
         """Generate session keys from shared secret and exchange hash."""
-        if not self._shared_secret or not self._exchange_hash or not self._session_id:
+        if (
+            not self._shared_secret
+            or not self._exchange_hash
+            or not self._session_id
+            or self._encryption_algorithm_c2s is None
+            or self._encryption_algorithm_s2c is None
+        ):
             raise CryptoException("Missing key exchange data for key generation")
 
         # Get key lengths from negotiated ciphers
-        assert self._encryption_algorithm_c2s is not None
-        assert self._encryption_algorithm_s2c is not None
         c2s_cipher_info = self._cipher_suite.get_cipher_info(
             self._encryption_algorithm_c2s
         )
