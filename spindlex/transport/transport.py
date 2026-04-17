@@ -1989,7 +1989,9 @@ class Transport:
                 )
             elif cipher_name in ["aes128-gcm@openssh.com", "aes256-gcm@openssh.com"]:
                 # Nonce is 4 bytes salt + 8 bytes sequence number
-                nonce = self._iv_out_active + struct.pack(">Q", self._sequence_number_out)
+                nonce = self._iv_out_active + struct.pack(
+                    ">Q", self._sequence_number_out
+                )
                 return self._crypto_backend.encrypt(
                     cipher_name, self._encryption_key_out_active, nonce, packet
                 )
@@ -2150,9 +2152,7 @@ class Transport:
             received_mac = self._recv_bytes(mac_len)
 
             mac_data = (
-                struct.pack(">I", self._sequence_number_in)
-                + length_data
-                + packet_data
+                struct.pack(">I", self._sequence_number_in) + length_data + packet_data
             )
             expected_mac = self._crypto_backend.compute_mac(
                 self._mac_in_active, self._mac_key_in_active, mac_data
