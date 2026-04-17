@@ -33,7 +33,7 @@ class SSHServer:
     def __init__(self) -> None:
         """Initialize SSH server with default settings."""
         self._server_key: Optional[PKey] = None
-        self._transport: Optional[Transport] = None
+        self._transports: list[Transport] = []
         self._authenticated_users: dict[str, bool] = {}
         self._lock = threading.Lock()
 
@@ -83,7 +83,8 @@ class SSHServer:
         # Set server interface for authentication callbacks
         transport.set_server_interface(self)
 
-        self._transport = transport
+        with self._lock:
+            self._transports.append(transport)
         return transport
 
     def check_auth_password(self, username: str, password: str) -> int:
@@ -423,29 +424,32 @@ class SSHServer:
 
     def get_active_channels(self) -> list[Channel]:
         """
-        Get list of active channels.
+        Get list of all active channels across all connections.
 
         Returns:
             List of active Channel instances
         """
-        if self._transport is None:
-            return []
-
+        channels = []
         with self._lock:
-            return list(self._transport._channels.values())
+            # Clean up inactive transports
+            self._transports = [t for t in self._transports if t.active]
+            for transport in self._transports:
+                channels.extend(list(transport._channels.values()))
+        return channels
 
     def get_channel_count(self) -> int:
         """
-        Get number of active channels.
+        Get total number of active channels across all connections.
 
         Returns:
             Number of active channels
         """
-        if self._transport is None:
-            return 0
-
+        count = 0
         with self._lock:
-            return len(self._transport._channels)
+            self._transports = [t for t in self._transports if t.active]
+            for transport in self._transports:
+                count += len(transport._channels)
+        return count
 
     def close_channel(self, channel: Channel) -> None:
         """
@@ -631,7 +635,7 @@ class SSHServerManager:
                     socket.SOL_SOCKET, socket.SO_REUSEADDR, 1
                 )
                 self._server_socket.bind((self._bind_address, self._port))
-                self._server_socket.listen(5)
+                self._server_socket.listen(socket.SOMAXCONN)
 
                 self._running = True
 

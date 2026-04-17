@@ -133,7 +133,7 @@ class LocalPortForwarder:
                 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 server_socket.bind(local_addr)
-                server_socket.listen(5)
+                server_socket.listen(socket.SOMAXCONN)
 
                 # Create tunnel object
                 tunnel = ForwardingTunnel(tunnel_id, local_addr, remote_addr, "local")

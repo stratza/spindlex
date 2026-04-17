@@ -5,6 +5,7 @@ Core SSH transport functionality including protocol handshake, key exchange,
 authentication, and secure packet transmission.
 """
 
+import hmac
 import logging
 import socket
 import struct
@@ -174,8 +175,6 @@ class Transport:
         self._rekey_time_limit = rekey_time_limit or 3600  # 1 hour default
 
         # Cipher instances
-        self._encryptor: Optional[Any] = None
-        self._decryptor: Optional[Any] = None
         self._encryptor_instance: Optional[Any] = None
         self._decryptor_instance: Optional[Any] = None
 
@@ -185,6 +184,7 @@ class Transport:
         self._packet_buffer = b""
         self._lock = threading.RLock()
         self._read_lock = threading.RLock()
+        self._kex_condition = threading.Condition(self._lock)
         self._server_host_key_blob = None
 
         self._kex_in_progress = False
@@ -255,37 +255,38 @@ class Transport:
             self._connect_timeout = timeout
 
         try:
-            with self._lock:
-                if self._active:
-                    raise TransportException("Transport already active")
+            with self._read_lock:
+                with self._lock:
+                    if self._active:
+                        raise TransportException("Transport already active")
 
-                self._server_mode = False
-                self._client_version = create_version_string()
+                    self._server_mode = False
+                    self._client_version = create_version_string()
 
-                # Set socket timeout for handshake
-                old_timeout = self._socket.gettimeout()
-                self._socket.settimeout(self._connect_timeout)
+                    # Set socket timeout for handshake
+                    old_timeout = self._socket.gettimeout()
+                    self._socket.settimeout(self._connect_timeout)
 
-                try:
-                    # Perform SSH handshake
-                    self._logger.debug("Starting handshake...")
-                    self._do_handshake()
-                    self._logger.debug("Handshake complete.")
-
-                    # Start key exchange
-                    self._logger.debug("Starting KEX...")
-                    self._start_kex()
-                    self._logger.debug("KEX complete.")
-
-                    self._active = True
-
-                finally:
-                    # Restore original socket timeout
                     try:
-                        if self._socket and self._socket.fileno() != -1:
-                            self._socket.settimeout(old_timeout)
-                    except (OSError, AttributeError):
-                        pass
+                        # Perform SSH handshake
+                        self._logger.debug("Starting handshake...")
+                        self._do_handshake()
+                        self._logger.debug("Handshake complete.")
+
+                        # Start key exchange
+                        self._logger.debug("Starting KEX...")
+                        self._start_kex()
+                        self._logger.debug("KEX complete.")
+
+                        self._active = True
+
+                    finally:
+                        # Restore original socket timeout
+                        try:
+                            if self._socket and self._socket.fileno() != -1:
+                                self._socket.settimeout(old_timeout)
+                        except (OSError, AttributeError):
+                            pass
 
         except Exception as e:
             self.close()
@@ -308,38 +309,39 @@ class Transport:
             self._connect_timeout = timeout
 
         try:
-            with self._lock:
-                if self._active:
-                    raise TransportException("Transport already active")
+            with self._read_lock:
+                with self._lock:
+                    if self._active:
+                        raise TransportException("Transport already active")
 
-                self._server_mode = True
-                self._server_key = server_key
-                self._server_version = create_version_string()
+                    self._server_mode = True
+                    self._server_key = server_key
+                    self._server_version = create_version_string()
 
-                # Set socket timeout for handshake
-                old_timeout = self._socket.gettimeout()
-                self._socket.settimeout(self._connect_timeout)
+                    # Set socket timeout for handshake
+                    old_timeout = self._socket.gettimeout()
+                    self._socket.settimeout(self._connect_timeout)
 
-                try:
-                    # Perform SSH handshake
-                    self._logger.debug("Starting handshake...")
-                    self._do_handshake()
-                    self._logger.debug("Handshake complete.")
-
-                    # Start key exchange
-                    self._logger.debug("Starting KEX...")
-                    self._start_kex()
-                    self._logger.debug("KEX complete.")
-
-                    self._active = True
-
-                finally:
-                    # Restore original socket timeout
                     try:
-                        if self._socket and self._socket.fileno() != -1:
-                            self._socket.settimeout(old_timeout)
-                    except (OSError, AttributeError):
-                        pass
+                        # Perform SSH handshake
+                        self._logger.debug("Starting handshake...")
+                        self._do_handshake()
+                        self._logger.debug("Handshake complete.")
+
+                        # Start key exchange
+                        self._logger.debug("Starting KEX...")
+                        self._start_kex()
+                        self._logger.debug("KEX complete.")
+
+                        self._active = True
+
+                    finally:
+                        # Restore original socket timeout
+                        try:
+                            if self._socket and self._socket.fileno() != -1:
+                                self._socket.settimeout(old_timeout)
+                        except (OSError, AttributeError):
+                            pass
 
         except Exception as e:
             self.close()
@@ -1411,10 +1413,8 @@ class Transport:
 
     def _recv_version(self) -> None:
         """Receive and validate SSH version string with retries."""
-        import time
-
-        max_retries = 15
-        retry_delay = 2.0
+        max_retries = 5
+        retry_delay = 1.0
         version_line = b""
 
         for attempt in range(max_retries):
@@ -1522,8 +1522,11 @@ class Transport:
         Start key exchange process in the background.
         Includes a 30-second watchdog to prevent hanging on stalled connections.
         """
-        self._kex_in_progress = True
-        self._kex_thread = threading.current_thread()
+        with self._lock:
+            self._kex_in_progress = True
+            self._kex_thread = threading.current_thread()
+            self._kex_condition.notify_all()
+
         timeout = 30.0
 
         # Set a temporary timeout for key exchange
@@ -1553,8 +1556,11 @@ class Transport:
                 raise
             raise TransportException(f"Rekeying failed or timed out: {e}") from e
         finally:
-            self._kex_in_progress = False
-            self._kex_thread = None  # type: ignore[assignment]
+            with self._lock:
+                self._kex_in_progress = False
+                self._kex_thread = None  # type: ignore[assignment]
+                self._kex_condition.notify_all()
+
             # Reset byte count after successful rekey
             with self._lock:
                 self._bytes_since_rekey = 0
@@ -1664,7 +1670,7 @@ class Transport:
             with self._lock:
                 packet = self._build_packet(payload)
 
-                if self._encryptor:
+                if self._encryptor_instance:
                     packet = self._encrypt_packet(packet)
 
                 self._socket.sendall(packet)
@@ -1811,25 +1817,25 @@ class Transport:
         Receive SSH message, checking the queue first.
         """
         while True:
-            with self._lock:
-                if self._message_queue:
-                    return self._message_queue.pop(0)
+            while True:
+                with self._lock:
+                    if self._message_queue:
+                        return self._message_queue.pop(0)
 
-                # If no rekeying or we are the rekeying thread, proceed to read
-                if not self._kex_in_progress or threading.current_thread() == getattr(
-                    self, "_kex_thread", None
-                ):
-                    break
+                    # If no rekeying or we are the rekeying thread, proceed to read
+                    if (
+                        not self._kex_in_progress
+                        or threading.current_thread()
+                        == getattr(self, "_kex_thread", None)
+                    ):
+                        break
 
-            # Yield and wait for rekeying thread to process packets
-            time.sleep(0.01)
+                    # Wait for rekeying thread to process packets or finish KEX
+                    self._kex_condition.wait(0.1)
 
-        msg = self._read_message()
-        if msg is None:
-            # Should only happen if we yielded and then read_message returned None
-            # because rekeying is still in progress (unlikely given the break above)
-            return self._recv_message()
-        return msg
+                msg = self._read_message()
+            if msg is not None:
+                return msg
 
     def _expect_message(self, *allowed_types: int) -> Message:
         """
@@ -1852,8 +1858,8 @@ class Transport:
                     ):
                         break
 
-                # Yield and wait for rekeying thread to process packets
-                time.sleep(0.01)
+                    # Wait for rekeying thread to process packets or finish KEX
+                    self._kex_condition.wait(0.1)
 
             # 2. Not in queue, read from socket
             read_msg = self._read_message()
@@ -1905,12 +1911,12 @@ class Transport:
         if iv is None:
             raise TransportException("Encryption parameters not fully negotiated")
 
-        self._encryptor = self._crypto_backend.create_cipher(cipher_name, key, iv)
+        encryptor = self._crypto_backend.create_cipher(cipher_name, key, iv)
         if not cipher_name.endswith("@openssh.com") and not cipher_name.endswith(
             "-gcm"
         ):
             # It's a standard cipher, needs separate encryptor instance for state
-            self._encryptor_instance = self._encryptor.encryptor()
+            self._encryptor_instance = encryptor.encryptor()
         else:
             self._encryptor_instance = None
 
@@ -1938,12 +1944,12 @@ class Transport:
         if iv is None:
             raise TransportException("Encryption parameters not fully negotiated")
 
-        self._decryptor = self._crypto_backend.create_cipher(cipher_name, key, iv)
+        decryptor = self._crypto_backend.create_cipher(cipher_name, key, iv)
         if not cipher_name.endswith("@openssh.com") and not cipher_name.endswith(
             "-gcm"
         ):
             # It's a standard cipher, needs separate decryptor instance for state
-            self._decryptor_instance = self._decryptor.decryptor()
+            self._decryptor_instance = decryptor.decryptor()
         else:
             self._decryptor_instance = None
 
@@ -2045,7 +2051,7 @@ class Transport:
                     self._mac_in_active, self._mac_key_in_active, mac_data
                 )
 
-                if received_mac != expected_mac:
+                if not hmac.compare_digest(received_mac, expected_mac):
                     raise TransportException("MAC verification failed")
 
             return bytes(length_data + packet_payload)
@@ -2065,6 +2071,24 @@ class Transport:
             # Read rest of packet
             packet_data = self._recv_bytes(packet_length)
 
+            # Verify MAC if present (even if unencrypted)
+            if self._mac_in_active and self._mac_key_in_active:
+                mac_info = self._kex._cipher_suite.get_mac_info(self._mac_in_active)
+                mac_len = mac_info["digest_len"]
+                received_mac = self._recv_bytes(mac_len)
+
+                mac_data = (
+                    struct.pack(">I", self._sequence_number_in)
+                    + length_data
+                    + packet_data
+                )
+                expected_mac = self._crypto_backend.compute_mac(
+                    self._mac_in_active, self._mac_key_in_active, mac_data
+                )
+
+                if not hmac.compare_digest(received_mac, expected_mac):
+                    raise TransportException("MAC verification failed")
+
             # Return complete packet
             return length_data + packet_data
 
@@ -2081,45 +2105,45 @@ class Transport:
         Raises:
             TransportException: If receive fails
         """
-        # Check if we have enough in buffer
-        with self._lock:
-            if len(self._packet_buffer) >= length:
-                data = self._packet_buffer[:length]
-                self._packet_buffer = self._packet_buffer[length:]
-                return data
+        with self._read_lock:
+            # Check if we have enough in buffer
+            with self._lock:
+                if len(self._packet_buffer) >= length:
+                    data = self._packet_buffer[:length]
+                    self._packet_buffer = self._packet_buffer[length:]
+                    return data
 
-            # Need more data, start with what we have
-            data = self._packet_buffer
-            self._packet_buffer = b""
+                # Need more data, start with what we have
+                data = self._packet_buffer
+                self._packet_buffer = b""
 
-        while len(data) < length:
-            try:
-                # If we need to read from socket, try to read more than requested to buffer it
-                # Read up to 32KB at a time to reduce syscalls and round-trips
-                to_read = max(32768, length - len(data))
-                with self._read_lock:
+            while len(data) < length:
+                try:
+                    # If we need to read from socket, try to read more than requested to buffer it
+                    # Read up to 32KB at a time to reduce syscalls and round-trips
+                    to_read = max(32768, length - len(data))
                     chunk = self._socket.recv(to_read)
-                if not chunk:
-                    self._logger.debug("Socket closed while receiving")
-                    raise TransportException("Connection closed unexpectedly")
+                    if not chunk:
+                        self._logger.debug("Socket closed while receiving")
+                        raise TransportException("Connection closed unexpectedly")
 
-                self._logger.debug(f"Received {len(chunk)} bytes: {chunk!r}")
-                data += chunk
-            except socket.timeout:
-                # If we have some data, but not enough, keep it in buffer
-                with self._lock:
-                    self._packet_buffer = data
-                raise TransportException("Timeout receiving data")
-            except OSError as e:
-                raise TransportException(f"Socket error: {e}") from e
+                    self._logger.debug(f"Received {len(chunk)} bytes")
+                    data += chunk
+                except socket.timeout:
+                    # If we have some data, but not enough, keep it in buffer
+                    with self._lock:
+                        self._packet_buffer = data
+                    raise TransportException("Timeout receiving data")
+                except OSError as e:
+                    raise TransportException(f"Socket error: {e}") from e
 
-        # If we read more than requested, store the rest in buffer
-        with self._lock:
-            if len(data) > length:
-                self._packet_buffer = data[length:]
-                return data[:length]
+            # If we read more than requested, store the rest in buffer
+            with self._lock:
+                if len(data) > length:
+                    self._packet_buffer = data[length:]
+                    return data[:length]
 
-        return data
+            return data
 
     @property
     def active(self) -> bool:

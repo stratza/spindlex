@@ -30,10 +30,6 @@ if TYPE_CHECKING:
 
         GSSAPI_AVAILABLE = True
     except ImportError:
-        gssapi = Any
-        Credentials = Any
-        Name = Any
-        SecurityContext = Any
         GSSAPI_AVAILABLE = False
 else:
     try:
@@ -85,11 +81,12 @@ else:
         _Name = MockName
         _SecurityContext = MockSecurityContext
 
-    # Expose the internal names for use in the rest of the module
-    gssapi = _gssapi
-    Credentials = _Credentials
-    Name = _Name
-    SecurityContext = _SecurityContext
+    # Expose the names for use in the rest of the module
+    # Use cast(Any, ...) or simple assignment where it doesn't break types
+    gssapi: Any = _gssapi
+    Credentials: Any = _Credentials
+    Name: Any = _Name
+    SecurityContext: Any = _SecurityContext
 
 
 class GSSAPIAuth:
@@ -180,8 +177,10 @@ class GSSAPIAuth:
 
             return Name(service_name, name_type=NameType.hostbased_service)
         else:
-            # In mock mode, Name is MockName
-            return Name(service_name, name_type=Name.NameType.hostbased_service)
+            # In mock mode, Name is MockName which has NameType attribute
+            # Use Any to bypass mypy check for the mock
+            mock_name_class: Any = Name
+            return Name(service_name, name_type=mock_name_class.NameType.hostbased_service)
 
     def _init_gss_context(self, target_name: Name, delegate_creds: bool) -> None:
         """

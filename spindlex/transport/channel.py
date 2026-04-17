@@ -68,6 +68,7 @@ class Channel:
         # Threading
         self._lock = threading.RLock()
         self._data_event = threading.Event()
+        self._window_event = threading.Event()
         self._request_event = threading.Event()
         self._timeout: Optional[float] = None
 
@@ -109,39 +110,75 @@ class Channel:
         if isinstance(data, str):
             data = data.encode(SSH_STRING_ENCODING)
 
-        with self._lock:
-            if self._closed:
-                raise ChannelException("Channel is closed")
+        orig_data_len = len(data)
+        sent_total = 0
+        start_time = time.time()
 
-            if self._eof_sent:
-                raise ChannelException("EOF already sent on channel")
+        while sent_total < orig_data_len:
+            with self._lock:
+                if self._closed:
+                    raise ChannelException("Channel is closed")
 
-            if self._remote_channel_id is None:
-                raise ChannelException("Channel not properly opened")
+                if self._eof_sent:
+                    raise ChannelException("EOF already sent on channel")
 
-            # Check flow control - don't send more than remote window allows
-            if len(data) > self._remote_window_size:
-                # Send only what fits in the window
-                data = data[: self._remote_window_size]
+                if self._remote_channel_id is None:
+                    raise ChannelException("Channel not properly opened")
 
-            # Check maximum packet size
-            if len(data) > self._remote_max_packet_size:
-                data = data[: self._remote_max_packet_size]
+                # Wait for window space if it's empty
+                while self._remote_window_size <= 0:
+                    # Check timeout
+                    if self._timeout is not None:
+                        elapsed = time.time() - start_time
+                        if elapsed >= self._timeout:
+                            raise ChannelException("Timeout waiting for window space")
+                        wait_timeout = self._timeout - elapsed
+                    else:
+                        wait_timeout = None
 
-            if len(data) == 0:
-                return 0
+                    # Release lock and wait for window adjust or close
+                    self._window_event.clear()
+                    self._lock.release()
+                    try:
+                        if not self._window_event.wait(timeout=wait_timeout):
+                            if self._timeout is not None:
+                                raise ChannelException(
+                                    "Timeout waiting for window space"
+                                )
+                            # If no timeout but wait returned False, something is wrong
+                            # but usually wait() returns False only on timeout.
+                    finally:
+                        self._lock.acquire()
 
-            try:
-                # Send data through transport
-                self._transport._send_channel_data(self._channel_id, data)
+                    # Re-check channel state after waking up
+                    if self._closed:
+                        raise ChannelException("Channel is closed while waiting")
 
-                # Update remote window size
-                self._remote_window_size -= len(data)
+                # We have some window space
+                can_send = min(
+                    len(data), self._remote_window_size, self._remote_max_packet_size
+                )
 
-                return len(data)
+                if can_send <= 0:
+                    # Should not happen if window_size > 0, but safety check
+                    continue
 
-            except Exception as e:
-                raise ChannelException(f"Failed to send data: {e}") from e
+                chunk = data[:can_send]
+
+                try:
+                    # Send data through transport
+                    self._transport._send_channel_data(self._channel_id, chunk)
+
+                    # Update remote window size
+                    self._remote_window_size -= len(chunk)
+
+                    sent_total += len(chunk)
+                    data = data[len(chunk) :]
+
+                except Exception as e:
+                    raise ChannelException(f"Failed to send data: {e}") from e
+
+        return sent_total
 
     def recv(self, nbytes: int) -> bytes:
         """
@@ -606,6 +643,7 @@ class Channel:
         with self._lock:
             self._closed = True
             self._data_event.set()
+            self._window_event.set()
 
     def _handle_window_adjust(self, bytes_to_add: int) -> None:
         """
@@ -616,6 +654,7 @@ class Channel:
         """
         with self._lock:
             self._remote_window_size += bytes_to_add
+            self._window_event.set()
 
     def _handle_request_success(self) -> None:
         """Handle request success from remote side."""

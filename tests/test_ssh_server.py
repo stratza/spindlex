@@ -73,7 +73,8 @@ class TestSSHServer:
         mock_trans = MagicMock()
         mock_chan = MagicMock()
         mock_trans._channels = {1: mock_chan}
-        server._transport = mock_trans
+        mock_trans.active = True
+        server._transports.append(mock_trans)
 
         assert server.get_channel_count() == 1
         assert server.get_active_channels() == [mock_chan]
