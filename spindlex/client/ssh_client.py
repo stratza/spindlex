@@ -752,6 +752,15 @@ class SSHClient:
                 raise
             raise SSHException(f"Failed to get port forwarding tunnels: {e}") from e
 
+    @property
+    def is_active(self) -> bool:
+        """Check if SSH connection is active."""
+        return self._transport is not None and self._transport.active
+
+    def get_host_keys(self) -> HostKeyStorage:
+        """Get host key storage instance."""
+        return self._host_key_storage
+
     def __enter__(self) -> "SSHClient":
         """Context manager entry."""
         return self
