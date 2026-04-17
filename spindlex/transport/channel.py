@@ -90,12 +90,13 @@ class Channel:
         """
         return self._timeout
 
-    def send(self, data: Union[bytes, str]) -> int:
+    def send(self, data: Union[bytes, str], timeout: Optional[float] = None) -> int:
         """
         Send data through channel.
 
         Args:
             data: Data to send (bytes or string)
+            timeout: Optional timeout for this operation (overrides channel timeout)
 
         Returns:
             Number of bytes sent
@@ -110,75 +111,70 @@ class Channel:
         if isinstance(data, str):
             data = data.encode(SSH_STRING_ENCODING)
 
-        orig_data_len = len(data)
-        sent_total = 0
         start_time = time.time()
+        
+        # Use effective timeout
+        effective_timeout = timeout if timeout is not None else self._timeout
 
-        while sent_total < orig_data_len:
-            with self._lock:
-                if self._closed:
-                    raise ChannelException("Channel is closed")
+        with self._lock:
+            if self._closed:
+                raise ChannelException("Channel is closed")
 
-                if self._eof_sent:
-                    raise ChannelException("EOF already sent on channel")
+            if self._eof_sent:
+                raise ChannelException("EOF already sent on channel")
 
-                if self._remote_channel_id is None:
-                    raise ChannelException("Channel not properly opened")
+            if self._remote_channel_id is None:
+                raise ChannelException("Channel not properly opened")
 
-                # Wait for window space if it's empty
-                while self._remote_window_size <= 0:
-                    # Check timeout
-                    if self._timeout is not None:
-                        elapsed = time.time() - start_time
-                        if elapsed >= self._timeout:
-                            raise ChannelException("Timeout waiting for window space")
-                        wait_timeout = self._timeout - elapsed
-                    else:
-                        wait_timeout = None
+            # Wait for window space if it's empty
+            while self._remote_window_size <= 0:
+                # Check timeout
+                if effective_timeout is not None:
+                    elapsed = time.time() - start_time
+                    if elapsed >= effective_timeout:
+                        raise ChannelException("Timeout waiting for window space")
+                    wait_timeout = effective_timeout - elapsed
+                else:
+                    wait_timeout = None
 
-                    # Release lock and wait for window adjust or close
-                    self._window_event.clear()
-                    self._lock.release()
-                    try:
-                        if not self._window_event.wait(timeout=wait_timeout):
-                            if self._timeout is not None:
-                                raise ChannelException(
-                                    "Timeout waiting for window space"
-                                )
-                            # If no timeout but wait returned False, something is wrong
-                            # but usually wait() returns False only on timeout.
-                    finally:
-                        self._lock.acquire()
-
-                    # Re-check channel state after waking up
-                    if self._closed:
-                        raise ChannelException("Channel is closed while waiting")
-
-                # We have some window space
-                can_send = min(
-                    len(data), self._remote_window_size, self._remote_max_packet_size
-                )
-
-                if can_send <= 0:
-                    # Should not happen if window_size > 0, but safety check
-                    continue
-
-                chunk = data[:can_send]
-
+                # Release lock and wait for window adjust or close
+                self._window_event.clear()
+                self._lock.release()
                 try:
-                    # Send data through transport
-                    self._transport._send_channel_data(self._channel_id, chunk)
+                    if not self._window_event.wait(timeout=wait_timeout):
+                        if effective_timeout is not None:
+                            raise ChannelException("Timeout waiting for window space")
+                        # If no timeout, we just return 0
+                        return 0
+                finally:
+                    self._lock.acquire()
 
-                    # Update remote window size
-                    self._remote_window_size -= len(chunk)
+                # Re-check channel state after waking up
+                if self._closed:
+                    raise ChannelException("Channel is closed while waiting")
 
-                    sent_total += len(chunk)
-                    data = data[len(chunk) :]
+            # We have some window space
+            # Send at most one packet (to match standard send() behavior)
+            can_send = min(
+                len(data), self._remote_window_size, self._remote_max_packet_size
+            )
 
-                except Exception as e:
-                    raise ChannelException(f"Failed to send data: {e}") from e
+            if can_send <= 0:
+                return 0
 
-        return sent_total
+            chunk = data[:can_send]
+
+            try:
+                # Send data through transport
+                self._transport._send_channel_data(self._channel_id, chunk)
+
+                # Update remote window size
+                self._remote_window_size -= len(chunk)
+
+                return len(chunk)
+
+            except Exception as e:
+                raise ChannelException(f"Failed to send data: {e}") from e
 
     def recv(self, nbytes: int) -> bytes:
         """
@@ -218,8 +214,8 @@ class Channel:
                         return bytes(result)
 
                 # No data available in buffer
-                if self._eof_received:
-                    return b""  # EOF reached and buffer is empty
+                if self._eof_received or not self._transport.active:
+                    return b""  # EOF reached or transport inactive
 
                 # Check total timeout
                 if self._timeout is not None:

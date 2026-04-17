@@ -1911,6 +1911,10 @@ class Transport:
         if iv is None:
             raise TransportException("Encryption parameters not fully negotiated")
 
+        self._cipher_out_active = cipher_name
+        self._encryption_key_out_active = key
+        self._iv_out_active = iv
+
         encryptor = self._crypto_backend.create_cipher(cipher_name, key, iv)
         if not cipher_name.endswith("@openssh.com") and not cipher_name.endswith(
             "-gcm"
@@ -1944,6 +1948,10 @@ class Transport:
         if iv is None:
             raise TransportException("Encryption parameters not fully negotiated")
 
+        self._cipher_in_active = cipher_name
+        self._encryption_key_in_active = key
+        self._iv_in_active = iv
+
         decryptor = self._crypto_backend.create_cipher(cipher_name, key, iv)
         if not cipher_name.endswith("@openssh.com") and not cipher_name.endswith(
             "-gcm"
@@ -1971,7 +1979,22 @@ class Transport:
                 return bytes(encrypted + mac)
             return bytes(encrypted)
 
-        return packet  # Fallback for AEAD which should be handled above
+        # Handle AEAD ciphers
+        if hasattr(self, "_cipher_out_active") and self._cipher_out_active:
+            cipher_name = self._cipher_out_active
+            if cipher_name == "chacha20-poly1305@openssh.com":
+                nonce = struct.pack(">Q", self._sequence_number_out)
+                return self._crypto_backend.encrypt(
+                    cipher_name, self._encryption_key_out_active, nonce, packet
+                )
+            elif cipher_name in ["aes128-gcm@openssh.com", "aes256-gcm@openssh.com"]:
+                # Nonce is 4 bytes salt + 8 bytes sequence number
+                nonce = self._iv_out_active + struct.pack(">Q", self._sequence_number_out)
+                return self._crypto_backend.encrypt(
+                    cipher_name, self._encryption_key_out_active, nonce, packet
+                )
+
+        return packet
 
     def _build_packet(self, payload: bytes) -> bytes:
         """
@@ -1985,9 +2008,10 @@ class Transport:
         """
         # Calculate padding
         block_size = 8  # Minimum block size
-        if self._cipher_c2s:
+        cipher_name = getattr(self, "_cipher_c2s", None)
+        if cipher_name:
             # Get block size from cipher
-            if "aes" in self._cipher_c2s:
+            if "aes" in cipher_name:
                 block_size = 16
 
         padding_length = block_size - (
@@ -2055,42 +2079,90 @@ class Transport:
                     raise TransportException("MAC verification failed")
 
             return bytes(length_data + packet_payload)
-        else:
-            # Unencrypted or AEAD (simplified unencrypted here for now to get connection working)
-            # Read packet length
-            length_data = self._recv_bytes(PACKET_LENGTH_SIZE)
-            packet_length = struct.unpack(">I", length_data)[0]
 
-            # Validate packet length
-            if packet_length < MIN_PACKET_SIZE - PACKET_LENGTH_SIZE:
-                raise ProtocolException(f"Invalid packet length: {packet_length}")
+        # Handle AEAD ciphers
+        if hasattr(self, "_cipher_in_active") and self._cipher_in_active:
+            cipher_name = self._cipher_in_active
+            if cipher_name == "chacha20-poly1305@openssh.com":
+                nonce = struct.pack(">Q", self._sequence_number_in)
 
-            if packet_length > MAX_PACKET_SIZE - PACKET_LENGTH_SIZE:
-                raise ProtocolException(f"Packet too large: {packet_length}")
-
-            # Read rest of packet
-            packet_data = self._recv_bytes(packet_length)
-
-            # Verify MAC if present (even if unencrypted)
-            if self._mac_in_active and self._mac_key_in_active:
-                mac_info = self._kex._cipher_suite.get_mac_info(self._mac_in_active)
-                mac_len = mac_info["digest_len"]
-                received_mac = self._recv_bytes(mac_len)
-
-                mac_data = (
-                    struct.pack(">I", self._sequence_number_in)
-                    + length_data
-                    + packet_data
+                # 1. Receive and decrypt length
+                enc_len = self._recv_bytes(PACKET_LENGTH_SIZE)
+                dec_len_bytes = self._crypto_backend.decrypt_length(
+                    cipher_name, self._encryption_key_in_active, nonce, enc_len
                 )
-                expected_mac = self._crypto_backend.compute_mac(
-                    self._mac_in_active, self._mac_key_in_active, mac_data
+                packet_length = struct.unpack(">I", dec_len_bytes)[0]
+
+                # Validate length
+                if packet_length < MIN_PACKET_SIZE - PACKET_LENGTH_SIZE:
+                    raise ProtocolException(f"Invalid packet length: {packet_length}")
+
+                # 2. Receive rest of packet + MAC (16 bytes)
+                remaining_len = packet_length + 16
+                rest_of_packet = self._recv_bytes(remaining_len)
+
+                # 3. Decrypt and verify
+                full_encrypted = enc_len + rest_of_packet
+                return self._crypto_backend.decrypt(
+                    cipher_name, self._encryption_key_in_active, nonce, full_encrypted
                 )
 
-                if not hmac.compare_digest(received_mac, expected_mac):
-                    raise TransportException("MAC verification failed")
+            elif cipher_name in ["aes128-gcm@openssh.com", "aes256-gcm@openssh.com"]:
+                nonce = self._iv_in_active + struct.pack(">Q", self._sequence_number_in)
 
-            # Return complete packet
-            return length_data + packet_data
+                # 1. Receive length (unencrypted)
+                len_data = self._recv_bytes(PACKET_LENGTH_SIZE)
+                packet_length = struct.unpack(">I", len_data)[0]
+
+                # Validate length
+                if packet_length < MIN_PACKET_SIZE - PACKET_LENGTH_SIZE:
+                    raise ProtocolException(f"Invalid packet length: {packet_length}")
+
+                # 2. Receive rest of packet + Tag (16 bytes)
+                remaining_len = packet_length + 16
+                rest_of_packet = self._recv_bytes(remaining_len)
+
+                # 3. Decrypt and verify
+                full_packet = len_data + rest_of_packet
+                return self._crypto_backend.decrypt(
+                    cipher_name, self._encryption_key_in_active, nonce, full_packet
+                )
+
+        # Unencrypted or AEAD (simplified unencrypted here for now to get connection working)
+        # Read packet length
+        length_data = self._recv_bytes(PACKET_LENGTH_SIZE)
+        packet_length = struct.unpack(">I", length_data)[0]
+
+        # Validate packet length
+        if packet_length < MIN_PACKET_SIZE - PACKET_LENGTH_SIZE:
+            raise ProtocolException(f"Invalid packet length: {packet_length}")
+
+        if packet_length > MAX_PACKET_SIZE - PACKET_LENGTH_SIZE:
+            raise ProtocolException(f"Packet too large: {packet_length}")
+
+        # Read rest of packet
+        packet_data = self._recv_bytes(packet_length)
+
+        # Verify MAC if present (even if unencrypted)
+        if self._mac_in_active and self._mac_key_in_active:
+            mac_info = self._kex._cipher_suite.get_mac_info(self._mac_in_active)
+            mac_len = mac_info["digest_len"]
+            received_mac = self._recv_bytes(mac_len)
+
+            mac_data = (
+                struct.pack(">I", self._sequence_number_in)
+                + length_data
+                + packet_data
+            )
+            expected_mac = self._crypto_backend.compute_mac(
+                self._mac_in_active, self._mac_key_in_active, mac_data
+            )
+
+            if not hmac.compare_digest(received_mac, expected_mac):
+                raise TransportException("MAC verification failed")
+
+        # Return complete packet
+        return length_data + packet_data
 
     def _recv_bytes(self, length: int) -> bytes:
         """
@@ -2125,6 +2197,7 @@ class Transport:
                     chunk = self._socket.recv(to_read)
                     if not chunk:
                         self._logger.debug("Socket closed while receiving")
+                        self.close()
                         raise TransportException("Connection closed unexpectedly")
 
                     self._logger.debug(f"Received {len(chunk)} bytes")

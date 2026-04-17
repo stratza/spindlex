@@ -747,7 +747,7 @@ class SSHServerManager:
                 except (socket.timeout, TransportException):
                     # Check if still active
                     if not transport.active:
-                        break  # type: ignore[unreachable]
+                        break
                     continue
                 except Exception as e:
                     self._logger.debug(
