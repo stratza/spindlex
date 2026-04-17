@@ -112,7 +112,7 @@ class Channel:
             data = data.encode(SSH_STRING_ENCODING)
 
         start_time = time.time()
-        
+
         # Use effective timeout
         effective_timeout = timeout if timeout is not None else self._timeout
 

@@ -134,7 +134,7 @@ def test_rekeying_end_to_end(ssh_server):
         initial_rekey_time = transport._last_rekey_time
 
         # Transfer more than 1KB to trigger rekey
-        # We use a command that works on most systems. 
+        # We use a command that works on most systems.
         # On Ubuntu, /dev/urandom and dd should be available.
         stdin, stdout, stderr = client.exec_command(
             "dd if=/dev/urandom bs=2048 count=1"

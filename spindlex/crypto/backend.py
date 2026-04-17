@@ -11,7 +11,7 @@ from typing import Any, Protocol
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, hmac, poly1305
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM, ChaCha20Poly1305
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from ..exceptions import CryptoException
 
@@ -132,7 +132,9 @@ class CryptoBackend(Protocol):
         """Decrypt data using specified cipher."""
         ...
 
-    def decrypt_length(self, algorithm: str, key: bytes, iv: bytes, data: bytes) -> bytes:
+    def decrypt_length(
+        self, algorithm: str, key: bytes, iv: bytes, data: bytes
+    ) -> bytes:
         """Decrypt only the length field for AEAD ciphers that encrypt it."""
         ...
 
