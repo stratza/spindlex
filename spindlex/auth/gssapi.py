@@ -180,7 +180,9 @@ class GSSAPIAuth:
             # In mock mode, Name is MockName which has NameType attribute
             # Use Any to bypass mypy check for the mock
             mock_name_class: Any = Name
-            return Name(service_name, name_type=mock_name_class.NameType.hostbased_service)
+            return Name(
+                service_name, name_type=mock_name_class.NameType.hostbased_service
+            )
 
     def _init_gss_context(self, target_name: Name, delegate_creds: bool) -> None:
         """
