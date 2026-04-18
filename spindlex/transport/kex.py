@@ -305,14 +305,13 @@ class KeyExchange:
             # Parse KEXDH_REPLY
             offset = 0
             server_host_key_blob, offset = read_string(reply_msg._data, offset)
+            
+            # Extract server's DH public key (f)
+            # We need the blob for hash computation and the int for DH
             server_dh_public_blob, offset = read_string(reply_msg._data, offset)
+            server_public_int = int.from_bytes(server_dh_public_blob, "big", signed=True)
+            
             signature_blob, offset = read_string(reply_msg._data, offset)
-
-            # Store server host key for verification
-            self._transport._server_host_key_blob = server_host_key_blob
-
-            # Extract server's DH public key
-            server_public_int, _ = read_mpint(server_dh_public_blob, 0)
 
             # Validate server's public key
             if server_public_int <= 1 or server_public_int >= self.DH_GROUP14_P - 1:

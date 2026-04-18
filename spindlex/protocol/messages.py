@@ -102,8 +102,6 @@ class Message:
             MSG_SERVICE_ACCEPT: ServiceAcceptMessage,
             MSG_KEXINIT: KexInitMessage,
             MSG_NEWKEYS: NewKeysMessage,
-            MSG_KEXDH_INIT: KexDHInitMessage,
-            MSG_KEXDH_REPLY: KexDHReplyMessage,
             MSG_USERAUTH_REQUEST: UserAuthRequestMessage,
             MSG_USERAUTH_FAILURE: UserAuthFailureMessage,
             MSG_USERAUTH_SUCCESS: UserAuthSuccessMessage,
