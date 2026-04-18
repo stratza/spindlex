@@ -58,3 +58,23 @@ def test_warning_policy(temp_hosts):
     client._host_key_storage = HostKeyStorage(temp_hosts)
     policy.missing_host_key(client, "localhost", key)
     assert client._host_key_storage.get("localhost") is None
+
+
+def test_auto_add_policy_storage_failure():
+    policy = AutoAddPolicy()
+    client = MagicMock()
+    storage = MagicMock()
+    # Mock storage.save to raise an exception
+    storage.save.side_effect = Exception("Storage full")
+    client._host_key_storage = storage
+    
+    hostname = "test.example.com"
+    key = MagicMock()
+    key.algorithm_name = "ssh-ed25519"
+    key.get_fingerprint.return_value = "SHA256:abc..."
+    
+    from spindlex.exceptions import SSHException
+    with pytest.raises(SSHException) as excinfo:
+        policy.missing_host_key(client, hostname, key)
+    
+    assert "Failed to persist new host key" in str(excinfo.value)

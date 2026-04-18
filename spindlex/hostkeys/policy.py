@@ -9,7 +9,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any
 
-from ..exceptions import BadHostKeyException
+from ..exceptions import BadHostKeyException, SSHException
 
 
 class MissingHostKeyPolicy(ABC):
