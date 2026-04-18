@@ -108,6 +108,24 @@ class ChannelFile:
 
         return self._channel.send(data)
 
+    def get_exit_status(self) -> int:
+        """
+        Get command exit status.
+
+        Returns:
+            Exit status code, or -1 if not available
+        """
+        return self._channel.get_exit_status()
+
+    def recv_exit_status(self) -> int:
+        """
+        Wait for and return command exit status.
+
+        Returns:
+            Exit status code
+        """
+        return self._channel.recv_exit_status()
+
     @property
     def channel(self) -> "Channel":
         """Get underlying SSH channel."""
@@ -179,6 +197,11 @@ class SSHClient:
         pkey: Optional[PKey] = None,
         key_filename: Optional[str] = None,
         timeout: Optional[float] = None,
+        compress: bool = False,
+        gss_auth: bool = False,
+        gss_kex: bool = False,
+        gss_deleg_creds: bool = True,
+        gss_host: Optional[str] = None,
         rekey_bytes_limit: Optional[int] = None,
         rekey_time_limit: Optional[int] = None,
     ) -> None:
@@ -191,7 +214,13 @@ class SSHClient:
             username: Username for authentication
             password: Password for authentication
             pkey: Private key for authentication
+            key_filename: Path to private key file
             timeout: Connection timeout in seconds
+            compress: Whether to enable compression
+            gss_auth: Whether to use GSSAPI authentication
+            gss_kex: Whether to use GSSAPI key exchange
+            gss_deleg_creds: Whether to delegate GSSAPI credentials
+            gss_host: GSSAPI hostname override
             rekey_bytes_limit: Number of bytes before rekeying (default: 1GB)
             rekey_time_limit: Seconds before rekeying (default: 1 hour)
 
@@ -240,12 +269,22 @@ class SSHClient:
 
             # Authenticate if credentials provided
             if username:
-                if password:
+                if gss_auth:
+                    self.auth_gssapi(username, gss_host, gss_deleg_creds)
+                elif password and not (pkey or key_filename):
                     self.auth_password(username, password)
                 elif pkey or key_filename:
                     self.auth_publickey(username, pkey, key_filename)
                 else:
-                    self._authenticate(username, password, pkey, key_filename)
+                    self._authenticate(
+                        username,
+                        password,
+                        pkey,
+                        key_filename,
+                        gss_auth,
+                        gss_host,
+                        gss_deleg_creds,
+                    )
 
             self._logger.info(f"Successfully connected to {hostname}:{port}")
 
@@ -417,6 +456,9 @@ class SSHClient:
         password: Optional[str] = None,
         pkey: Optional[PKey] = None,
         key_filename: Optional[str] = None,
+        gss_auth: bool = False,
+        gss_host: Optional[str] = None,
+        gss_deleg_creds: bool = False,
     ) -> None:
         """
         Authenticate with the server.
@@ -425,6 +467,10 @@ class SSHClient:
             username: Username for authentication
             password: Password for authentication
             pkey: Private key for authentication
+            key_filename: Path to private key file
+            gss_auth: Whether to use GSSAPI authentication
+            gss_host: GSSAPI hostname override
+            gss_deleg_creds: Whether to delegate GSSAPI credentials
 
         Raises:
             AuthenticationException: If authentication fails
@@ -434,8 +480,16 @@ class SSHClient:
 
         authenticated = False
 
+        # Try GSSAPI if requested
+        if gss_auth and not authenticated:
+            try:
+                self.auth_gssapi(username, gss_host, gss_deleg_creds)
+                authenticated = True
+            except Exception as e:
+                self._logger.debug(f"GSSAPI authentication failed: {e}")
+
         # Load key from file if provided
-        if key_filename and not pkey:
+        if key_filename and not pkey and not authenticated:
             try:
                 from ..crypto.pkey import PKey
 

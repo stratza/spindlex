@@ -50,7 +50,7 @@ pip install spindlex[gssapi]
         print(f"Server info: {output}")
         
         # Get exit status
-        exit_status = stdout._channel.get_exit_status()
+        exit_status = stdout.get_exit_status()
         print(f"Exit status: {exit_status}")
 
     finally:
@@ -93,7 +93,7 @@ pip install spindlex[gssapi]
 === "SSH Key"
 
     ```python
-    from spindlex.crypto.pkey import PKey
+    from spindlex.crypto import PKey
 
     # Load private key (auto-detects type)
     private_key = PKey.from_private_key_file('/path/to/private_key')
