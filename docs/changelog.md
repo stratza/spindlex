@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-04-18
+
+### Fixed
+*   **Curve25519 Key Exchange**: Resolved a critical issue where the key exchange could fail if the server's public key had leading zeros. De-coupled algorithm-specific message parsing (types 30 and 31) from generic message unpacking.
+*   **Diffie-Hellman Group 14**: Fixed an incorrect `mpint` parsing logic in the client-side key exchange that could lead to protocol failures.
+
+### Added
+*   **Python 3.13 Support**: Formally verified and added support for Python 3.13, including CI pipeline integration.
+
+### Changed
+*   **Protocol Stability**: Standardized message unpacking to handle algorithm-dependent message structures more robustly.
+
 ## [0.5.2] - 2026-04-16
 
 ### Added
