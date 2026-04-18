@@ -237,6 +237,7 @@ class KeyExchange:
 
         # Use CipherSuite to negotiate
         negotiated = self._cipher_suite.negotiate_algorithms(client_algs, server_algs)
+        self._transport._logger.debug(f"Negotiated algorithms: {negotiated}")
 
         self._kex_algorithm = negotiated["kex"]
         self._server_host_key_algorithm = negotiated["server_host_key"]
@@ -722,10 +723,13 @@ class KeyExchange:
 
     def _generate_session_keys(self) -> None:
         """Generate session keys from shared secret and exchange hash."""
+        # First-time handshake: session_id is equal to first exchange_hash
+        effective_session_id = self._session_id or self._exchange_hash
+
         if (
             not self._shared_secret
             or not self._exchange_hash
-            or not self._session_id
+            or not effective_session_id
             or self._encryption_algorithm_c2s is None
             or self._encryption_algorithm_s2c is None
         ):
@@ -768,7 +772,7 @@ class KeyExchange:
             hash_alg,
             self._shared_secret,
             self._exchange_hash,
-            self._session_id,
+            effective_session_id,
             b"A",
             iv_len_c2s,
         )
@@ -778,7 +782,7 @@ class KeyExchange:
             hash_alg,
             self._shared_secret,
             self._exchange_hash,
-            self._session_id,
+            effective_session_id,
             b"B",
             iv_len_s2c,
         )
@@ -788,7 +792,7 @@ class KeyExchange:
             hash_alg,
             self._shared_secret,
             self._exchange_hash,
-            self._session_id,
+            effective_session_id,
             b"C",
             key_len_c2s,
         )
@@ -798,7 +802,7 @@ class KeyExchange:
             hash_alg,
             self._shared_secret,
             self._exchange_hash,
-            self._session_id,
+            effective_session_id,
             b"D",
             key_len_s2c,
         )
@@ -810,7 +814,7 @@ class KeyExchange:
                 hash_alg,
                 self._shared_secret,
                 self._exchange_hash,
-                self._session_id,
+                effective_session_id,
                 b"E",
                 mac_key_len_c2s,
             )
@@ -822,7 +826,7 @@ class KeyExchange:
                 hash_alg,
                 self._shared_secret,
                 self._exchange_hash,
-                self._session_id,
+                effective_session_id,
                 b"F",
                 mac_key_len_s2c,
             )

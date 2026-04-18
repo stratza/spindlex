@@ -10,7 +10,7 @@ import time
 from collections import deque
 from typing import Any, Optional, Union
 
-from ..exceptions import ChannelException
+from ..exceptions import ChannelException, ProtocolException
 from ..protocol.constants import (
     DEFAULT_WINDOW_SIZE,
     MSG_CHANNEL_FAILURE,
@@ -685,11 +685,33 @@ class Channel:
         Returns:
             True if request was accepted, False otherwise
         """
+        if request_type == "exit-status":
+            if len(data) >= 4:
+                status, _ = read_uint32(data, 0)
+                self._handle_exit_status(status)
+            return True
+
+        if request_type == "exit-signal":
+            if len(data) >= 4:
+                try:
+                    offset = 0
+                    signal_name_bytes, offset = read_string(data, offset)
+                    core_dumped, offset = read_boolean(data, offset)
+                    error_msg_bytes, offset = read_string(data, offset)
+                    lang_tag_bytes, offset = read_string(data, offset)
+
+                    signal_name = signal_name_bytes.decode(SSH_STRING_ENCODING)
+                    error_msg = error_msg_bytes.decode(SSH_STRING_ENCODING)
+                    lang_tag = lang_tag_bytes.decode(SSH_STRING_ENCODING)
+
+                    self._handle_exit_signal(
+                        signal_name, core_dumped, error_msg, lang_tag
+                    )
+                except (ProtocolException, UnicodeDecodeError):
+                    pass
+            return True
+
         if not self._transport._server_mode or not self._transport._server_interface:
-            # Default for client mode or if no server interface is provided
-            # Some requests might be harmlessly accepted
-            if request_type in ["exit-status", "exit-signal"]:
-                return True
             return False
 
         server = self._transport._server_interface

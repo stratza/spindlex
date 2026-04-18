@@ -27,23 +27,12 @@ from ..protocol.constants import (
     CHANNEL_DIRECT_TCPIP,
     CHANNEL_FORWARDED_TCPIP,
     CHANNEL_SESSION,
-    CIPHER_AES128_CTR,
-    CIPHER_AES192_CTR,
-    CIPHER_AES256_CTR,
     COMPRESS_NONE,
     DEFAULT_AUTH_TIMEOUT,
     DEFAULT_CONNECT_TIMEOUT,
     DEFAULT_MAX_PACKET_SIZE,
     DEFAULT_WINDOW_SIZE,
-    HOSTKEY_ECDSA_SHA2_NISTP256,
-    HOSTKEY_ED25519,
-    HOSTKEY_RSA_SHA2_256,
     KEX_COOKIE_SIZE,
-    KEX_CURVE25519_SHA256,
-    KEX_DH_GROUP14_SHA256,
-    KEX_ECDH_SHA2_NISTP256,
-    MAC_HMAC_SHA2_256,
-    MAC_HMAC_SHA2_512,
     MAX_CHANNELS,
     MAX_PACKET_SIZE,
     MIN_PACKET_SIZE,
@@ -178,7 +167,6 @@ class Transport:
         self._encryptor_instance: Optional[Any] = None
         self._decryptor_instance: Optional[Any] = None
 
-        # Packet handling
         self._sequence_number_in = 0
         self._sequence_number_out = 0
         self._packet_buffer = b""
@@ -1543,43 +1531,19 @@ class Transport:
         """Send KEXINIT message with supported algorithms."""
         cookie = self._crypto_backend.generate_random(KEX_COOKIE_SIZE)
 
-        # Define supported algorithms (modern preferences)
-        kex_algorithms = [
-            KEX_CURVE25519_SHA256,
-            "curve25519-sha256@libssh.org",
-            KEX_ECDH_SHA2_NISTP256,
-            KEX_DH_GROUP14_SHA256,
-        ]
-
-        host_key_algorithms = [
-            HOSTKEY_ED25519,
-            HOSTKEY_ECDSA_SHA2_NISTP256,
-            HOSTKEY_RSA_SHA2_256,
-        ]
-
-        encryption_algorithms = [
-            CIPHER_AES256_CTR,
-            CIPHER_AES192_CTR,
-            CIPHER_AES128_CTR,
-        ]
-
-        mac_algorithms = [
-            MAC_HMAC_SHA2_256,
-            MAC_HMAC_SHA2_512,
-        ]
-
-        compression_algorithms = [COMPRESS_NONE, "zlib@openssh.com"]
+        # Use algorithms from CipherSuite to ensure consistency
+        cipher_suite = self._kex._cipher_suite
 
         kexinit_msg = KexInitMessage(
             cookie=cookie,
-            kex_algorithms=kex_algorithms,
-            server_host_key_algorithms=host_key_algorithms,
-            encryption_algorithms_client_to_server=encryption_algorithms,
-            encryption_algorithms_server_to_client=encryption_algorithms,
-            mac_algorithms_client_to_server=mac_algorithms,
-            mac_algorithms_server_to_client=mac_algorithms,
-            compression_algorithms_client_to_server=compression_algorithms,
-            compression_algorithms_server_to_client=compression_algorithms,
+            kex_algorithms=cipher_suite.KEX_ALGORITHMS,
+            server_host_key_algorithms=cipher_suite.HOST_KEY_ALGORITHMS,
+            encryption_algorithms_client_to_server=cipher_suite.ENCRYPTION_ALGORITHMS,
+            encryption_algorithms_server_to_client=cipher_suite.ENCRYPTION_ALGORITHMS,
+            mac_algorithms_client_to_server=cipher_suite.MAC_ALGORITHMS,
+            mac_algorithms_server_to_client=cipher_suite.MAC_ALGORITHMS,
+            compression_algorithms_client_to_server=[COMPRESS_NONE],
+            compression_algorithms_server_to_client=[COMPRESS_NONE],
         )
 
         self._client_kexinit_blob = kexinit_msg.pack()
@@ -1636,12 +1600,16 @@ class Transport:
             payload = message.pack()
 
             with self._lock:
+                self._logger.debug(f"Sending message type {message.msg_type}")
                 packet = self._build_packet(payload)
 
                 # Encrypt if we have an active cipher (standard or AEAD)
                 if self._encryptor_instance or getattr(
                     self, "_cipher_out_active", None
                 ):
+                    self._logger.debug(
+                        f"Encrypting message type {message.msg_type} with seq {self._sequence_number_out}"
+                    )
                     packet = self._encrypt_packet(packet)
 
                 self._socket.sendall(packet)
@@ -1658,7 +1626,7 @@ class Transport:
                 if message.msg_type == MSG_NEWKEYS:
                     self._activate_outbound_encryption()
 
-                self._sequence_number_out = (self._sequence_number_out + 1) & 0xFFFFFFFF
+                self._sequence_number_out += 1
 
         except Exception as e:
             raise TransportException(f"Failed to send message: {e}") from e
@@ -1700,9 +1668,7 @@ class Transport:
                             self._check_rekey()
 
                         # ALWAYS increment sequence number for EVERY packet received
-                        self._sequence_number_in = (
-                            self._sequence_number_in + 1
-                        ) & 0xFFFFFFFF
+                        self._sequence_number_in += 1
 
                         # Handle internal messages and extensions
                         # 7 = MSG_EXT_INFO (RFC 8308)
@@ -1886,7 +1852,12 @@ class Transport:
         self._encryption_key_out_active = key
         self._iv_out_active = iv
 
+        self._logger.info(f"Activating outbound encryption: {cipher_name}")
+
         encryptor = self._crypto_backend.create_cipher(cipher_name, key, iv)
+        self._logger.debug(
+            f"Activating {cipher_name}: key_len={len(key)}, iv_len={len(iv)}"
+        )
         if not cipher_name.endswith("@openssh.com") and not cipher_name.endswith(
             "-gcm"
         ):
@@ -1923,6 +1894,8 @@ class Transport:
         self._encryption_key_in_active = key
         self._iv_in_active = iv
 
+        self._logger.info(f"Activating inbound encryption: {cipher_name}")
+
         decryptor = self._crypto_backend.create_cipher(cipher_name, key, iv)
         if not cipher_name.endswith("@openssh.com") and not cipher_name.endswith(
             "-gcm"
@@ -1943,7 +1916,9 @@ class Transport:
 
             # Add MAC
             if self._mac_out_active and self._mac_key_out_active:
-                mac_data = struct.pack(">I", self._sequence_number_out) + packet
+                mac_data = (
+                    struct.pack(">I", self._sequence_number_out & 0xFFFFFFFF) + packet
+                )
                 mac = self._crypto_backend.compute_mac(
                     self._mac_out_active, self._mac_key_out_active, mac_data
                 )
@@ -1959,13 +1934,18 @@ class Transport:
                     cipher_name, self._encryption_key_out_active, nonce, packet
                 )
             elif cipher_name in ["aes128-gcm@openssh.com", "aes256-gcm@openssh.com"]:
-                # Nonce is 4 bytes salt + 8 bytes sequence number
                 nonce = self._iv_out_active + struct.pack(
                     ">Q", self._sequence_number_out
                 )
-                return self._crypto_backend.encrypt(
+                self._logger.info(
+                    f"AEAD Encrypt: cipher={cipher_name}, nonce={nonce.hex()}, data_len={len(packet)}"
+                )
+                if len(packet) < 100:
+                    self._logger.info(f"AEAD Plaintext hex: {packet.hex()}")
+                encrypted = self._crypto_backend.encrypt(
                     cipher_name, self._encryption_key_out_active, nonce, packet
                 )
+                return encrypted
 
         return packet
 
@@ -2042,7 +2022,7 @@ class Transport:
 
                 received_mac = self._recv_bytes(mac_len)
                 mac_data = (
-                    struct.pack(">I", self._sequence_number_in)
+                    struct.pack(">I", self._sequence_number_in & 0xFFFFFFFF)
                     + length_data
                     + packet_payload
                 )
@@ -2094,14 +2074,19 @@ class Transport:
                     raise ProtocolException(f"Invalid packet length: {packet_length}")
 
                 # 2. Receive rest of packet + Tag (16 bytes)
+                # RFC 5647: packet_length excludes the length field itself and the MAC (tag).
                 remaining_len = packet_length + 16
                 rest_of_packet = self._recv_bytes(remaining_len)
 
                 # 3. Decrypt and verify
                 full_packet = len_data + rest_of_packet
-                return self._crypto_backend.decrypt(
+                self._logger.info(
+                    f"AEAD Decrypt: cipher={cipher_name}, nonce={nonce.hex()}, data_len={len(full_packet)}"
+                )
+                decrypted = self._crypto_backend.decrypt(
                     cipher_name, self._encryption_key_in_active, nonce, full_packet
                 )
+                return decrypted
 
         # Unencrypted or AEAD (simplified unencrypted here for now to get connection working)
         # Read packet length

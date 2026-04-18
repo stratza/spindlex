@@ -105,7 +105,7 @@ class ChaCha20Poly1305OpenSSH:
         len_nonce16 = b"\x00" * 8 + nonce
         len_cipher = Cipher(algorithms.ChaCha20(self.k_len, len_nonce16), mode=None)
         len_decryptor = len_cipher.decryptor()
-        return len_decryptor.update(enc_len)
+        return bytes(len_decryptor.update(enc_len) + len_decryptor.finalize())
 
 
 class CryptoBackend(Protocol):
@@ -255,12 +255,15 @@ class CryptographyBackend:
 
             cipher: Any
             if algorithm == "chacha20-poly1305@openssh.com":
+                # SSH ChaCha20-Poly1305 (OpenSSH):
+                # The 64-bit record sequence number is used as the nonce.
                 cipher = ChaCha20Poly1305OpenSSH(key_bytes)
                 return bytes(cipher.encrypt(iv_bytes, data_bytes))
             elif algorithm in ["aes256-gcm@openssh.com", "aes128-gcm@openssh.com"]:
                 # SSH AES-GCM (RFC 5647):
                 # data is full packet: length (4) + payload + padding
                 # length is AAD, payload+padding is encrypted
+                # iv_bytes is the 12-byte nonce (4-byte salt + 8-byte counter)
                 cipher = AESGCM(key_bytes)
                 aad = data_bytes[:4]
                 payload = data_bytes[4:]
@@ -305,6 +308,7 @@ class CryptographyBackend:
             elif algorithm in ["aes256-gcm@openssh.com", "aes128-gcm@openssh.com"]:
                 # SSH AES-GCM (RFC 5647):
                 # data is Length (4) + Enc(payload) + Tag (16)
+                # iv_bytes is the 12-byte nonce (4-byte salt + 8-byte counter)
                 cipher = AESGCM(key_bytes)
                 aad = data_bytes[:4]
                 ciphertext = data_bytes[4:]

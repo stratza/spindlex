@@ -22,8 +22,9 @@ class CipherSuite:
     # Supported key exchange algorithms (in preference order)
     KEX_ALGORITHMS = [
         "curve25519-sha256",
-        "ecdh-sha2-nistp256",
+        "diffie-hellman-group-exchange-sha256",
         "diffie-hellman-group14-sha256",
+        "ext-info-c",
     ]
 
     # Supported host key algorithms (in preference order)
@@ -35,12 +36,12 @@ class CipherSuite:
 
     # Supported encryption algorithms (in preference order)
     ENCRYPTION_ALGORITHMS = [
-        "chacha20-poly1305@openssh.com",
-        "aes256-gcm@openssh.com",
-        "aes128-gcm@openssh.com",
         "aes256-ctr",
         "aes192-ctr",
         "aes128-ctr",
+        "aes128-gcm@openssh.com",
+        "aes256-gcm@openssh.com",
+        "chacha20-poly1305@openssh.com",
     ]
 
     # Supported MAC algorithms (in preference order)
@@ -51,7 +52,7 @@ class CipherSuite:
 
     # Cipher key and IV lengths
     CIPHER_INFO = {
-        "chacha20-poly1305@openssh.com": {"key_len": 64, "iv_len": 8, "aead": True},
+        "chacha20-poly1305@openssh.com": {"key_len": 64, "iv_len": 0, "aead": True},
         "aes256-gcm@openssh.com": {"key_len": 32, "iv_len": 4, "aead": True},
         "aes128-gcm@openssh.com": {"key_len": 16, "iv_len": 4, "aead": True},
         "aes256-ctr": {"key_len": 32, "iv_len": 16, "aead": False},

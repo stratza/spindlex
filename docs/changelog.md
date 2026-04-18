@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-04-18
+
+### Fixed
+*   **Key Derivation**: Resolved a critical issue where AEAD ciphers (AES-GCM and ChaCha20-Poly1305) would fail during the initial handshake due to missing `session_id` synchronization in the key derivation function.
+*   **Exit Status Mapping**: Fixed a bug in `Channel` where command exit codes and termination signals from the server were acknowledged but not correctly parsed and stored in the session state.
+*   **Transport Robustness**: Improved the resiliency of channel request parsing, ensuring that malformed or empty packets for standard types like `exit-status` do not cause protocol exceptions.
+
 ## [0.6.0] - 2026-04-18
 
 ### Fixed
