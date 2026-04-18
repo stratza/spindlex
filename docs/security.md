@@ -38,7 +38,7 @@ Host key verification is critical to prevent man-in-the-middle (MITM) attacks.
 
 ## Security Policy
 
-For information on how to report vulnerabilities or our disclosure policy, please see our [Responsible Disclosure Policy](meta/SECURITY.md).
+For information on how to report vulnerabilities or our disclosure policy, please see our [Responsible Disclosure Policy](https://github.com/Di3Z1E/spindlex/blob/main/meta/SECURITY.md).
 
 ### Supported Versions
 

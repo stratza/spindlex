@@ -106,7 +106,7 @@ with SSHClient() as client:
     except KeyboardInterrupt:
         print("Stopping log stream...")
 
-## Custom Rekeying Policy {#rekey-policy}
+## Custom Rekeying Policy
 
 For high-security or high-compliance environments, you can tighten the rekeying thresholds.
 
