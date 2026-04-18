@@ -61,10 +61,10 @@ The SSH client is the primary interface for connecting to SSH servers and execut
 === "Sync"
 
     ```python
-    from spindlex.crypto.pkey import load_key_from_file
+    from spindlex.crypto import PKey
 
     # Load key from file
-    private_key = load_key_from_file('/path/to/key')
+    private_key = PKey.from_private_key_file('/path/to/key')
 
     client.connect(
         hostname='example.com',
@@ -76,9 +76,9 @@ The SSH client is the primary interface for connecting to SSH servers and execut
 === "Async"
 
     ```python
-    from spindlex.crypto.pkey import load_key_from_file
+    from spindlex.crypto import PKey
 
-    private_key = load_key_from_file('/path/to/key')
+    private_key = PKey.from_private_key_file('/path/to/key')
 
     await client.connect(
         hostname='example.com',
@@ -102,7 +102,7 @@ The SSH client is the primary interface for connecting to SSH servers and execut
     error = stderr.read().decode('utf-8')
     
     # Get exit status
-    exit_status = stdout._channel.get_exit_status()
+    exit_status = stdout.get_exit_status()
     ```
 
 === "Async"
@@ -116,7 +116,7 @@ The SSH client is the primary interface for connecting to SSH servers and execut
     error = await stderr.read()
     
     # Get exit status
-    exit_status = await stdout.get_exit_status()
+    exit_status = await stdout.recv_exit_status()
     ```
 
 ### Commands with Input

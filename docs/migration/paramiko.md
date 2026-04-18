@@ -75,7 +75,7 @@ SpindleX was designed to be a modern, high-performance alternative to Paramiko. 
 === "SpindleX"
 
     ```python
-    from spindlex.crypto.pkey import PKey
+    from spindlex.crypto import PKey
 
     # Automatically detects key type (RSA, Ed25519, etc.)
     key = PKey.from_private_key_file('/path/to/key')

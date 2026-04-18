@@ -244,8 +244,8 @@ class AsyncTransport(Transport):
             )
             return fut.result()
         except Exception as e:
-            print(
-                f"DEBUG: AsyncTransport._recv_bytes({length}) failed: {e} ({type(e)})"
+            self._logger.debug(
+                f"AsyncTransport._recv_bytes({length}) failed: {e} ({type(e)})"
             )
             raise
 

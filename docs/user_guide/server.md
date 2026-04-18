@@ -16,7 +16,7 @@ To create an SSH server, you must subclass `SSHServer` and override the relevant
 ### 1. Define Server Interface
 
 ```python
-from spindlex.server import SSHServer
+from spindlex import SSHServer, SSHServerManager
 from spindlex.protocol.constants import AUTH_SUCCESSFUL, AUTH_FAILED
 
 class MySSHServer(SSHServer):
@@ -41,11 +41,12 @@ Use `SSHServerManager` to bind the server to a port and start accepting connecti
 
 ```python
 import socket
-from spindlex.server import SSHServerManager
-from spindlex.crypto.pkey import PKey
+from spindlex import SSHServerManager
+from spindlex.crypto import PKey
 
 # Load or generate server host key
 server_key = PKey.generate(key_type='ed25519')
+```
 
 # Initialize interface and manager
 interface = MySSHServer()
@@ -90,7 +91,7 @@ class ExecServer(SSHServer):
 To implement an SFTP server, override `check_channel_subsystem_request` and handle the "sftp" subsystem.
 
 ```python
-from spindlex.server import SFTPServer
+from spindlex import SFTPServer
 
 class MySFTPServer(SSHServer):
     def check_channel_subsystem_request(self, channel, name):
@@ -103,7 +104,7 @@ class MySFTPServer(SSHServer):
 
 ## Advanced Configuration
 
-`SSHServerManager` provides several settings to tune server behavior:
+`SSHServerManager` provides several settings to tune server behavior. **Note: These methods must be called before calling `start_server()` to take effect.**
 
 - `set_max_connections(n)`: Limit concurrent connections.
 - `set_connection_timeout(s)`: Timeout for the initial socket connection.

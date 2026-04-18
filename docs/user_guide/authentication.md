@@ -26,10 +26,10 @@ spindlex-keygen -t ed25519 -f ~/.ssh/id_ed25519_spindlex
 Load private keys from files using the utility functions in `spindlex.crypto.pkey`:
 
 ```python
-from spindlex.crypto.pkey import load_key_from_file
+from spindlex.crypto import PKey
 
 # Load key with passphrase
-private_key = load_key_from_file(
+private_key = PKey.from_private_key_file(
     '/path/to/private_key',
     password='passphrase'
 )
@@ -41,9 +41,9 @@ private_key = load_key_from_file(
 
     ```python
     from spindlex import SSHClient
-    from spindlex.crypto.pkey import load_key_from_file
+    from spindlex.crypto import PKey
 
-    private_key = load_key_from_file('/path/to/key')
+    private_key = PKey.from_private_key_file('/path/to/key')
 
     with SSHClient() as client:
         client.connect(
@@ -57,9 +57,9 @@ private_key = load_key_from_file(
 
     ```python
     from spindlex import AsyncSSHClient
-    from spindlex.crypto.pkey import load_key_from_file
+    from spindlex.crypto import PKey
 
-    private_key = load_key_from_file('/path/to/key')
+    private_key = PKey.from_private_key_file('/path/to/key')
 
     async with AsyncSSHClient() as client:
         await client.connect(
@@ -90,7 +90,22 @@ with SSHClient() as client:
 
 ## GSSAPI/Kerberos Authentication
 
-GSSAPI authentication provides single sign-on capabilities in Kerberos environments. This is fully supported in the asynchronous client.
+GSSAPI authentication provides single sign-on capabilities in Kerberos environments.
+
+### Sync GSSAPI Authentication
+
+```python
+from spindlex import SSHClient
+
+with SSHClient() as client:
+    client.connect(
+        hostname='server.example.com',
+        username='user',
+        gss_auth=True,          # Enable GSSAPI authentication
+        gss_host='server.example.com', # Target service name
+        gss_deleg_creds=True    # Delegate credentials if needed
+    )
+```
 
 ### Async GSSAPI Authentication
 
@@ -102,9 +117,9 @@ async def connect_gssapi():
         await client.connect(
             hostname='server.example.com',
             username='user',
-            gss_auth=True,          # Enable GSSAPI authentication
-            gss_host='server.example.com', # Target service name
-            gss_deleg_creds=True    # Delegate credentials if needed
+            gss_auth=True,
+            gss_host='server.example.com',
+            gss_deleg_creds=True
         )
 ```
 

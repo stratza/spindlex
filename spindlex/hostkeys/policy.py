@@ -63,15 +63,16 @@ class AutoAddPolicy(MissingHostKeyPolicy):
             if storage:
                 storage.add(hostname, key)
                 storage.save()
+            else:
+                self._logger.debug("No host key storage available on client")
 
             self._logger.warning(
                 f"Automatically added host key for {hostname}: {key.algorithm_name} "
                 f"{key.get_fingerprint()}"
             )
-
         except Exception as e:
-            self._logger.error(f"Failed to add host key for {hostname}: {e}")
-            # Don't raise exception - policy is to accept unknown keys
+            self._logger.error(f"Failed to add/save host key for {hostname}: {e}")
+            raise SSHException(f"Failed to persist new host key for {hostname}: {e}") from e
 
 
 class RejectPolicy(MissingHostKeyPolicy):

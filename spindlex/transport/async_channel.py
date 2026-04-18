@@ -481,6 +481,24 @@ class AsyncChannelFile:
             return await self._channel.recv_stderr(size)
         return await self._channel.recv(size)
 
+    def get_exit_status(self) -> int:
+        """
+        Get command exit status.
+
+        Returns:
+            Exit status code, or -1 if not available
+        """
+        return self._channel.get_exit_status()
+
+    async def recv_exit_status(self) -> int:
+        """
+        Wait for and return command exit status asynchronously.
+
+        Returns:
+            Exit status code
+        """
+        return await self._channel.recv_exit_status()
+
     async def write(self, data: bytes) -> int:
         """
         Write data to channel asynchronously.

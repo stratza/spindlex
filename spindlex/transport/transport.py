@@ -273,13 +273,6 @@ class Transport:
                         self._do_handshake()
                         self._logger.debug("Handshake complete.")
 
-                        # Start key exchange
-                        self._logger.debug("Starting KEX...")
-                        self._start_kex()
-                        self._logger.debug("KEX complete.")
-
-                        self._active = True
-
                     finally:
                         # Restore original socket timeout
                         try:
@@ -287,6 +280,14 @@ class Transport:
                                 self._socket.settimeout(old_timeout)
                         except (OSError, AttributeError):
                             pass
+
+                # Start key exchange (WITHOUT holding _lock)
+                self._logger.debug("Starting KEX...")
+                self._start_kex()
+                self._logger.debug("KEX complete.")
+
+                with self._lock:
+                    self._active = True
 
         except Exception as e:
             self.close()
@@ -328,13 +329,6 @@ class Transport:
                         self._do_handshake()
                         self._logger.debug("Handshake complete.")
 
-                        # Start key exchange
-                        self._logger.debug("Starting KEX...")
-                        self._start_kex()
-                        self._logger.debug("KEX complete.")
-
-                        self._active = True
-
                     finally:
                         # Restore original socket timeout
                         try:
@@ -342,6 +336,14 @@ class Transport:
                                 self._socket.settimeout(old_timeout)
                         except (OSError, AttributeError):
                             pass
+
+                # Start key exchange (WITHOUT holding _lock)
+                self._logger.debug("Starting KEX...")
+                self._start_kex()
+                self._logger.debug("KEX complete.")
+
+                with self._lock:
+                    self._active = True
 
         except Exception as e:
             self.close()
@@ -676,12 +678,18 @@ class Transport:
             if len(self._channels) >= MAX_CHANNELS:
                 raise TransportException("Maximum number of channels reached")
 
-            # Get next channel ID
+            # Find next available channel ID (recycling IDs)
             channel_id = self._next_channel_id
-            self._next_channel_id += 1
+            while channel_id in self._channels:
+                channel_id = (channel_id + 1) % MAX_CHANNELS
+            
+            self._next_channel_id = (channel_id + 1) % MAX_CHANNELS
 
             # Create channel instance
             channel = Channel(self, channel_id)
+
+            # Register channel BEFORE sending open request to avoid race
+            self._channels[channel_id] = channel
 
         try:
             # Build channel open message
@@ -714,23 +722,31 @@ class Transport:
                     channel._local_window_size = DEFAULT_WINDOW_SIZE
                     channel._local_max_packet_size = DEFAULT_MAX_PACKET_SIZE
 
-                    # Add to channels dict
-                    self._channels[channel_id] = channel
-
                 return channel
 
             elif isinstance(response, ChannelOpenFailureMessage):
-                # Channel open failed
+                # Channel open failed - remove from channels
+                with self._lock:
+                    if channel_id in self._channels:
+                        del self._channels[channel_id]
                 raise TransportException(
                     f"Channel open failed: {response.description} (code: {response.reason_code})"
                 )
 
             else:
+                # Unexpected response - remove from channels
+                with self._lock:
+                    if channel_id in self._channels:
+                        del self._channels[channel_id]
                 raise TransportException(
                     f"Unexpected response to channel open: {type(response).__name__}"
                 )
 
         except Exception as e:
+            # Cleanup on error
+            with self._lock:
+                if channel_id in self._channels:
+                    del self._channels[channel_id]
             if isinstance(e, TransportException):
                 raise
             raise TransportException(f"Failed to open channel: {e}") from e
@@ -806,7 +822,6 @@ class Transport:
                     self._handle_channel_open(msg)
                 else:
                     pass
-                    # print(f"DEBUG: Channel {recipient_channel} not found in {list(self._channels.keys())}")
 
         # If it's a global request, handle it separately
         if msg.msg_type == MSG_GLOBAL_REQUEST:
@@ -982,7 +997,7 @@ class Transport:
                     channel = self._channels[msg.recipient_channel]
                     channel._handle_data(msg.data)
                 else:
-                    print(f"DEBUG: Data for UNKNOWN channel {msg.recipient_channel}")
+                    self._logger.debug(f"Data for UNKNOWN channel {msg.recipient_channel}")
 
     def _handle_channel_extended_data(self, msg: Message) -> None:
         """Handle channel extended data message."""
@@ -1412,96 +1427,47 @@ class Transport:
         self._socket.sendall(version_line.encode(SSH_STRING_ENCODING))
 
     def _recv_version(self) -> None:
-        """Receive and validate SSH version string with retries."""
-        max_retries = 5
-        retry_delay = 1.0
+        """Receive and validate SSH version string."""
         version_line = b""
 
-        for attempt in range(max_retries):
-            try:
-                # Read lines until we find the one starting with SSH-
-                while True:
-                    current_line = b""
-                    # Read character by character until line ending
-                    while True:
-                        char = self._recv_bytes(1)
-                        if not char:
-                            self._logger.debug("Received EOF during banner read")
-                            raise TransportException("Connection closed")
+        # RFC 4253: The server MAY send other lines of data before
+        # sending the version string. ... The identification string
+        # MUST start with 'SSH-'.
+        while True:
+            current_line = b""
+            # Read character by character until line ending
+            while True:
+                char = self._recv_bytes(1)
+                if not char:
+                    raise TransportException("Connection closed during banner read")
 
-                        self._logger.debug(f"Banner read char: {repr(char)}")
-                        current_line += char
+                current_line += char
 
-                        # Check for line ending
-                        if current_line.endswith(b"\r\n"):
-                            current_line = current_line[:-2]
-                            self._logger.debug(
-                                f"Banner line completed (CRLF): {repr(current_line)}"
-                            )
-                            break
-                        elif current_line.endswith(b"\n"):
-                            current_line = current_line[:-1]
-                            self._logger.debug(
-                                f"Banner line completed (LF): {repr(current_line)}"
-                            )
-                            break
-
-                        # Prevent excessive version line length
-                        if len(current_line) > 255:
-                            raise ProtocolException("Version line too long")
-
-                    # RFC 4253: The server MAY send other lines of data before
-                    # sending the version string. ... The identification string
-                    # MUST start with 'SSH-'.
-                    if current_line.startswith(b"SSH-"):
-                        version_line = current_line
-                        self._logger.debug(f"Found version line: {repr(version_line)}")
-                        break
-
-                    self._logger.debug(f"Ignoring non-SSH line: {repr(current_line)}")
-
-                if version_line:
+                # Check for line ending
+                if current_line.endswith(b"\r\n"):
+                    current_line = current_line[:-2]
+                    break
+                elif current_line.endswith(b"\n"):
+                    current_line = current_line[:-1]
                     break
 
-            except (TransportException, socket.timeout, ConnectionResetError) as e:
-                # If connection closed unexpectedly, no point in retrying
-                # BROADEN CLOSED CHECK: Include common socket error messages and types
-                error_str = str(e).lower()
-                is_closed = any(
-                    term in error_str
-                    for term in ["closed", "10053", "10054", "aborted", "reset"]
-                )
-                if (
-                    isinstance(e, (ConnectionResetError, ConnectionAbortedError))
-                    or is_closed
-                ):
-                    self._logger.debug(
-                        f"Connection closed/reset during banner read: {e}"
-                    )
-                    if isinstance(e, TransportException):
-                        raise
-                    raise TransportException(
-                        f"Connection closed during handshake: {e}"
-                    ) from e
+                # Prevent excessive version line length
+                if len(current_line) > 255:
+                    raise ProtocolException("Version line too long")
 
-                if attempt < max_retries - 1:
-                    self._logger.debug(
-                        f"Banner read attempt {attempt + 1} failed, retrying..."
-                    )
-                    time.sleep(retry_delay)
-                    version_line = b""  # Reset for next attempt
-                    continue
-                raise TransportException(
-                    f"Failed to receive SSH banner after {max_retries} attempts: Timeout"
-                )
+            if current_line.startswith(b"SSH-"):
+                version_line = current_line
+                break
 
-        self._remote_version = version_line.decode().strip()
-        self._logger.debug(f"Remote version: {self._remote_version}")
+            self._logger.debug(f"Ignoring non-SSH line: {repr(current_line)}")
 
         try:
             version_string = version_line.decode(SSH_STRING_ENCODING)
         except UnicodeDecodeError:
             raise ProtocolException("Invalid version string encoding")
+
+        self._remote_version = version_string.strip()
+        self._logger.debug(f"Remote version: {self._remote_version}")
 
         # Parse and validate version
         try:
@@ -1670,7 +1636,8 @@ class Transport:
             with self._lock:
                 packet = self._build_packet(payload)
 
-                if self._encryptor_instance:
+                # Encrypt if we have an active cipher (standard or AEAD)
+                if self._encryptor_instance or getattr(self, "_cipher_out_active", None):
                     packet = self._encrypt_packet(packet)
 
                 self._socket.sendall(packet)
@@ -2010,7 +1977,9 @@ class Transport:
         """
         # Calculate padding
         block_size = 8  # Minimum block size
-        cipher_name = getattr(self, "_cipher_c2s", None)
+        cipher_name = getattr(self, "_cipher_out_active", None) or getattr(
+            self, "_cipher_c2s", None
+        )
         if cipher_name:
             # Get block size from cipher
             if "aes" in cipher_name:
@@ -2194,7 +2163,10 @@ class Transport:
                     # If we need to read from socket, try to read more than requested to buffer it
                     # Read up to 32KB at a time to reduce syscalls and round-trips
                     to_read = max(32768, length - len(data))
+                    
+                    # Ensure we don't hold _lock during blocking recv()
                     chunk = self._socket.recv(to_read)
+                    
                     if not chunk:
                         self._logger.debug("Socket closed while receiving")
                         self.close()
