@@ -2,7 +2,7 @@
 
 Practical recipes for common SFTP file transfer tasks.
 
-## <a name="recursive-upload"></a>Recursive Upload
+## Recursive Upload
 
 Upload an entire directory tree from your local machine to a remote server.
 
@@ -33,7 +33,7 @@ with SSHClient() as client:
         put_recursive(sftp, './logs', '/home/user/backups/logs')
 ```
 
-## <a name="progress-callback"></a>Progress Tracking
+## Progress Tracking
 
 Add a progress bar or progress callback to your file transfers.
 
@@ -54,7 +54,7 @@ with SSHClient() as client:
         )
 ```
 
-## <a name="pattern-delete"></a>Pattern-Based Deletion
+## Pattern-Based Deletion
 
 Delete files on the remote server that match a certain pattern (e.g., all `.log` files older than 7 days).
 

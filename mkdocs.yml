@@ -83,6 +83,7 @@ plugins:
 nav:
   - Home: index.md
   - Quick Start: quickstart.md
+  - Demos: demo_results.md
   - User Guide:
       - Introduction: user_guide/index.md
       - Authentication: user_guide/authentication.md
