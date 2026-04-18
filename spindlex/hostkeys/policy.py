@@ -72,7 +72,9 @@ class AutoAddPolicy(MissingHostKeyPolicy):
             )
         except Exception as e:
             self._logger.error(f"Failed to add/save host key for {hostname}: {e}")
-            raise SSHException(f"Failed to persist new host key for {hostname}: {e}") from e
+            raise SSHException(
+                f"Failed to persist new host key for {hostname}: {e}"
+            ) from e
 
 
 class RejectPolicy(MissingHostKeyPolicy):

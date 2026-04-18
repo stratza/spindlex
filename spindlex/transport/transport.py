@@ -682,7 +682,7 @@ class Transport:
             channel_id = self._next_channel_id
             while channel_id in self._channels:
                 channel_id = (channel_id + 1) % MAX_CHANNELS
-            
+
             self._next_channel_id = (channel_id + 1) % MAX_CHANNELS
 
             # Create channel instance
@@ -997,7 +997,9 @@ class Transport:
                     channel = self._channels[msg.recipient_channel]
                     channel._handle_data(msg.data)
                 else:
-                    self._logger.debug(f"Data for UNKNOWN channel {msg.recipient_channel}")
+                    self._logger.debug(
+                        f"Data for UNKNOWN channel {msg.recipient_channel}"
+                    )
 
     def _handle_channel_extended_data(self, msg: Message) -> None:
         """Handle channel extended data message."""
@@ -1637,7 +1639,9 @@ class Transport:
                 packet = self._build_packet(payload)
 
                 # Encrypt if we have an active cipher (standard or AEAD)
-                if self._encryptor_instance or getattr(self, "_cipher_out_active", None):
+                if self._encryptor_instance or getattr(
+                    self, "_cipher_out_active", None
+                ):
                     packet = self._encrypt_packet(packet)
 
                 self._socket.sendall(packet)
@@ -2163,10 +2167,10 @@ class Transport:
                     # If we need to read from socket, try to read more than requested to buffer it
                     # Read up to 32KB at a time to reduce syscalls and round-trips
                     to_read = max(32768, length - len(data))
-                    
+
                     # Ensure we don't hold _lock during blocking recv()
                     chunk = self._socket.recv(to_read)
-                    
+
                     if not chunk:
                         self._logger.debug("Socket closed while receiving")
                         self.close()
