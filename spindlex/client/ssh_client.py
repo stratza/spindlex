@@ -203,7 +203,7 @@ class SSHClient:
         gss_deleg_creds: bool = True,
         gss_host: Optional[str] = None,
         rekey_bytes_limit: Optional[int] = None,
-        rekey_time_limit: Optional[int] = None,
+        rekey_time_limit: Optional[float] = None,
     ) -> None:
         """
         Connect to SSH server and authenticate.
@@ -234,21 +234,18 @@ class SSHClient:
         self._port = port
 
         try:
-            # Create socket connection
+            # Create socket connection — create_connection resolves IPv4 and IPv6
             self._logger.debug(f"Connecting to {hostname}:{port}")
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            try:
+                sock = socket.create_connection(
+                    (hostname, port),
+                    timeout=timeout if timeout else None,
+                )
+            except OSError as e:
+                raise SSHException(f"Connection failed: {e}") from e
 
             # Enable TCP_NODELAY to reduce latency (Nagle's algorithm)
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-
-            if timeout:
-                sock.settimeout(timeout)
-
-            try:
-                sock.connect((hostname, port))
-            except OSError as e:
-                sock.close()
-                raise SSHException(f"Connection failed: {e}") from e
 
             # Create transport
             self._transport = Transport(
@@ -320,10 +317,10 @@ class SSHClient:
                 self._logger.warning("No host key received from server")
                 return
 
-            # Check if we have a known host key for this hostname
-            known_key = self._host_key_storage.get(hostname)
+            # Check if we have any known host keys for this hostname
+            known_keys = self._host_key_storage.get_all(hostname)
 
-            if known_key is None:
+            if not known_keys:
                 # No known key - apply missing host key policy
                 self._logger.debug(f"No known host key for {hostname}")
 
@@ -336,15 +333,13 @@ class SSHClient:
                     # Policy had an error but didn't reject
                     self._logger.warning(f"Host key policy error: {e}")
             else:
-                # We have a known key - compare with the actual server key
-                self._logger.debug(f"Found known host key for {hostname}")
-
-                if (
-                    known_key.get_public_key_bytes()
-                    != server_key.get_public_key_bytes()
+                # Check if server key matches ANY stored key for this host
+                self._logger.debug(f"Found known host key(s) for {hostname}")
+                server_key_bytes = server_key.get_public_key_bytes()
+                if not any(
+                    k.get_public_key_bytes() == server_key_bytes for k in known_keys
                 ):
-                    # Key mismatch!
-                    raise BadHostKeyException(hostname, server_key, known_key)
+                    raise BadHostKeyException(hostname, server_key, known_keys[0])
 
         except BadHostKeyException:
             raise
@@ -557,7 +552,8 @@ class SSHClient:
             raise SSHException("Command cannot be empty")
 
         try:
-            assert self._transport is not None
+            if self._transport is None:
+                raise SSHException("No transport available")
             # Open a new session channel
             channel = self._transport.open_channel("session")
 
@@ -592,7 +588,8 @@ class SSHClient:
             raise SSHException("Not connected to server")
 
         try:
-            assert self._transport is not None
+            if self._transport is None:
+                raise SSHException("No transport available")
             # Open a new session channel
             channel = self._transport.open_channel("session")
 
@@ -627,7 +624,8 @@ class SSHClient:
         try:
             from .sftp_client import SFTPClient
 
-            assert self._transport is not None
+            if self._transport is None:
+                raise SSHException("No transport available")
             return SFTPClient(self._transport)
         except Exception as e:
             if isinstance(e, SSHException):
@@ -707,7 +705,8 @@ class SSHClient:
             raise SSHException("Not connected to SSH server")
 
         try:
-            assert self._transport is not None
+            if self._transport is None:
+                raise SSHException("No transport available")
             forwarding_manager = self._transport.get_port_forwarding_manager()
             return forwarding_manager.create_local_tunnel(
                 local_port, remote_host, remote_port, local_host
@@ -739,7 +738,8 @@ class SSHClient:
             raise SSHException("Not connected to SSH server")
 
         try:
-            assert self._transport is not None
+            if self._transport is None:
+                raise SSHException("No transport available")
             forwarding_manager = self._transport.get_port_forwarding_manager()
             return forwarding_manager.create_remote_tunnel(
                 remote_port, local_host, local_port, remote_host
@@ -763,7 +763,8 @@ class SSHClient:
             raise SSHException("Not connected to SSH server")
 
         try:
-            assert self._transport is not None
+            if self._transport is None:
+                raise SSHException("No transport available")
             forwarding_manager = self._transport.get_port_forwarding_manager()
             forwarding_manager.close_tunnel(tunnel_id)
         except Exception as e:
@@ -785,7 +786,8 @@ class SSHClient:
             raise SSHException("Not connected to SSH server")
 
         try:
-            assert self._transport is not None
+            if self._transport is None:
+                raise SSHException("No transport available")
             forwarding_manager = self._transport.get_port_forwarding_manager()
             tunnels = forwarding_manager.get_all_tunnels()
 

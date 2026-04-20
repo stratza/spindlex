@@ -11,6 +11,7 @@ import socket
 import struct
 import threading
 import time
+from collections import deque
 from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
@@ -118,7 +119,7 @@ class Transport:
         self,
         sock: socket.socket,
         rekey_bytes_limit: Optional[int] = None,
-        rekey_time_limit: Optional[int] = None,
+        rekey_time_limit: Optional[float] = None,
     ) -> None:
         """
         Initialize transport with socket connection.
@@ -175,7 +176,7 @@ class Transport:
         self._lock = threading.RLock()
         self._read_lock = threading.RLock()
         self._kex_condition = threading.Condition(self._lock)
-        self._server_host_key_blob = None
+        self._server_host_key_blob: Optional[bytes] = None
 
         self._kex_in_progress = False
         self._kex = KeyExchange(self)
@@ -196,7 +197,7 @@ class Transport:
         self._port_forwarding_manager: Optional[PortForwardingManager] = None
 
         # Message dispatching
-        self._message_queue: list[Message] = []
+        self._message_queue: deque[Message] = deque()
         self._timeout = 10.0
 
         self._logger = logging.getLogger(__name__)
@@ -217,7 +218,7 @@ class Transport:
             self._socket.settimeout(timeout)
 
     def set_rekey_policy(
-        self, bytes_limit: Optional[int] = None, time_limit: Optional[int] = None
+        self, bytes_limit: Optional[int] = None, time_limit: Optional[float] = None
     ) -> None:
         """
         Configure rekeying thresholds.
@@ -1446,11 +1447,16 @@ class Transport:
     def _recv_version(self) -> None:
         """Receive and validate SSH version string."""
         version_line = b""
+        _MAX_BANNER_LINES = 20
 
         # RFC 4253: The server MAY send other lines of data before
         # sending the version string. ... The identification string
         # MUST start with 'SSH-'.
+        banner_lines = 0
         while True:
+            if banner_lines > _MAX_BANNER_LINES:
+                raise ProtocolException("Too many banner lines before SSH version string")
+            banner_lines += 1
             current_line = b""
             # Read character by character until line ending
             while True:
@@ -1656,7 +1662,7 @@ class Transport:
                 if message.msg_type == MSG_NEWKEYS:
                     self._activate_outbound_encryption()
 
-                self._sequence_number_out += 1
+                self._sequence_number_out = (self._sequence_number_out + 1) & 0xFFFFFFFF
 
         except Exception as e:
             raise TransportException(f"Failed to send message: {e}") from e
@@ -1698,7 +1704,7 @@ class Transport:
                             self._check_rekey()
 
                         # ALWAYS increment sequence number for EVERY packet received
-                        self._sequence_number_in += 1
+                        self._sequence_number_in = (self._sequence_number_in + 1) & 0xFFFFFFFF
 
                         # Handle internal messages and extensions
                         # 7 = MSG_EXT_INFO (RFC 8308)
@@ -1729,8 +1735,7 @@ class Transport:
                             # Peer initiated rekeying. Set flag immediately to prevent
                             # multiple threads, then queue message and start KEX thread.
                             self._kex_in_progress = True
-                            with self._lock:
-                                self._message_queue.append(msg)
+                            self._message_queue.append(msg)
                             threading.Thread(
                                 target=self._start_kex, daemon=True
                             ).start()
@@ -1787,7 +1792,7 @@ class Transport:
             while True:
                 with self._lock:
                     if self._message_queue:
-                        return self._message_queue.pop(0)
+                        return self._message_queue.popleft()
 
                     # If no rekeying or we are the rekeying thread, proceed to read
                     if (
@@ -1800,7 +1805,8 @@ class Transport:
                     # Wait for rekeying thread to process packets or finish KEX
                     self._kex_condition.wait(0.1)
 
-                msg = self._read_message()
+            # Inner loop exited via break — safe to read from socket now
+            msg = self._read_message()
             if msg is not None:
                 return msg
 
@@ -1813,9 +1819,10 @@ class Transport:
             # 1. Check queue for allowed message
             while True:
                 with self._lock:
-                    for i, msg in enumerate(self._message_queue):
-                        if msg.msg_type in allowed_types:
-                            return self._message_queue.pop(i)
+                    for i, queued in enumerate(self._message_queue):
+                        if queued.msg_type in allowed_types:
+                            del self._message_queue[i]
+                            return queued
 
                     # If no rekeying or we are the rekeying thread, proceed to read
                     if (
@@ -1847,7 +1854,7 @@ class Transport:
         Returns:
             PKey object or None if not available
         """
-        if not hasattr(self, "_server_host_key_blob") or not self._server_host_key_blob:
+        if not self._server_host_key_blob:
             return None
 
         from ..crypto.pkey import PKey
@@ -1988,14 +1995,18 @@ class Transport:
             Complete SSH packet
         """
         # Calculate padding
-        block_size = 8  # Minimum block size
+        _CIPHER_BLOCK_SIZES = {
+            "aes128-ctr": 16,
+            "aes192-ctr": 16,
+            "aes256-ctr": 16,
+            "aes128-gcm@openssh.com": 16,
+            "aes256-gcm@openssh.com": 16,
+            "chacha20-poly1305@openssh.com": 8,
+        }
         cipher_name = getattr(self, "_cipher_out_active", None) or getattr(
             self, "_cipher_c2s", None
         )
-        if cipher_name:
-            # Get block size from cipher
-            if "aes" in cipher_name:
-                block_size = 16
+        block_size = _CIPHER_BLOCK_SIZES.get(cipher_name, 8) if cipher_name else 8
 
         padding_length = block_size - (
             (len(payload) + PADDING_LENGTH_SIZE + PACKET_LENGTH_SIZE) % block_size

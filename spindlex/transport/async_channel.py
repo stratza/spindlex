@@ -10,8 +10,6 @@ from typing import Any, Union
 from ..exceptions import ChannelException
 from ..protocol.constants import (
     DEFAULT_WINDOW_SIZE,
-    MSG_CHANNEL_FAILURE,
-    MSG_CHANNEL_SUCCESS,
     SSH_EXTENDED_DATA_STDERR,
 )
 from ..protocol.utils import write_string

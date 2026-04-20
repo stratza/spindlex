@@ -2,6 +2,7 @@
 Log sanitization utilities for security-sensitive information.
 """
 
+import logging
 import re
 from typing import Any, Pattern
 
@@ -129,3 +130,19 @@ class LogSanitizer:
                 sanitized[key] = value
 
         return sanitized
+
+
+class SanitizingFilter(logging.Filter):
+    """Logging filter that redacts sensitive information from all log records."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        record.msg = LogSanitizer.sanitize_message(str(record.msg))
+        if record.args:
+            if isinstance(record.args, dict):
+                record.args = LogSanitizer.sanitize_dict(record.args)
+            else:
+                record.args = tuple(
+                    LogSanitizer.sanitize_message(str(a)) if isinstance(a, str) else a
+                    for a in record.args
+                )
+        return True

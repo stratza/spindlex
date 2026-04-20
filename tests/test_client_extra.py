@@ -98,7 +98,7 @@ def test_ssh_client_verify_host_key_auto_add():
     transport.get_server_host_key.return_value = server_key
 
     client._host_key_storage = MagicMock()
-    client._host_key_storage.get.return_value = None
+    client._host_key_storage.get_all.return_value = []
 
     client.set_missing_host_key_policy(AutoAddPolicy())
     # Should not raise
@@ -119,7 +119,7 @@ def test_ssh_client_verify_host_key_mismatch():
     known_key = MagicMock()
     known_key.get_public_key_bytes.return_value = b"old_key"
     client._host_key_storage = MagicMock()
-    client._host_key_storage.get.return_value = known_key
+    client._host_key_storage.get_all.return_value = [known_key]
 
     with pytest.raises(BadHostKeyException):
         client._verify_host_key()

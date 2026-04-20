@@ -277,7 +277,7 @@ class AsyncTransport(Transport):
         if check_queue:
             async with self._state_lock:
                 if self._message_queue:
-                    return self._message_queue.pop(0)
+                    return self._message_queue.popleft()
 
         async with self._recv_lock:
             while True:
@@ -288,7 +288,7 @@ class AsyncTransport(Transport):
                 if msg is not None:
                     return msg
 
-    def _read_single_packet(self) -> "Message | None":
+    def _read_single_packet(self) -> Message | None:
         """Read exactly one SSH packet and dispatch it if it is a channel message.
         Returns the message if it needs to be queued, or None if it was dispatched internally."""
         return super()._read_message(single_pump=True)
@@ -324,7 +324,8 @@ class AsyncTransport(Transport):
                             if msg_channel_id != channel_id:
                                 continue
 
-                        return self._message_queue.pop(i)
+                        del self._message_queue[i]
+                        return msg
 
             # 2. Read next
             msg = await self._recv_message_async(check_queue=False)

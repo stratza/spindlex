@@ -131,10 +131,6 @@ class Channel:
                     elapsed = time.time() - start_time
                     if elapsed >= effective_timeout:
                         raise ChannelException("Timeout waiting for window space")
-                    wait_timeout = effective_timeout - elapsed
-                else:
-                    wait_timeout = None
-
                 # Release lock and wait for window adjust or close
                 self._window_event.clear()
                 self._lock.release()
