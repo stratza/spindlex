@@ -81,11 +81,11 @@ test = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Di3Z1E/spindlex"
+Homepage = "https://github.com/Di3Z1E/SpindleX"
 Documentation = "https://spindlex.readthedocs.io/"
-Repository = "https://github.com/Di3Z1E/spindlex"
-Issues = "https://github.com/Di3Z1E/spindlex/issues"
-Changelog = "https://github.com/Di3Z1E/spindlex/blob/main/docs/changelog.md"
+Repository = "https://github.com/Di3Z1E/SpindleX"
+Issues = "https://github.com/Di3Z1E/SpindleX/issues"
+Changelog = "https://github.com/Di3Z1E/SpindleX/blob/main/docs/changelog.md"
 
 [project.scripts]
 spindlex-keygen = "spindlex.tools.keygen:main"
