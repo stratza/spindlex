@@ -50,6 +50,7 @@ class AsyncSSHClient:
         key_filename: str | list[str] | None = None,
         timeout: float | None = None,
         compress: bool = False,
+        sock: Any | None = None,
         gss_auth: bool = False,
         gss_kex: bool = False,
         gss_deleg_creds: bool = True,
@@ -68,9 +69,10 @@ class AsyncSSHClient:
             pkey: Private key for authentication
             key_filename: Path to private key file(s)
             timeout: Connection timeout in seconds
+            compress: Enable compression
+            sock: Optional existing socket or channel to use
             rekey_bytes_limit: Number of bytes before rekeying (default: 1GB)
             rekey_time_limit: Seconds before rekeying (default: 1 hour)
-            compress: Enable compression
             gss_auth: Use GSSAPI authentication
             gss_kex: Use GSSAPI key exchange
             gss_deleg_creds: Delegate GSSAPI credentials
@@ -84,10 +86,20 @@ class AsyncSSHClient:
             raise SSHException("Already connected")
 
         try:
-            # Create socket connection
-            sock, reader, writer = await self._create_connection(
-                hostname, port, timeout
-            )
+            if sock is None:
+                # Create socket connection
+                sock, reader, writer = await self._create_connection(
+                    hostname, port, timeout
+                )
+            else:
+                # If sock is provided, we need to wrap it if it's a raw socket
+                # In asyncio, we usually need reader/writer.
+                # If it's a SpindleX Channel, it might need special handling.
+                if hasattr(sock, "makefile"): # Likely a socket-like object
+                     reader, writer = await asyncio.open_connection(sock=sock)
+                else:
+                     # Assume it's already a pair or handled by transport
+                     reader, writer = None, None
 
             # Create async transport
             self._transport = AsyncTransport(
@@ -97,7 +109,8 @@ class AsyncSSHClient:
             )
 
             # Use connect_existing helper to set reader/writer safely
-            await self._transport.connect_existing(reader, writer)
+            if reader and writer:
+                await self._transport.connect_existing(reader, writer)
 
             # Start client transport
             await self._transport.start_client(timeout)

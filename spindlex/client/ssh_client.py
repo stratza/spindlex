@@ -126,6 +126,47 @@ class ChannelFile:
         """
         return self._channel.recv_exit_status()
 
+    def __iter__(self) -> "ChannelFile":
+        """
+        Make object iterable for line-by-line reading.
+
+        Returns:
+            Self as iterator
+        """
+        return self
+
+    def __next__(self) -> str:
+        """
+        Read next line from channel.
+
+        Returns:
+            Next line of data
+
+        Raises:
+            StopIteration: If EOF reached
+        """
+        line = self.readline()
+        if not line:
+            raise StopIteration
+        return line
+
+    def readline(self) -> str:
+        """
+        Read a single line from the channel.
+
+        Returns:
+            Read line
+        """
+        result = bytearray()
+        while True:
+            char = self.read(1)
+            if not char:
+                break
+            result.extend(char)
+            if char == b"\n":
+                break
+        return result.decode("utf-8", errors="replace")
+
     @property
     def channel(self) -> "Channel":
         """Get underlying SSH channel."""
@@ -198,6 +239,7 @@ class SSHClient:
         key_filename: Optional[str] = None,
         timeout: Optional[float] = None,
         compress: bool = False,
+        sock: Optional[socket.socket] = None,
         gss_auth: bool = False,
         gss_kex: bool = False,
         gss_deleg_creds: bool = True,
@@ -217,6 +259,7 @@ class SSHClient:
             key_filename: Path to private key file
             timeout: Connection timeout in seconds
             compress: Whether to enable compression
+            sock: Optional existing socket to use
             gss_auth: Whether to use GSSAPI authentication
             gss_kex: Whether to use GSSAPI key exchange
             gss_deleg_creds: Whether to delegate GSSAPI credentials
@@ -234,18 +277,19 @@ class SSHClient:
         self._port = port
 
         try:
-            # Create socket connection — create_connection resolves IPv4 and IPv6
-            self._logger.debug(f"Connecting to {hostname}:{port}")
-            try:
-                sock = socket.create_connection(
-                    (hostname, port),
-                    timeout=timeout if timeout else None,
-                )
-            except OSError as e:
-                raise SSHException(f"Connection failed: {e}") from e
+            if sock is None:
+                # Create socket connection — create_connection resolves IPv4 and IPv6
+                self._logger.debug(f"Connecting to {hostname}:{port}")
+                try:
+                    sock = socket.create_connection(
+                        (hostname, port),
+                        timeout=timeout if timeout else None,
+                    )
+                except OSError as e:
+                    raise SSHException(f"Connection failed: {e}") from e
 
-            # Enable TCP_NODELAY to reduce latency (Nagle's algorithm)
-            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                # Enable TCP_NODELAY to reduce latency (Nagle's algorithm)
+                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
             # Create transport
             self._transport = Transport(
@@ -266,22 +310,15 @@ class SSHClient:
 
             # Authenticate if credentials provided
             if username:
-                if gss_auth:
-                    self.auth_gssapi(username, gss_host, gss_deleg_creds)
-                elif password and not (pkey or key_filename):
-                    self.auth_password(username, password)
-                elif pkey or key_filename:
-                    self.auth_publickey(username, pkey, key_filename)
-                else:
-                    self._authenticate(
-                        username,
-                        password,
-                        pkey,
-                        key_filename,
-                        gss_auth,
-                        gss_host,
-                        gss_deleg_creds,
-                    )
+                self._authenticate(
+                    username,
+                    password,
+                    pkey,
+                    key_filename,
+                    gss_auth,
+                    gss_host,
+                    gss_deleg_creds,
+                )
 
             self._logger.info(f"Successfully connected to {hostname}:{port}")
 

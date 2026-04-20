@@ -118,6 +118,15 @@ class AsyncChannel(Channel):
                 raise
             raise ChannelException(f"Send failed: {e}") from e
 
+    async def sendall(self, data: Union[bytes, str]) -> None:
+        """
+        Send all data through channel asynchronously.
+
+        Args:
+            data: Data to send
+        """
+        await self.send(data)
+
     async def recv(self, nbytes: int) -> bytes:  # type: ignore[override]
         """
         Receive data from channel asynchronously.
@@ -487,6 +496,47 @@ class AsyncChannelFile:
             Exit status code
         """
         return await self._channel.recv_exit_status()
+
+    def __aiter__(self) -> "AsyncChannelFile":
+        """
+        Make object async iterable for line-by-line reading.
+
+        Returns:
+            Self as async iterator
+        """
+        return self
+
+    async def __anext__(self) -> str:
+        """
+        Read next line from channel asynchronously.
+
+        Returns:
+            Next line of data
+
+        Raises:
+            StopAsyncIteration: If EOF reached
+        """
+        line = await self.readline()
+        if not line:
+            raise StopAsyncIteration
+        return line
+
+    async def readline(self) -> str:
+        """
+        Read a single line from the channel asynchronously.
+
+        Returns:
+            Read line
+        """
+        result = bytearray()
+        while True:
+            char = await self.read(1)
+            if not char:
+                break
+            result.extend(char)
+            if char == b"\n":
+                break
+        return result.decode("utf-8", errors="replace")
 
     async def write(self, data: bytes) -> int:
         """

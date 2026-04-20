@@ -258,31 +258,31 @@ Once a tunnel is created, you can manage it using the `tunnel_id` returned by th
 === "Sync"
 
     ```python
-    client.close_local_port_forward(tunnel_id)
-    # or
-    client.close_remote_port_forward(tunnel_id)
+    client.close_port_forward(tunnel_id)
     ```
 
 === "Async"
 
     ```python
-    await client.close_local_port_forward(tunnel_id)
-    # or
-    await client.close_remote_port_forward(tunnel_id)
+    await client.close_port_forward(tunnel_id)
     ```
 
-#### Closing All Tunnels
+#### Listing Active Tunnels
 
 === "Sync"
 
     ```python
-    client.close_all_tunnels()
+    tunnels = client.get_port_forwards()
+    for tunnel_id, info in tunnels.items():
+        print(f"Tunnel {tunnel_id}: {info['local_addr']} -> {info['remote_addr']}")
     ```
 
 === "Async"
 
     ```python
-    await client.close_all_tunnels()
+    tunnels = client.get_port_forwards()
+    for tunnel_id, info in tunnels.items():
+        print(f"Tunnel {tunnel_id}: {info['local_addr']} -> {info['remote_addr']}")
     ```
 
 ## Error Handling

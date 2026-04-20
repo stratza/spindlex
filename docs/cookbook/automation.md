@@ -2,6 +2,55 @@
 
 Solve infrastructure problems with these automation scripts.
 
+## Basic SSH Operations {#basic-operations}
+
+Common tasks for connecting to servers and executing commands.
+
+### Connect and Execute
+
+```python
+from spindlex import SSHClient
+from spindlex.hostkeys.policy import AutoAddPolicy
+
+with SSHClient() as client:
+    # Auto-add unknown host keys (use with caution)
+    client.set_missing_host_key_policy(AutoAddPolicy())
+    
+    client.connect('server.example.com', username='admin', password='password')
+    
+    # exec_command returns (stdin, stdout, stderr)
+    stdin, stdout, stderr = client.exec_command('ls -l /tmp')
+    
+    # stdout and stderr are iterable and return lines
+    for line in stdout:
+        print(line.strip())
+        
+    # Get the exit status (0 usually means success)
+    exit_status = stdout.recv_exit_status()
+    print(f"Command exited with status: {exit_status}")
+```
+
+### File Transfer (SFTP)
+
+```python
+from spindlex import SSHClient
+
+with SSHClient() as client:
+    client.connect('server.example.com', username='admin')
+    
+    with client.open_sftp() as sftp:
+        # Upload a file
+        sftp.put('local_file.txt', '/home/admin/remote_file.txt')
+        
+        # Download a file
+        sftp.get('/var/log/syslog', 'local_syslog.log')
+        
+        # List directory
+        print("Files in home:")
+        for attr in sftp.listdir_attr('/home/admin'):
+            print(f"{attr.filename} - {attr.st_size} bytes")
+```
+
 ## Sudo Command Execution {#sudo-execution}
 
 Automate `sudo` commands by providing the password when prompted.
@@ -41,8 +90,13 @@ async def run_on_server(hostname, command):
         async with AsyncSSHClient() as client:
             await client.connect(hostname, username='admin')
             stdin, stdout, stderr = await client.exec_command(command)
-            output = await stdout.read()
-            print(f"[{hostname}] {output.strip()}")
+            
+            # AsyncChannelFile is also async iterable
+            async for line in stdout:
+                print(f"[{hostname}] {line.strip()}")
+                
+            status = await stdout.recv_exit_status()
+            print(f"[{hostname}] Finished with status {status}")
     except Exception as e:
         print(f"[{hostname}] Error: {e}")
 
@@ -70,6 +124,7 @@ with SSHClient() as bastion:
     dest_addr = ('internal-target.lan', 22)
     local_addr = ('localhost', 0)
     
+    # Create a direct-tcpip channel (tunnels TCP to target)
     channel = transport.open_channel(
         "direct-tcpip", 
         dest_addr, 
@@ -84,7 +139,7 @@ with SSHClient() as bastion:
             sock=channel
         )
         stdin, stdout, stderr = target.exec_command('hostname')
-        print(f"Connected to: {stdout.read().decode()}")
+        print(f"Connected to: {stdout.read().decode().strip()}")
 ```
 
 ## Real-time Log Tailing {#log-tailing}
@@ -101,10 +156,12 @@ with SSHClient() as client:
     
     print("--- Streaming Remote Logs (Ctrl+C to stop) ---")
     try:
+        # ChannelFile is iterable line-by-line
         for line in stdout:
             print(line.strip())
     except KeyboardInterrupt:
         print("Stopping log stream...")
+```
 
 ## Custom Rekeying Policy
 
@@ -219,5 +276,4 @@ def backup_config(hostname, remote_path, local_dir):
             print(f"Backup saved to {local_path}")
 
 # backup_config('router01', '/etc/config', './backups')
-```
 ```

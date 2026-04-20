@@ -176,6 +176,24 @@ class Channel:
             except Exception as e:
                 raise ChannelException(f"Failed to send data: {e}") from e
 
+    def sendall(self, data: Union[bytes, str], timeout: Optional[float] = None) -> None:
+        """
+        Send all data through channel, retrying until all sent.
+
+        Args:
+            data: Data to send
+            timeout: Optional timeout
+        """
+        if isinstance(data, str):
+            data = data.encode(SSH_STRING_ENCODING)
+
+        total_sent = 0
+        while total_sent < len(data):
+            sent = self.send(data[total_sent:], timeout=timeout)
+            if sent <= 0:
+                raise ChannelException("Failed to send data")
+            total_sent += sent
+
     def recv(self, nbytes: int) -> bytes:
         """
         Receive data from channel.
