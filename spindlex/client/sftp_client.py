@@ -75,8 +75,12 @@ class SFTPFile:
         if size < 0:
             # Read until EOF
             result = bytearray()
+            # Use a chunk size slightly smaller than SFTP_MAX_PACKET_SIZE
+            # to allow for SSH channel and SFTP message overhead
+            chunk_size = SFTP_MAX_PACKET_SIZE - 1024
             while True:
-                chunk = self.read(SFTP_MAX_READ_SIZE)
+                chunk = local_file.read(chunk_size)
+
                 if not chunk:
                     break
                 result.extend(chunk)
@@ -397,10 +401,11 @@ class SFTPClient:
                 # Open local file for reading and upload in chunks
                 with open(localpath, "rb") as local_file:
                     offset = 0
+                    chunk_size = 30000
 
                     while True:
                         # Read chunk from local file
-                        chunk = local_file.read(SFTP_MAX_READ_SIZE)
+                        chunk = local_file.read(chunk_size)
                         if not chunk:
                             break  # End of file reached
 
@@ -408,7 +413,9 @@ class SFTPClient:
                         request_id = self._get_next_request_id()
                         write_msg = SFTPWriteMessage(request_id, handle, offset, chunk)
 
+                        self._logger.debug(f"SFTP PUT: Sending write request {request_id} for offset {offset}, size {len(chunk)}")
                         response = self._send_request_and_wait_response(write_msg)
+                        self._logger.debug(f"SFTP PUT: Received response for write request {request_id}")
                         if isinstance(response, SFTPStatusMessage):
                             if response.status_code != SSH_FX_OK:
                                 raise SFTPError.from_status(

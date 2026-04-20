@@ -761,11 +761,9 @@ class RSAKey(PKey):
     @property
     def algorithm_name(self) -> str:
         """Get SSH algorithm name."""
-        return "rsa-sha2-256"
+        return getattr(self, "_algorithm_name", "ssh-rsa")
 
-    def get_ssh_type(self) -> str:
-        """Get SSH key type."""
-        return "ssh-rsa"
+    # Remove hardcoded get_ssh_type to use the one in PKey which returns algorithm_name
 
     def load_private_key(
         self, key_data: bytes, password: Optional[bytes] = None
@@ -811,6 +809,10 @@ class RSAKey(PKey):
 
             if algorithm not in ["ssh-rsa", "rsa-sha2-256", "rsa-sha2-512"]:
                 raise CryptoException(f"Expected RSA algorithm, got {algorithm}")
+
+            # Store the algorithm name if it's one of the SHA-2 variants
+            if algorithm in ["rsa-sha2-256", "rsa-sha2-512"]:
+                self._algorithm_name = algorithm
 
             # Read public exponent
             e_len = struct.unpack(">I", key_data[offset : offset + 4])[0]
@@ -881,12 +883,23 @@ class RSAKey(PKey):
             if not isinstance(self._key, rsa.RSAPrivateKey):
                 raise CryptoException("No RSA private key loaded")
 
-            # Sign data with PKCS1v15 padding and SHA-256
-            signature = self._key.sign(data, padding.PKCS1v15(), hashes.SHA256())
+            # Select hash algorithm based on current algorithm name
+            algo_name = self.algorithm_name
+            hash_algo: Any
+            if algo_name == "rsa-sha2-512":
+                hash_algo = hashes.SHA512()
+            elif algo_name == "rsa-sha2-256":
+                hash_algo = hashes.SHA256()
+            else:
+                # Default to SHA-1 for legacy ssh-rsa
+                hash_algo = hashes.SHA1()
+
+            # Sign data with PKCS1v15 padding
+            signature = self._key.sign(data, padding.PKCS1v15(), hash_algo)
 
             # Format as SSH signature
-            algorithm = b"rsa-sha2-256"
-            result = struct.pack(">I", len(algorithm)) + algorithm
+            identifier = algo_name.encode()
+            result = struct.pack(">I", len(identifier)) + identifier
             result += struct.pack(">I", len(signature)) + signature
             return result
         except Exception as e:

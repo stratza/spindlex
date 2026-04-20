@@ -12,7 +12,7 @@ import struct
 import threading
 import time
 from collections import deque
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 if TYPE_CHECKING:
     from .forwarding import PortForwardingManager
@@ -105,6 +105,13 @@ from ..protocol.utils import (
 )
 from .channel import Channel
 from .kex import KeyExchange
+
+
+class HandledMessage:
+    """Sentinel for messages handled internally by the transport."""
+
+    msg_type = 0
+    _data = b""
 
 
 class Transport:
@@ -993,7 +1000,6 @@ class Transport:
     def _handle_channel_data(self, msg: Message) -> None:
         """Handle channel data message."""
         if isinstance(msg, ChannelDataMessage):
-            # print(f"DEBUG: Data for channel {msg.recipient_channel}: {len(msg.data)} bytes")
             with self._lock:
                 if msg.recipient_channel in self._channels:
                     channel = self._channels[msg.recipient_channel]
@@ -1135,7 +1141,9 @@ class Transport:
             channel = self._channels[channel_id]
 
             # Check window size
+            self._logger.debug(f"Channel {channel_id} window: remote={channel._remote_window_size}, max_packet={channel._remote_max_packet_size}, data={len(data)}")
             if len(data) > channel._remote_window_size:
+
                 raise TransportException("Remote window size exceeded")
 
             if len(data) > channel._remote_max_packet_size:
@@ -1638,16 +1646,12 @@ class Transport:
             payload = message.pack()
 
             with self._lock:
-                self._logger.debug(f"Sending message type {message.msg_type}")
                 packet = self._build_packet(payload)
 
                 # Encrypt if we have an active cipher (standard or AEAD)
                 if self._encryptor_instance or getattr(
                     self, "_cipher_out_active", None
                 ):
-                    self._logger.debug(
-                        f"Encrypting message type {message.msg_type} with seq {self._sequence_number_out}"
-                    )
                     packet = self._encrypt_packet(packet)
 
                 self._socket.sendall(packet)
@@ -1695,7 +1699,6 @@ class Transport:
 
                     with self._lock:
                         msg = Message.unpack(payload)
-                        self._logger.debug(f"Received message type {msg.msg_type}")
 
                         # Track bytes received for rekeying (unless it's KEX)
                         if msg.msg_type not in [
@@ -1714,7 +1717,7 @@ class Transport:
                         # 7 = MSG_EXT_INFO (RFC 8308)
                         if msg.msg_type in [MSG_IGNORE, MSG_DEBUG, 7]:
                             if single_pump:
-                                return None
+                                return HandledMessage()  # type: ignore[return-value]
                             continue
 
                         if msg.msg_type == MSG_DISCONNECT:
@@ -1744,7 +1747,7 @@ class Transport:
                                 target=self._start_kex, daemon=True
                             ).start()
                             if single_pump:
-                                return None
+                                return HandledMessage()  # type: ignore[return-value]
                             continue
 
                         if (
@@ -1754,7 +1757,7 @@ class Transport:
                         ):
                             self._handle_channel_message(msg)
                             if single_pump:
-                                return None
+                                return HandledMessage()  # type: ignore[return-value]
                             continue
 
                         # Server-side specific messages
@@ -1762,12 +1765,12 @@ class Transport:
                             if msg.msg_type == MSG_SERVICE_REQUEST:
                                 self._handle_service_request(msg)
                                 if single_pump:
-                                    return None
+                                    return HandledMessage()  # type: ignore[return-value]
                                 continue
                             if msg.msg_type == MSG_USERAUTH_REQUEST:
                                 self._handle_userauth_request(msg)
                                 if single_pump:
-                                    return None
+                                    return HandledMessage()  # type: ignore[return-value]
                                 continue
 
                         return msg
@@ -1777,16 +1780,27 @@ class Transport:
                     raise
                 raise TransportException(f"Failed to receive message: {e}") from e
 
-    def _pump(self) -> None:
+    def _pump(self) -> Optional[Union[Message, type[HandledMessage]]]:
         """
         Read next message and either handle it or queue it.
         This is used for background message processing to ensure no
         messages are lost when multiple threads are waiting for messages.
+
+        Returns:
+            The message read, or HandledMessage if it was handled internally.
         """
+        # First check if we already have messages in the queue
+        with self._lock:
+            if self._message_queue:
+                return self._message_queue[0]
+
         msg = self._read_message(single_pump=True)
         if msg:
-            with self._lock:
-                self._message_queue.append(msg)
+            if isinstance(msg, Message):
+                with self._lock:
+                    self._message_queue.append(msg)
+            return msg
+        return None
 
     def _recv_message(self) -> Message:
         """

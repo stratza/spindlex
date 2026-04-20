@@ -1238,7 +1238,7 @@ class ChannelExtendedDataMessage(Message):
         # Build message data
         self.add_uint32(recipient_channel)
         self.add_uint32(data_type)
-        self.add_string(data)
+        self._data.extend(data)
 
     @classmethod
     def _unpack_data(cls, data: bytes) -> "ChannelExtendedDataMessage":
@@ -1246,9 +1246,9 @@ class ChannelExtendedDataMessage(Message):
         offset = 0
         recipient_channel, offset = read_uint32(data, offset)
         data_type, offset = read_uint32(data, offset)
-        extended_data, offset = read_string(data, offset)
+        message_data = data[offset:]
 
-        return cls(recipient_channel, data_type, extended_data)
+        return cls(recipient_channel, data_type, message_data)
 
 
 class ChannelEOFMessage(Message):

@@ -201,9 +201,6 @@ class AsyncTransport(Transport):
             raise TransportException("Synchronous receive called on event loop thread")
         except RuntimeError:
             # For debugging the 'bytes' error
-            # print(f"DEBUG: _recv_message from thread. Queue type: {type(self._message_queue)}")
-            if not self._loop:
-                raise TransportException("Event loop not available")
             fut = asyncio.run_coroutine_threadsafe(
                 self._recv_message_async(), self._loop
             )
@@ -240,9 +237,6 @@ class AsyncTransport(Transport):
             )
             return fut.result()
         except Exception as e:
-            self._logger.debug(
-                f"AsyncTransport._recv_bytes({length}) failed: {e} ({type(e)})"
-            )
             raise
 
     async def _send_message_async(self, message: Message) -> None:

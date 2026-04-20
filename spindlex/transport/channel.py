@@ -265,7 +265,13 @@ class Channel:
                     ):
                         continue
                 try:
-                    self._transport._pump()
+                    # No data in event wait, try pumping the transport
+                    from .transport import HandledMessage
+
+                    res = self._transport._pump()
+                    if res is not None:
+                        # We read or handled a message, re-check buffer immediately
+                        continue
                 except Exception as e:
                     if "timeout" not in str(e).lower():
                         raise
