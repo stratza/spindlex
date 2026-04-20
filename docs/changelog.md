@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.3] - 2026-04-20
+
+### Fixed
+*   **RSA Authentication**: Refactored `RSAKey` to dynamically support SHA-2 signature algorithms (`rsa-sha2-256`, `rsa-sha2-512`), resolving "Authentication Failed" errors on modern OpenSSH servers.
+*   **Transport Stability**: Resolved a potential `AttributeError` in the transport layer by adding missing attributes to internal sentinel messages. Cleaned up noisy debug logs for better terminal readability.
+*   **SFTP Robustness**: Fixed a critical logic bug in `SFTPFile.read(-1)` that caused crashes when downloading files without an explicit size.
+*   **Protocol Compliance**: Corrected RSA signature verification to support legacy SHA-1 signatures while maintaining modern SHA-2 defaults.
+
 ## [0.6.2] - 2026-04-20
 
 ### Added

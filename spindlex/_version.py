@@ -1,7 +1,7 @@
 # spindlex/_version.py
 
-__version__ = "0.6.2"
-__version_info__ = (0, 6, 2)
+__version__ = "0.6.3"
+__version_info__ = (0, 6, 3)
 
 
 def get_version() -> str:
