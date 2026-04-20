@@ -1141,9 +1141,10 @@ class Transport:
             channel = self._channels[channel_id]
 
             # Check window size
-            self._logger.debug(f"Channel {channel_id} window: remote={channel._remote_window_size}, max_packet={channel._remote_max_packet_size}, data={len(data)}")
+            self._logger.debug(
+                f"Channel {channel_id} window: remote={channel._remote_window_size}, max_packet={channel._remote_max_packet_size}, data={len(data)}"
+            )
             if len(data) > channel._remote_window_size:
-
                 raise TransportException("Remote window size exceeded")
 
             if len(data) > channel._remote_max_packet_size:

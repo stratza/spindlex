@@ -61,13 +61,16 @@ class PublicKeyAuth:
             # Handle response to query
             # Expect MSG_USERAUTH_FAILURE or MSG_USERAUTH_PK_OK
             from ..protocol.constants import MSG_USERAUTH_FAILURE, MSG_USERAUTH_PK_OK
-            msg = self._transport._expect_message(MSG_USERAUTH_FAILURE, MSG_USERAUTH_PK_OK)
+
+            msg = self._transport._expect_message(
+                MSG_USERAUTH_FAILURE, MSG_USERAUTH_PK_OK
+            )
 
             if msg.msg_type == MSG_USERAUTH_FAILURE:
                 return False
-            
+
             # If PK_OK, proceed to full auth
-            
+
             # 2. Perform full authentication with real signature
             # RFC 4252 Section 7:
             # The signature is over a blob of:
@@ -97,7 +100,9 @@ class PublicKeyAuth:
                 username=username,
                 service=SERVICE_CONNECTION,
                 method=AUTH_PUBLICKEY,
-                method_data=self.get_method_data(key, is_query=False, signature=signature),
+                method_data=self.get_method_data(
+                    key, is_query=False, signature=signature
+                ),
             )
 
             # Send authentication request
@@ -113,7 +118,9 @@ class PublicKeyAuth:
                 f"Public key authentication failed: {e}"
             ) from e
 
-    def get_method_data(self, key: Any, is_query: bool = False, signature: bytes = b"") -> bytes:
+    def get_method_data(
+        self, key: Any, is_query: bool = False, signature: bytes = b""
+    ) -> bytes:
         """
         Build public key authentication method data.
 

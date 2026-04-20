@@ -27,9 +27,7 @@ def run_command(cmd, check=True):
     print(f"Running: {cmd}")
     if isinstance(cmd, str):
         cmd = shlex.split(cmd)
-    result = subprocess.run(
-        cmd, shell=False, capture_output=True, text=True
-    )  # noqa: S603
+    result = subprocess.run(cmd, shell=False, capture_output=True, text=True)  # noqa: S603
     if check and result.returncode != 0:
         print(f"Error running command: {cmd}")
         print(f"stdout: {result.stdout}")
