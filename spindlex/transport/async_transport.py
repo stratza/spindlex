@@ -236,7 +236,7 @@ class AsyncTransport(Transport):
                 self._reader.readexactly(length), self._loop
             )
             return fut.result()
-        except Exception as e:
+        except Exception:
             raise
 
     async def _send_message_async(self, message: Message) -> None:

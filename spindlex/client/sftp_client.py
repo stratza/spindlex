@@ -75,11 +75,11 @@ class SFTPFile:
         if size < 0:
             # Read until EOF
             result = bytearray()
-            # Use a chunk size slightly smaller than SFTP_MAX_PACKET_SIZE
+            # Use a chunk size slightly smaller than SFTP_MAX_READ_SIZE
             # to allow for SSH channel and SFTP message overhead
-            chunk_size = SFTP_MAX_PACKET_SIZE - 1024
+            chunk_size = SFTP_MAX_READ_SIZE - 1024
             while True:
-                chunk = local_file.read(chunk_size)
+                chunk = self.read(chunk_size)
 
                 if not chunk:
                     break

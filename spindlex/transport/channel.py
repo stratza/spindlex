@@ -266,8 +266,6 @@ class Channel:
                         continue
                 try:
                     # No data in event wait, try pumping the transport
-                    from .transport import HandledMessage
-
                     res = self._transport._pump()
                     if res is not None:
                         # We read or handled a message, re-check buffer immediately

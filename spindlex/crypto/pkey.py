@@ -892,7 +892,7 @@ class RSAKey(PKey):
                 hash_algo = hashes.SHA256()
             else:
                 # Default to SHA-1 for legacy ssh-rsa
-                hash_algo = hashes.SHA1()
+                hash_algo = hashes.SHA1()  # nosec
 
             # Sign data with PKCS1v15 padding
             signature = self._key.sign(data, padding.PKCS1v15(), hash_algo)
