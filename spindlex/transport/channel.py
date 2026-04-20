@@ -139,11 +139,15 @@ class Channel:
                 self._window_event.clear()
                 self._lock.release()
                 try:
-                    if not self._window_event.wait(timeout=wait_timeout):
-                        if effective_timeout is not None:
-                            raise ChannelException("Timeout waiting for window space")
-                        # If no timeout, we just return 0
-                        return 0
+                    # If we're waiting for window space, we MUST pump the transport
+                    # to process any incoming WINDOW_ADJUST messages from the server.
+                    # Otherwise, we will wait forever in a single-threaded environment.
+                    if not self._window_event.wait(timeout=0.1):
+                        self._transport._pump()
+                except Exception as e:
+                    # Ignore timeout errors from pump
+                    if "timeout" not in str(e).lower():
+                        raise ChannelException(f"Transport error during send: {e}") from e
                 finally:
                     self._lock.acquire()
 

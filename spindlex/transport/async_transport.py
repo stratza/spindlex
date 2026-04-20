@@ -288,19 +288,23 @@ class AsyncTransport(Transport):
                 if msg is not None:
                     return msg
 
+    def _read_single_packet(self) -> "Message | None":
+        """Read exactly one SSH packet and dispatch it if it is a channel message.
+        Returns the message if it needs to be queued, or None if it was dispatched internally."""
+        return super()._read_message(single_pump=True)
+
     async def _pump_async(self) -> None:
         """
-        Pump the transport once to read and dispatch a message.
+        Pump the transport once to read and dispatch exactly one SSH packet.
         Used by channels to wait for data/window adjustments.
         """
-        # We call with check_queue=False because we want to actually read from
-        # the socket to trigger dispatcher logic for data packets.
-        msg = await self._recv_message_async(check_queue=False)
+        async with self._recv_lock:
+            msg = await asyncio.to_thread(self._read_single_packet)
 
-        # Always queue the message so it can be picked up by _expect_message_async
-        # even if it was already dispatched by _read_message.
-        async with self._state_lock:
-            self._message_queue.append(msg)
+        if msg is not None:
+            # Non-channel message — queue it for _expect_message_async to pick up.
+            async with self._state_lock:
+                self._message_queue.append(msg)
 
     async def _expect_message_async(
         self, *allowed_types: int, channel_id: int | None = None
@@ -642,7 +646,10 @@ class AsyncTransport(Transport):
         self, channel_id: int, bytes_to_add: int
     ) -> None:
         """Send channel window adjust message asynchronously."""
-        remote_id = self._channels[channel_id]._remote_channel_id
+        chan = self._channels.get(channel_id)
+        if chan is None:
+            return
+        remote_id = chan._remote_channel_id
         if remote_id is None:
             return
 
@@ -653,12 +660,29 @@ class AsyncTransport(Transport):
         await self._send_message_async(msg)
 
     async def close(self) -> None:  # type: ignore[override]
+        # Snapshot channels and mark inactive before releasing lock
         async with self._state_lock:
             self._active = False
+            channels_to_close = list(self._channels.values())
+            self._channels.clear()
+
+        # Close channels outside the state lock to avoid deadlock
+        # (AsyncChannel.close() also acquires _state_lock)
+        from .async_channel import AsyncChannel
+        for c in channels_to_close:
+            try:
+                if isinstance(c, AsyncChannel):
+                    await c.close()
+                else:
+                    c.close()
+            except Exception:
+                pass
+
+        async with self._state_lock:
             if self._writer:
                 try:
                     self._writer.close()
-                    await self._writer.wait_closed()
+                    await asyncio.wait_for(self._writer.wait_closed(), timeout=2.0)
                 except Exception:
                     pass
                 self._writer = None
@@ -668,14 +692,3 @@ class AsyncTransport(Transport):
                     self._socket.close()
                 except Exception:
                     pass
-            for c in list(self._channels.values()):
-                try:
-                    from .async_channel import AsyncChannel
-
-                    if isinstance(c, AsyncChannel):
-                        await c.close()
-                    else:
-                        c.close()
-                except Exception:
-                    pass
-            self._channels.clear()

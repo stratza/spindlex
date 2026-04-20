@@ -79,11 +79,20 @@ async def test_async_channel_recv_stderr(async_channel, mock_transport):
 
 @pytest.mark.asyncio
 async def test_async_channel_exec_command(async_channel, mock_transport):
-    from spindlex.protocol.messages import Message
+    # Mock _pump_async to set the request event
+    async def pump_effect():
+        async_channel._handle_request_success()
 
-    mock_transport._expect_message_async.return_value = Message(MSG_CHANNEL_SUCCESS)
+    mock_transport._pump_async.side_effect = pump_effect
 
-    await async_channel.exec_command("ls")
+    # Use a timeout to avoid hanging indefinitely if it fails
+    import asyncio
+
+    try:
+        await asyncio.wait_for(async_channel.exec_command("ls"), timeout=1.0)
+    except asyncio.TimeoutError:
+        pytest.fail("test_async_channel_exec_command timed out")
+
     assert mock_transport._send_channel_request_async.called
 
 

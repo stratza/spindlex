@@ -102,14 +102,14 @@ class AsyncSSHClient:
             # Start client transport
             await self._transport.start_client(timeout)
 
-            # Verify host key
-            self._verify_host_key()
-
-            # Store connection info
+            # Store connection info before host key verification so hostname is available
             self._hostname = hostname
             self._port = port
             self._username = username
             self._connected = True
+
+            # Verify host key
+            self._verify_host_key()
 
             # Perform authentication if credentials provided
             if username:
