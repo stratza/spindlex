@@ -95,11 +95,11 @@ class AsyncSSHClient:
                 # If sock is provided, we need to wrap it if it's a raw socket
                 # In asyncio, we usually need reader/writer.
                 # If it's a SpindleX Channel, it might need special handling.
-                if hasattr(sock, "makefile"): # Likely a socket-like object
-                     reader, writer = await asyncio.open_connection(sock=sock)
+                if hasattr(sock, "makefile"):  # Likely a socket-like object
+                    reader, writer = await asyncio.open_connection(sock=sock)
                 else:
-                     # Assume it's already a pair or handled by transport
-                     reader, writer = None, None
+                    # Assume it's already a pair or handled by transport
+                    reader, writer = None, None
 
             # Create async transport
             self._transport = AsyncTransport(

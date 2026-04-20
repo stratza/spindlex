@@ -118,7 +118,7 @@ class AsyncChannel(Channel):
                 raise
             raise ChannelException(f"Send failed: {e}") from e
 
-    async def sendall(self, data: Union[bytes, str]) -> None:
+    async def sendall(self, data: Union[bytes, str]) -> None:  # type: ignore[override]
         """
         Send all data through channel asynchronously.
 
