@@ -13,3 +13,9 @@ Everything you need to know about file transfers, directory management, and stre
 
 ## [**Server Usage**](server.md)
 Learn how to implement custom SSH and SFTP servers using SpindleX's modular server framework.
+
+## [**Security Best Practices**](../security.md)
+Recommendations for secure deployment and management of SSH connections.
+
+## [**Performance Optimization**](../performance.md)
+Techniques and tools for maximizing throughput and minimizing latency.

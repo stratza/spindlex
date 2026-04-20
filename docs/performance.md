@@ -36,6 +36,44 @@ SpindleX uses an internal buffering strategy for I/O operations. By reading data
 
 By default, SpindleX enables `TCP_NODELAY` on the underlying transport socket. This ensures that packets are sent immediately without waiting for the buffer to fill up, which is critical for interactive shells and low-latency command execution.
 
+## Performance Monitoring Tools
+
+SpindleX provides advanced monitoring tools to profile your SSH operations in real-time. These tools are available in the `spindlex.logging.monitoring` module.
+
+### Performance Monitor
+
+The `PerformanceMonitor` tracks operation timings, throughput, and error rates.
+
+```python
+from spindlex.logging.monitoring import get_performance_monitor
+
+monitor = get_performance_monitor()
+
+# The monitor automatically tracks internal operations if logging is enabled.
+# You can also manually track custom operations:
+with monitor.track("my_bulk_transfer"):
+    # Perform operations
+    pass
+
+# Print a summary of performance metrics
+monitor.print_summary()
+```
+
+### Protocol Analyzer
+
+The `ProtocolAnalyzer` provides insights into the SSH protocol exchange, including packet types, sizes, and frequencies.
+
+```python
+from spindlex.logging.monitoring import get_protocol_analyzer
+
+analyzer = get_protocol_analyzer()
+
+# Get statistics about packet distribution
+stats = analyzer.get_stats()
+print(f"Total packets: {stats['total_packets']}")
+print(f"Data throughput: {stats['total_bytes'] / 1024 / 1024:.2f} MB")
+```
+
 ## Best Practices Summary
 
 1.  **Use Connection Pooling**: Reuse SSH connections for multiple operations to avoid the overhead of repeated handshakes.

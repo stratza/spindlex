@@ -182,6 +182,9 @@ class SFTPClient:
             if not self._channel:
                 raise SFTPError("Failed to open channel for SFTP")
 
+            # Prevent recv() from spinning forever when no response arrives
+            self._channel.settimeout(30.0)
+
             # Request SFTP subsystem
             self._channel.invoke_subsystem(SFTP_SUBSYSTEM)
 

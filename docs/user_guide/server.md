@@ -9,6 +9,9 @@ Developing an SSH server with SpindleX involves two main components:
 1.  **`SSHServer`**: A base class that defines the server's behavior (authentication policies, channel authorization, etc.).
 2.  **`SSHServerManager`**: Orchestrates the server lifecycle, listening for incoming socket connections and handing them off to the transport layer.
 
+> [!IMPORTANT]
+> **Async Support**: Currently, SpindleX only supports **synchronous** SSH and SFTP server implementations. `AsyncSSHServer` is on the roadmap but is not yet available. However, synchronous servers can still handle multiple connections efficiently using the built-in threading model.
+
 ## Basic Server Implementation
 
 To create an SSH server, you must subclass `SSHServer` and override the relevant methods for your needs.

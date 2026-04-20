@@ -234,6 +234,10 @@ class SFTPServer:
             SFTPError: If SFTP initialization fails
         """
         try:
+            # Bound recv() waits so the SFTP thread exits promptly when the
+            # client disconnects instead of blocking for the full socket timeout.
+            self._channel.settimeout(30.0)
+
             # Wait for client init message
             init_msg = self._receive_message()
             if not isinstance(init_msg, SFTPInitMessage):
@@ -312,24 +316,39 @@ class SFTPServer:
 
         Handles all SFTP protocol messages and dispatches to appropriate handlers.
         """
+        message = None
         while True:
             try:
                 message = self._receive_message()
                 self._handle_message(message)
             except Exception as e:
-                self._logger.error(f"Error processing SFTP message: {e}")
-                # Send error response if possible
-                try:
-                    if (
-                        hasattr(message, "request_id")
-                        and message.request_id is not None
-                    ):
-                        error_msg = SFTPStatusMessage(
-                            message.request_id, SSH_FX_FAILURE, str(e)
-                        )
-                        self._send_message(error_msg)
-                except Exception:
-                    pass
+                err = str(e).lower()
+                # Treat EOF / connection-closed as a clean shutdown, not an error
+                if any(
+                    k in err
+                    for k in (
+                        "connection closed",
+                        "eof",
+                        "closed",
+                        "bad file descriptor",
+                        "timeout",
+                    )
+                ):
+                    self._logger.debug(f"SFTP session ended: {e}")
+                else:
+                    self._logger.error(f"Error processing SFTP message: {e}")
+                    try:
+                        if (
+                            message is not None
+                            and hasattr(message, "request_id")
+                            and message.request_id is not None
+                        ):
+                            error_msg = SFTPStatusMessage(
+                                message.request_id, SSH_FX_FAILURE, str(e)
+                            )
+                            self._send_message(error_msg)
+                    except Exception:
+                        pass
                 break
 
     def _handle_message(self, message: SFTPMessage) -> None:

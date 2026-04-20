@@ -42,15 +42,20 @@ class AsyncChannel(Channel):
         # Override parent's deque buffers with bytes for async
         self._recv_buffer: bytes = b""
         self._stderr_buffer: bytes = b""
+        import threading
+
+        self._buffer_lock = threading.Lock()
 
     def _handle_data(self, data: bytes) -> None:
         """Handle incoming channel data."""
-        self._recv_buffer += data
+        with self._buffer_lock:
+            self._recv_buffer += data
 
     def _handle_extended_data(self, data_type: int, data: bytes) -> None:
         """Handle incoming channel extended data."""
         if data_type == SSH_EXTENDED_DATA_STDERR:
-            self._stderr_buffer += data
+            with self._buffer_lock:
+                self._stderr_buffer += data
 
     def _handle_eof(self) -> None:
         """Handle incoming channel EOF."""

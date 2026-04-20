@@ -35,6 +35,7 @@ from ..protocol.constants import (
     KEX_COOKIE_SIZE,
     MAX_CHANNELS,
     MAX_PACKET_SIZE,
+    MAX_VERSION_LINE_LENGTH,
     MIN_PACKET_SIZE,
     MIN_PADDING_SIZE,
     MSG_CHANNEL_CLOSE,
@@ -66,6 +67,7 @@ from ..protocol.constants import (
     MSG_USERAUTH_SUCCESS,
     PACKET_LENGTH_SIZE,
     PADDING_LENGTH_SIZE,
+    REKEY_SEQUENCE_THRESHOLD,
     SERVICE_CONNECTION,
     SERVICE_USERAUTH,
     SSH_OPEN_CONNECT_FAILED,
@@ -443,7 +445,7 @@ class Transport:
 
         if isinstance(msg, UserAuthFailureMessage):
             return False
-        elif getattr(msg, "msg_type", 0) == MSG_USERAUTH_PK_OK:
+        elif msg.msg_type == MSG_USERAUTH_PK_OK:
             return True
         else:
             return False
@@ -741,10 +743,14 @@ class Transport:
 
     def _build_direct_tcpip_data(self, dest_addr: tuple[str, int]) -> bytes:
         """Build type-specific data for direct-tcpip channel."""
+        try:
+            originator_ip = self._socket.getsockname()[0]
+        except OSError:
+            originator_ip = "127.0.0.1"
         data = bytearray()
         data.extend(write_string(dest_addr[0]))  # destination host
         data.extend(write_uint32(dest_addr[1]))  # destination port
-        data.extend(write_string("127.0.0.1"))  # originator IP
+        data.extend(write_string(originator_ip))  # originator IP
         data.extend(write_uint32(0))  # originator port
         return bytes(data)
 
@@ -777,7 +783,16 @@ class Transport:
         Args:
             msg: Channel message to handle
         """
-        # All channel messages (80-100) have recipient_channel as first uint32
+        # Handle messages that don't have a recipient_channel field first
+        if msg.msg_type == MSG_CHANNEL_OPEN:
+            self._handle_channel_open(msg)
+            return
+
+        if msg.msg_type == MSG_GLOBAL_REQUEST:
+            self._handle_global_request(msg)
+            return
+
+        # Other channel messages (91-100) have recipient_channel as first uint32
         recipient_channel = None
         if len(msg._data) >= 4:
             recipient_channel, _ = read_uint32(msg._data, 0)
@@ -804,16 +819,14 @@ class Transport:
                         channel._handle_request_failure()
                     elif msg.msg_type == MSG_CHANNEL_REQUEST:
                         self._handle_channel_request(msg)
-
-                # Handle channel open even if channel doesn't exist yet (logical!)
-                if msg.msg_type == MSG_CHANNEL_OPEN:
-                    self._handle_channel_open(msg)
+                    else:
+                        self._logger.debug(
+                            f"Unhandled channel message type {msg.msg_type} for channel {recipient_channel}"
+                        )
                 else:
-                    pass
-
-        # If it's a global request, handle it separately
-        if msg.msg_type == MSG_GLOBAL_REQUEST:
-            self._handle_global_request(msg)
+                    self._logger.debug(
+                        f"Message type {msg.msg_type} for unknown channel {recipient_channel}"
+                    )
 
     def _handle_channel_open(self, msg: Message) -> None:
         """
@@ -1373,9 +1386,15 @@ class Transport:
 
     def close(self) -> None:
         """Close transport and cleanup resources."""
+        kex_thread: Optional[threading.Thread] = None
         with self._lock:
             self._active = False
+            kex_thread = getattr(self, "_kex_thread", None)
             if self._socket:
+                try:
+                    self._socket.shutdown(socket.SHUT_RDWR)
+                except Exception:
+                    pass
                 try:
                     self._socket.close()
                 except Exception:
@@ -1388,6 +1407,11 @@ class Transport:
                 except Exception:
                     pass
             self._channels.clear()
+
+        # Join kex thread outside lock to avoid deadlock.
+        # Socket closure above ensures the thread unblocks promptly.
+        if kex_thread is not None and kex_thread.is_alive():
+            kex_thread.join(timeout=5.0)
 
     def _do_handshake(self) -> None:
         """
@@ -1411,7 +1435,10 @@ class Transport:
     def _send_version(self) -> None:
         """Send SSH version string."""
         version_string = create_version_string()
-        self._client_version = version_string
+        if self._server_mode:
+            self._server_version = version_string
+        else:
+            self._client_version = version_string
 
         version_line = version_string + "\r\n"
         self._socket.sendall(version_line.encode(SSH_STRING_ENCODING))
@@ -1442,7 +1469,7 @@ class Transport:
                     break
 
                 # Prevent excessive version line length
-                if len(current_line) > 255:
+                if len(current_line) > MAX_VERSION_LINE_LENGTH:
                     raise ProtocolException("Version line too long")
 
             if current_line.startswith(b"SSH-"):
@@ -1561,16 +1588,19 @@ class Transport:
 
     def _check_rekey(self) -> None:
         """Check if rekeying is needed and start it if so."""
-        if self._kex_in_progress or not self._active:
+        if not self._active:
             return
 
         with self._lock:
+            if self._kex_in_progress:
+                return
+
             # Check byte limit, time limit, or sequence number (rekey every 2^31 packets)
             if (
                 self._bytes_since_rekey >= self._rekey_bytes_limit
                 or (time.time() - self._last_rekey_time) >= self._rekey_time_limit
-                or self._sequence_number_out >= 0x80000000
-                or self._sequence_number_in >= 0x80000000
+                or self._sequence_number_out >= REKEY_SEQUENCE_THRESHOLD
+                or self._sequence_number_in >= REKEY_SEQUENCE_THRESHOLD
             ):
                 self._logger.debug(
                     f"Triggering rekeying: bytes={self._bytes_since_rekey}, limit={self._rekey_bytes_limit}"
@@ -1711,7 +1741,7 @@ class Transport:
                         if (
                             msg.msg_type == MSG_GLOBAL_REQUEST  # 80
                             or msg.msg_type == MSG_CHANNEL_OPEN  # 90
-                            or (msg.msg_type >= 93 and msg.msg_type <= 98)
+                            or (msg.msg_type >= 93 and msg.msg_type <= 100)
                         ):
                             self._handle_channel_message(msg)
                             if single_pump:
@@ -1820,7 +1850,7 @@ class Transport:
         if not hasattr(self, "_server_host_key_blob") or not self._server_host_key_blob:
             return None
 
-        from ..crypto.pkey import PKey  # type: ignore[unreachable]
+        from ..crypto.pkey import PKey
 
         try:
             return PKey.from_string(self._server_host_key_blob)
@@ -1937,11 +1967,9 @@ class Transport:
                 nonce = self._iv_out_active + struct.pack(
                     ">Q", self._sequence_number_out
                 )
-                self._logger.info(
+                self._logger.debug(
                     f"AEAD Encrypt: cipher={cipher_name}, nonce={nonce.hex()}, data_len={len(packet)}"
                 )
-                if len(packet) < 100:
-                    self._logger.info(f"AEAD Plaintext hex: {packet.hex()}")
                 encrypted = self._crypto_backend.encrypt(
                     cipher_name, self._encryption_key_out_active, nonce, packet
                 )
@@ -2149,8 +2177,8 @@ class Transport:
 
             while len(data) < length:
                 try:
-                    # If we need to read from socket, try to read more than requested to buffer it
-                    # Read up to 32KB at a time to reduce syscalls and round-trips
+                    # Read at least 32KB at a time to buffer ahead and reduce syscalls;
+                    # for larger packets read exactly what's needed.
                     to_read = max(32768, length - len(data))
 
                     # Ensure we don't hold _lock during blocking recv()

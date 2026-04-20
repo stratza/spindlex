@@ -114,13 +114,9 @@ class AsyncTransport(Transport):
             self._server_mode = False
 
         try:
-            # Handshake
-            if self._server_mode:
-                await self._send_version_async()
-                await self._recv_version_async()
-            else:
-                await self._recv_version_async()
-                await self._send_version_async()
+            # Handshake: send our version first, then receive peer's (RFC 4253 §4.2)
+            await self._send_version_async()
+            await self._recv_version_async()
 
             # Key Exchange
             await self._start_kex_async()
@@ -348,7 +344,10 @@ class AsyncTransport(Transport):
 
     async def _send_version_async(self) -> None:
         version_string = create_version_string()
-        self._client_version = version_string
+        if self._server_mode:
+            self._server_version = version_string
+        else:
+            self._client_version = version_string
         if not self._writer:
             raise TransportException("Transport not initialized with async streams")
         self._writer.write((version_string + "\r\n").encode(SSH_STRING_ENCODING))
@@ -363,7 +362,11 @@ class AsyncTransport(Transport):
                 raise TransportException("Connection closed")
             line = line.strip()
             if line.startswith(b"SSH-"):
-                self._server_version = line.decode(SSH_STRING_ENCODING)
+                version_string = line.decode(SSH_STRING_ENCODING)
+                if self._server_mode:
+                    self._client_version = version_string
+                else:
+                    self._server_version = version_string
                 break
 
     async def _send_kexinit_async(self) -> None:

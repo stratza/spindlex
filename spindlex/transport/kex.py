@@ -20,6 +20,7 @@ from ..protocol.constants import (
     KEX_CURVE25519_SHA256,
     KEX_DH_GROUP14_SHA256,
     KEX_ECDH_SHA2_NISTP256,
+    MSG_KEX_ECDH_INIT,
     MSG_KEX_ECDH_REPLY,
     MSG_KEXDH_INIT,
     MSG_KEXDH_REPLY,
@@ -316,6 +317,9 @@ class KeyExchange:
 
             signature_blob, offset = read_string(reply_msg._data, offset)
 
+            # Store host key blob for transport
+            self._transport._server_host_key_blob = server_host_key_blob
+
             # Validate server's public key
             if server_public_int <= 1 or server_public_int >= self.DH_GROUP14_P - 1:
                 raise CryptoException("Invalid server DH public key")
@@ -377,8 +381,8 @@ class KeyExchange:
                 format=serialization.PublicFormat.UncompressedPoint,
             )
 
-            # Send KEX_ECDH_INIT message (message type 30)
-            kex_ecdh_init = Message(30)  # MSG_KEX_ECDH_INIT
+            # Send KEX_ECDH_INIT message
+            kex_ecdh_init = Message(MSG_KEX_ECDH_INIT)
             kex_ecdh_init.add_string(self._ecdh_public_key_bytes)
             self._transport._send_message(kex_ecdh_init)
 
@@ -421,9 +425,17 @@ class KeyExchange:
             raise
 
     def _compute_ecdh_exchange_hash(
-        self, server_host_key: bytes, server_public_key: bytes, signature: bytes
+        self,
+        server_host_key: bytes,
+        server_public_key: bytes,
+        signature: bytes,
+        client_ecdh_public_key: Optional[bytes] = None,
     ) -> None:
-        """Compute the exchange hash H for ECDH."""
+        """Compute the exchange hash H for ECDH.
+
+        client_ecdh_public_key overrides self._ecdh_public_key_bytes, allowing
+        the server-side path to pass in the client's key without mutating state.
+        """
         hash_data = bytearray()
 
         # Client version string
@@ -435,24 +447,34 @@ class KeyExchange:
         hash_data.extend(write_string(server_version))
 
         # Client KEXINIT
-        assert self._client_kexinit is not None
+        if self._client_kexinit is None:
+            raise CryptoException("Missing client KEXINIT for ECDH exchange hash")
         hash_data.extend(write_string(self._client_kexinit))
 
         # Server KEXINIT
-        assert self._server_kexinit is not None
+        if self._server_kexinit is None:
+            raise CryptoException("Missing server KEXINIT for ECDH exchange hash")
         hash_data.extend(write_string(self._server_kexinit))
 
         # Server host key
         hash_data.extend(write_string(server_host_key))
 
         # Client public key
-        hash_data.extend(write_string(self._ecdh_public_key_bytes))
+        client_pub = (
+            client_ecdh_public_key
+            if client_ecdh_public_key is not None
+            else self._ecdh_public_key_bytes
+        )
+        if client_pub is None:
+            raise CryptoException("Missing ECDH client public key for exchange hash")
+        hash_data.extend(write_string(client_pub))
 
         # Server public key
         hash_data.extend(write_string(server_public_key))
 
         # Shared secret
-        assert self._shared_secret is not None
+        if self._shared_secret is None:
+            raise CryptoException("Missing shared secret for ECDH exchange hash")
         hash_data.extend(self._shared_secret)
 
         # Compute SHA256 hash
@@ -465,8 +487,8 @@ class KeyExchange:
         try:
             from cryptography.hazmat.primitives.asymmetric import x25519
 
-            # 1. Receive KEX_ECDH_INIT (30)
-            init_msg = self._transport._expect_message(30)  # MSG_KEX_ECDH_INIT
+            # 1. Receive KEX_ECDH_INIT
+            init_msg = self._transport._expect_message(MSG_KEX_ECDH_INIT)
             client_public_key_blob, _ = read_string(init_msg._data, 0)
 
             # 2. Generate server Curve25519 key pair
@@ -500,8 +522,8 @@ class KeyExchange:
             # 6. Sign exchange hash
             signature_blob = self._sign_exchange_hash(self._exchange_hash)  # type: ignore[arg-type]
 
-            # 7. Send KEX_ECDH_REPLY (31)
-            reply_msg = Message(31)  # MSG_KEX_ECDH_REPLY
+            # 7. Send KEX_ECDH_REPLY
+            reply_msg = Message(MSG_KEX_ECDH_REPLY)
             reply_msg.add_string(server_host_key_blob)
             reply_msg.add_string(server_public_key_bytes)
             reply_msg.add_string(signature_blob)
@@ -545,30 +567,13 @@ class KeyExchange:
             server_host_key = self._transport._server_key
             server_host_key_blob = server_host_key.get_public_key_bytes()
 
-            # 6. Compute exchange hash H
-            # In our generic _compute_exchange_hash, arguments are: host_key, server_dh_public, signature
-            # Wait! We need server_dh_public as the payload for the mpint.
-            # And we need to make sure client public is stored correctly in the object.
-
-            # Temporary hack: manually set object state for _compute_exchange_hash
-            # This is slightly ugly but matches current structure.
-            # Need to store CLIENT key in e and SERVER key in f for hash
-            # Wait! _compute_exchange_hash expects CLIENT pub in self._dh_public_key_mpint
-            # and SERVER pub as argument.
-
-            orig_client_mpint = self._dh_public_key_mpint
-            self._dh_public_key_mpint = write_mpint(client_public_key_int)
-
+            # 6. Compute exchange hash H — pass client key explicitly to avoid mutating state
             self._compute_exchange_hash(
                 server_host_key_blob,
-                write_mpint(server_public_numbers.y)[
-                    4:
-                ],  # Extract payload to match read_string behavior
+                write_mpint(server_public_numbers.y)[4:],  # strip 4-byte length prefix
                 b"",  # signature not used during hash computation itself
+                client_dh_public_mpint=write_mpint(client_public_key_int),
             )
-
-            # Restore state
-            self._dh_public_key_mpint = orig_client_mpint
 
             # 7. Sign exchange hash
             signature_blob = self._sign_exchange_hash(self._exchange_hash)  # type: ignore[arg-type]
@@ -589,15 +594,68 @@ class KeyExchange:
 
     def _perform_ecdh_sha2_nistp256_server(self) -> None:
         """Perform server-side ECDH NIST P-256 SHA256 key exchange."""
-        # Implementation of ECDH server side would go here.
-        # For now, let's at least have the method to avoid AttributeError.
-        raise CryptoException(
-            "ECDH NIST P-256 server-side key exchange not yet fully implemented"
-        )
+        try:
+            from cryptography.hazmat.primitives.asymmetric import ec
+
+            # 1. Receive KEX_ECDH_INIT with client's P-256 public key
+            init_msg = self._transport._expect_message(MSG_KEX_ECDH_INIT)
+            client_public_key_blob, _ = read_string(init_msg._data, 0)
+
+            # 2. Generate server P-256 key pair
+            self._ecdh_private_key = ec.generate_private_key(
+                ec.SECP256R1(), default_backend()
+            )
+            server_public_key = self._ecdh_private_key.public_key()
+            self._ecdh_public_key_bytes = server_public_key.public_bytes(
+                encoding=serialization.Encoding.X962,
+                format=serialization.PublicFormat.UncompressedPoint,
+            )
+
+            # 3. Compute shared secret
+            client_public_key_obj = ec.EllipticCurvePublicKey.from_encoded_point(
+                ec.SECP256R1(), client_public_key_blob
+            )
+            shared_secret_bytes = self._ecdh_private_key.exchange(
+                ec.ECDH(), client_public_key_obj
+            )
+            self._shared_secret = write_mpint(
+                int.from_bytes(shared_secret_bytes, "big")
+            )
+
+            # 4. Get server host key blob
+            server_host_key = self._transport._server_key
+            server_host_key_blob = server_host_key.get_public_key_bytes()
+
+            # 5. Compute exchange hash — pass client key explicitly to avoid mutating state
+            self._compute_ecdh_exchange_hash(
+                server_host_key_blob,
+                self._ecdh_public_key_bytes,  # server's public key
+                b"",
+                client_ecdh_public_key=client_public_key_blob,
+            )
+
+            # 6. Sign exchange hash
+            signature_blob = self._sign_exchange_hash(self._exchange_hash)  # type: ignore[arg-type]
+
+            # 7. Send KEX_ECDH_REPLY
+            reply_msg = Message(MSG_KEX_ECDH_REPLY)
+            reply_msg.add_string(server_host_key_blob)
+            reply_msg.add_string(self._ecdh_public_key_bytes)
+            reply_msg.add_string(signature_blob)
+            self._transport._send_message(reply_msg)
+
+            # 8. Set session ID
+            if self._session_id is None:
+                self._session_id = self._exchange_hash
+
+        except Exception as e:
+            raise CryptoException(f"ECDH P-256 server KEX failed: {e}") from e
 
     def _sign_exchange_hash(self, exchange_hash: bytes) -> bytes:
         """Sign exchange hash using server private key."""
         server_key = self._transport._server_key
+        if server_key is None:
+            raise CryptoException("Server key not set — cannot sign exchange hash")
         signature = server_key.sign(exchange_hash)
         if signature is None:
             raise CryptoException("Failed to sign exchange hash")
@@ -616,13 +674,13 @@ class KeyExchange:
                 format=serialization.PublicFormat.Raw,
             )
 
-            # Send KEX_ECDH_INIT (30)
-            kex_ecdh_init = Message(30)
+            # Send KEX_ECDH_INIT
+            kex_ecdh_init = Message(MSG_KEX_ECDH_INIT)
             kex_ecdh_init.add_string(client_public_key_bytes)
             self._transport._send_message(kex_ecdh_init)
 
-            # Receive KEX_REPLY (31)
-            reply_msg = self._transport._expect_message(31)
+            # Receive KEX_ECDH_REPLY
+            reply_msg = self._transport._expect_message(MSG_KEX_ECDH_REPLY)
             offset = 0
             server_host_key_blob, offset = read_string(reply_msg._data, offset)
             server_public_key_blob, offset = read_string(reply_msg._data, offset)
@@ -677,9 +735,17 @@ class KeyExchange:
         )
 
     def _compute_exchange_hash(
-        self, server_host_key: bytes, server_dh_public: bytes, signature: bytes
+        self,
+        server_host_key: bytes,
+        server_dh_public: bytes,
+        signature: bytes,
+        client_dh_public_mpint: Optional[bytes] = None,
     ) -> None:
-        """Compute the exchange hash H."""
+        """Compute the exchange hash H for DH key exchange.
+
+        client_dh_public_mpint overrides self._dh_public_key_mpint, allowing
+        the server-side path to pass in the client's key without mutating state.
+        """
         hash_data = bytearray()
 
         # Client version string
@@ -703,10 +769,15 @@ class KeyExchange:
         # Server host key
         hash_data.extend(write_string(server_host_key))
 
-        # Client DH public key
-        if self._dh_public_key_mpint is None:
-            raise CryptoException("Missing DH public key")
-        hash_data.extend(self._dh_public_key_mpint)
+        # Client DH public key (e)
+        client_mpint = (
+            client_dh_public_mpint
+            if client_dh_public_mpint is not None
+            else self._dh_public_key_mpint
+        )
+        if client_mpint is None:
+            raise CryptoException("Missing DH client public key")
+        hash_data.extend(client_mpint)
 
         # Server DH public key (f) - must be encoded as mpint/string
         hash_data.extend(write_string(server_dh_public))

@@ -36,6 +36,44 @@ Host key verification is critical to prevent man-in-the-middle (MITM) attacks.
 
 ---
 
+## Supported Cryptographic Algorithms
+
+SpindleX prioritizes modern, secure cryptographic algorithms and disables legacy, weak primitives by default.
+
+### Key Exchange Algorithms
+
+-   `curve25519-sha256@libssh.org`
+-   `ecdh-sha2-nistp256`
+-   `ecdh-sha2-nistp384`
+-   `ecdh-sha2-nistp521`
+-   `diffie-hellman-group14-sha256`
+-   `diffie-hellman-group14-sha1` (Deprecated, but available)
+
+### Encryption Ciphers
+
+-   `chacha20-poly1305@openssh.com` (AEAD)
+-   `aes256-gcm@openssh.com` (AEAD)
+-   `aes128-gcm@openssh.com` (AEAD)
+-   `aes256-ctr`
+-   `aes192-ctr`
+-   `aes128-ctr`
+
+### Message Authentication Codes (MAC)
+
+-   `hmac-sha2-512`
+-   `hmac-sha2-256`
+-   `hmac-sha1` (Deprecated)
+
+### Public Key Algorithms
+
+-   `ssh-ed25519`
+-   `ecdsa-sha2-nistp256`
+-   `ecdsa-sha2-nistp384`
+-   `ecdsa-sha2-nistp521`
+-   `ssh-rsa` (Requires SHA-2 signatures: `rsa-sha2-256`, `rsa-sha2-512`)
+
+---
+
 ## Security Policy
 
 For information on how to report vulnerabilities or our disclosure policy, please see our [Responsible Disclosure Policy](https://github.com/Di3Z1E/spindlex/blob/main/meta/SECURITY.md).

@@ -248,6 +248,41 @@ Remote port forwarding allows you to forward a port on the remote server to a po
             )
             
             print(f"Remote tunnel {tunnel_id} established.")
+
+### Managing Tunnels
+
+Once a tunnel is created, you can manage it using the `tunnel_id` returned by the creation methods.
+
+#### Closing a Specific Tunnel
+
+=== "Sync"
+
+    ```python
+    client.close_local_port_forward(tunnel_id)
+    # or
+    client.close_remote_port_forward(tunnel_id)
+    ```
+
+=== "Async"
+
+    ```python
+    await client.close_local_port_forward(tunnel_id)
+    # or
+    await client.close_remote_port_forward(tunnel_id)
+    ```
+
+#### Closing All Tunnels
+
+=== "Sync"
+
+    ```python
+    client.close_all_tunnels()
+    ```
+
+=== "Async"
+
+    ```python
+    await client.close_all_tunnels()
     ```
 
 ## Error Handling

@@ -165,8 +165,13 @@ class GSSAPIAuth:
             GSSAPI Name object for the target service
         """
         if gss_host is None:
-            # Use hostname from transport socket
-            hostname = self._transport._socket.getpeername()[0]
+            # Use hostname from transport if available, otherwise get from socket
+            hostname = getattr(self._transport, "_hostname", None)
+            if not hostname:
+                try:
+                    hostname = self._transport._socket.getpeername()[0]
+                except (OSError, AttributeError):
+                    hostname = "localhost"
         else:
             hostname = gss_host
 
@@ -241,6 +246,9 @@ class GSSAPIAuth:
                     # Receive response if context not complete
                     if self._gss_context and not self._gss_context.complete:
                         token = self._receive_gssapi_response()
+                        # If authenticated successfully during response receive
+                        if self._transport.authenticated:
+                            return True
                         if token is None:
                             return False
 

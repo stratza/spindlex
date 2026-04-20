@@ -13,8 +13,6 @@ from typing import Any, Optional, Union
 from ..exceptions import ChannelException, ProtocolException
 from ..protocol.constants import (
     DEFAULT_WINDOW_SIZE,
-    MSG_CHANNEL_FAILURE,
-    MSG_CHANNEL_SUCCESS,
     SSH_STRING_ENCODING,
 )
 from ..protocol.utils import (
@@ -234,16 +232,22 @@ class Channel:
 
             # Wait for data or timeout
             if not self._data_event.wait(timeout=wait_timeout):
-                # We timed out waiting for the event, poll transport
+                # Another thread (e.g. connection handler) may have already put
+                # data in the buffer while we were waiting.  Check before
+                # blocking on the socket – calling _pump() here would race with
+                # that thread and could block for the full socket timeout even
+                # though data is already available.
+                with self._lock:
+                    if (
+                        self._recv_buffer
+                        or self._eof_received
+                        or not self._transport.active
+                    ):
+                        continue
                 try:
-                    # _pump will handle the message and set _data_event if it's channel data
-                    self._transport._logger.debug(
-                        f"DEBUG: Channel {self._channel_id} polling transport via _pump (EOF={self._eof_received}, KEX={self._transport._kex_in_progress})"
-                    )
                     self._transport._pump()
                 except Exception as e:
-                    # If it's a timeout from the socket, we just loop again and check our own timeout
-                    if "Timeout" not in str(e):
+                    if "timeout" not in str(e).lower():
                         raise
                     pass
 
@@ -446,41 +450,49 @@ class Channel:
                 raise ChannelException("Channel not properly opened")
 
             try:
-                # Send channel request through transport
-                self._transport._send_channel_request(
-                    self._channel_id, request_type, want_reply, data
-                )
-
                 if want_reply:
-                    # Reset request event and wait for response
                     self._request_success = None
                     self._request_event.clear()
 
-                # Release lock before waiting
-                pass
-
+                self._transport._send_channel_request(
+                    self._channel_id, request_type, want_reply, data
+                )
             except Exception as e:
                 raise ChannelException(f"Failed to send channel request: {e}") from e
 
-        if want_reply:
-            try:
-                # Wait for response using _expect_message which handles other messages correctly
-                msg = self._transport._expect_message(
-                    MSG_CHANNEL_SUCCESS, MSG_CHANNEL_FAILURE
-                )
+        if not want_reply:
+            return True
 
-                # Check recipient channel matches (it should, _expect_message just gives us next msg)
-                # But MSG_CHANNEL_SUCCESS/FAILURE might be for another channel if we didn't filter.
-                # Actually _expect_message gives next message of that type.
-                # If there are multiple channels, we might need a better way.
-                # For now, this is better than what we had.
-                return bool(msg.msg_type == MSG_CHANNEL_SUCCESS)
-            except Exception as e:
-                raise ChannelException(
-                    f"Error waiting for channel request response: {e}"
-                )
+        start_time = time.time()
+        while True:
+            with self._lock:
+                if self._request_success is not None:
+                    return self._request_success
+                if self._closed:
+                    raise ChannelException(
+                        "Channel closed while waiting for request response"
+                    )
 
-        return True  # No reply requested
+            if self._timeout is not None:
+                elapsed = time.time() - start_time
+                if elapsed >= self._timeout:
+                    raise ChannelException(
+                        "Timeout waiting for channel request response"
+                    )
+
+            wait_timeout = 0.1
+            if self._timeout is not None:
+                elapsed = time.time() - start_time
+                wait_timeout = max(0, min(0.1, self._timeout - elapsed))
+
+            if not self._request_event.wait(timeout=wait_timeout):
+                try:
+                    self._transport._pump()
+                except Exception as e:
+                    if "timeout" not in str(e).lower():
+                        raise ChannelException(
+                            f"Transport error during request: {e}"
+                        ) from e
 
     def send_eof(self) -> None:
         """
@@ -566,14 +578,17 @@ class Channel:
 
             # Wait for data or timeout
             if not self._data_event.wait(timeout=wait_timeout):
-                # We timed out waiting for the event, poll transport
+                with self._lock:
+                    if (
+                        self._stderr_buffer
+                        or self._eof_received
+                        or not self._transport.active
+                    ):
+                        continue
                 try:
-                    # _pump will handle the message and set _data_event if it's channel data
-                    # _pump will handle the message and set _data_event if it's channel data
                     self._transport._pump()
                 except Exception as e:
-                    # If it's a timeout from the socket, we just loop again and check our own timeout
-                    if "Timeout" not in str(e):
+                    if "timeout" not in str(e).lower():
                         raise
                     pass
 
