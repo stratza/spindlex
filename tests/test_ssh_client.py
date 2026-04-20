@@ -24,14 +24,14 @@ def test_ssh_client_connect(ssh_client, mock_socket):
     with patch("spindlex.transport.transport.Transport.start_client"):
         # Clear the mocked transport from fixture so connect() can create a new one
         ssh_client._transport = None
-        
+
         # We need to patch the Transport constructor to return a mock
         with patch("spindlex.client.ssh_client.Transport") as mock_transport_class:
             mock_transport = MagicMock()
             mock_transport.active = True
             mock_transport.auth_password.return_value = True
             mock_transport_class.return_value = mock_transport
-            
+
             # Bypass host key verification for this test
             with patch.object(ssh_client, "_verify_host_key"):
                 ssh_client.connect("localhost", username="alice", password="password")
