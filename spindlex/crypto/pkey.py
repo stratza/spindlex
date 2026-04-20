@@ -761,7 +761,7 @@ class RSAKey(PKey):
     @property
     def algorithm_name(self) -> str:
         """Get SSH algorithm name."""
-        return getattr(self, "_algorithm_name", "ssh-rsa")
+        return getattr(self, "_algorithm_name", "rsa-sha2-256")
 
     # Remove hardcoded get_ssh_type to use the one in PKey which returns algorithm_name
 
@@ -967,12 +967,6 @@ class RSAKey(PKey):
             algorithm = signature[offset : offset + algo_len].decode()
             offset += algo_len
 
-            if algorithm == "ssh-rsa":
-                raise CryptoException("Insecure ssh-rsa (SHA-1) signature rejected")
-
-            if algorithm not in ["rsa-sha2-256", "rsa-sha2-512"]:
-                return False
-
             sig_len = struct.unpack(">I", signature[offset : offset + 4])[0]
             offset += 4
             sig_bytes = signature[offset : offset + sig_len]
@@ -981,8 +975,12 @@ class RSAKey(PKey):
             hash_algo: Any
             if algorithm == "rsa-sha2-512":
                 hash_algo = hashes.SHA512()
-            else:
+            elif algorithm == "rsa-sha2-256":
                 hash_algo = hashes.SHA256()
+            elif algorithm == "ssh-rsa":
+                hash_algo = hashes.SHA1()  # nosec
+            else:
+                return False
 
             # Verify signature
             public_key.verify(sig_bytes, data, padding.PKCS1v15(), hash_algo)
