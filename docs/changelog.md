@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.2] - 2026-04-20
+
+### Added
+*   **ProxyJump Support**: Added `sock` parameter to `SSHClient.connect()` and `AsyncSSHClient.connect()`, enabling connections via existing channels (bastion hosts) or custom sockets.
+*   **Stream Iteration**: `ChannelFile` (sync) and `AsyncChannelFile` (async) are now iterable, allowing line-by-line reading: `for line in stdout: print(line)`.
+*   **Enhanced Connectivity**: Added `sendall()` and `readline()` methods to base `Channel` and `AsyncChannel` for better socket-like compatibility.
+
+### Fixed
+*   **Authentication Logic**: Fixed `SSHClient.connect()` to correctly attempt all provided credentials (Public Key then Password) sequentially if one fails.
+*   **Documentation Accuracy**: Corrected misleading method names in the User Guide (e.g., `close_port_forward`) and updated `ProxyJump` recipes to use the new `sock` parameter.
+*   **Async Consistency**: Updated async examples to properly use `await` on `recv_exit_status()` and other stream operations.
+
+### Security
+*   **Log Sanitization**: Integrated `LogSanitizer` to automatically redact sensitive credentials (passwords, keys) from all project logs.
+*   **Protocol Hardening**: Fixed sequence number wrapping and improved host key verification to check all stored keys for a host.
+*   **IPv6 Support**: Resolved IPv6 connectivity issues by switching to `socket.create_connection()`.
+
 ## [0.6.1] - 2026-04-18
 
 ### Fixed

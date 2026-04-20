@@ -9,7 +9,7 @@ This script automates the release process for SpindleX:
 4. Pushes to GitHub (triggers CI/CD pipeline)
 
 Usage:
-    python scripts/release.py --version 0.4.0 --type minor
+    python scripts/release.py --version 0.6.2 --type minor
     python scripts/release.py --version 0.2.1 --type patch
 """
 
@@ -166,7 +166,7 @@ def create_git_tag(version):
 def main():
     parser = argparse.ArgumentParser(description="Automate SpindleX release process")
     parser.add_argument(
-        "--version", required=True, help="Version to release (e.g., 0.4.0)"
+        "--version", required=True, help="Version to release (e.g., 0.6.2)"
     )
     parser.add_argument(
         "--type",
