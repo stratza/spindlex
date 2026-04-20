@@ -2,13 +2,11 @@
 Unit tests for transport/forwarding.py — ForwardingTunnel, LocalPortForwarder,
 PortForwardingManager covering the untested 65%.
 """
+
 import socket
-import threading
-import time
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock
 
 import pytest
-
 from spindlex.exceptions import SSHException
 from spindlex.transport.forwarding import (
     ForwardingTunnel,
@@ -16,10 +14,10 @@ from spindlex.transport.forwarding import (
     PortForwardingManager,
 )
 
-
 # ---------------------------------------------------------------------------
 # ForwardingTunnel
 # ---------------------------------------------------------------------------
+
 
 class TestForwardingTunnel:
     def _make_tunnel(self, tunnel_type="local"):
@@ -64,6 +62,7 @@ class TestForwardingTunnel:
 
     def test_close_with_channel_connections(self):
         from spindlex.transport.channel import Channel
+
         t = self._make_tunnel()
         t.active = True
 
@@ -105,6 +104,7 @@ class TestForwardingTunnel:
 # ---------------------------------------------------------------------------
 # LocalPortForwarder
 # ---------------------------------------------------------------------------
+
 
 class TestLocalPortForwarder:
     def _make_forwarder(self):
@@ -164,13 +164,14 @@ class TestLocalPortForwarder:
             forwarder.create_tunnel(
                 local_port=99999,  # invalid port
                 remote_host="127.0.0.1",
-                remote_port=22
+                remote_port=22,
             )
 
 
 # ---------------------------------------------------------------------------
 # PortForwardingManager
 # ---------------------------------------------------------------------------
+
 
 class TestPortForwardingManager:
     def _make_manager(self):
@@ -207,13 +208,17 @@ class TestPortForwardingManager:
 
     def test_close_all_tunnels(self):
         manager, transport = self._make_manager()
-        t1 = manager.create_local_tunnel(
-            local_host="127.0.0.1", local_port=19512,
-            remote_host="127.0.0.1", remote_port=22
+        manager.create_local_tunnel(
+            local_host="127.0.0.1",
+            local_port=19512,
+            remote_host="127.0.0.1",
+            remote_port=22,
         )
-        t2 = manager.create_local_tunnel(
-            local_host="127.0.0.1", local_port=19513,
-            remote_host="127.0.0.1", remote_port=22
+        manager.create_local_tunnel(
+            local_host="127.0.0.1",
+            local_port=19513,
+            remote_host="127.0.0.1",
+            remote_port=22,
         )
         manager.close_all_tunnels()
         assert manager.get_all_tunnels() == {}

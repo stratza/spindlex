@@ -2,13 +2,13 @@
 Coverage tests for SFTPHandle (sftp_server.py) — all read/write/seek/close paths.
 Also tests SFTPServer._handle_message dispatch and _process_messages break paths.
 """
+
 import io
 import os
 import tempfile
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import pytest
-
 from spindlex.exceptions import SFTPError
 from spindlex.protocol.sftp_constants import (
     SSH_FX_EOF,
@@ -16,7 +16,6 @@ from spindlex.protocol.sftp_constants import (
     SSH_FX_NO_SUCH_FILE,
     SSH_FX_OK,
     SSH_FX_OP_UNSUPPORTED,
-    SSH_FX_PERMISSION_DENIED,
     SSH_FXF_APPEND,
     SSH_FXF_READ,
     SSH_FXF_WRITE,
@@ -43,15 +42,14 @@ from spindlex.protocol.sftp_messages import (
     SFTPSetStatMessage,
     SFTPStatMessage,
     SFTPStatusMessage,
-    SFTPVersionMessage,
     SFTPWriteMessage,
 )
 from spindlex.server.sftp_server import SFTPHandle, SFTPServer
 
-
 # ---------------------------------------------------------------------------
 # SFTPHandle tests
 # ---------------------------------------------------------------------------
+
 
 class TestSFTPHandleRead:
     def _make_file_handle(self, content=b"hello world", flags=SSH_FXF_READ):
@@ -118,7 +116,7 @@ class TestSFTPHandleWrite:
 
     def test_write_io_error_raises(self):
         bad_obj = MagicMock()
-        bad_obj.write.side_effect = IOError("disk full")
+        bad_obj.write.side_effect = OSError("disk full")
         h = SFTPHandle(b"wh3", "/file.txt", SSH_FXF_WRITE, file_obj=bad_obj)
         with pytest.raises(SFTPError, match="Write failed"):
             h.write(b"data")
@@ -149,7 +147,7 @@ class TestSFTPHandleSeek:
 
     def test_seek_io_error_raises(self):
         bad_obj = MagicMock()
-        bad_obj.seek.side_effect = IOError("seek error")
+        bad_obj.seek.side_effect = OSError("seek error")
         h = SFTPHandle(b"sh3", "/file.txt", SSH_FXF_READ, file_obj=bad_obj)
         with pytest.raises(SFTPError, match="Seek failed"):
             h.seek(5)
@@ -174,7 +172,7 @@ class TestSFTPHandleClose:
 
     def test_close_with_error_on_file_close(self):
         bad_obj = MagicMock()
-        bad_obj.close.side_effect = IOError("close error")
+        bad_obj.close.side_effect = OSError("close error")
         h = SFTPHandle(b"ech", "/file.txt", SSH_FXF_READ, file_obj=bad_obj)
         h.close()  # error should be silenced
         assert h.file_obj is None
@@ -183,6 +181,7 @@ class TestSFTPHandleClose:
 # ---------------------------------------------------------------------------
 # SFTPServer message dispatch tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def temp_root():
@@ -331,7 +330,10 @@ class TestHandleOpenFile:
 
     def test_handle_open_write_create(self, sftp_server, temp_root):
         from spindlex.protocol.sftp_constants import SSH_FXF_CREAT
-        msg = SFTPOpenMessage(2, "newfile.txt", SSH_FXF_WRITE | SSH_FXF_CREAT, SFTPAttributes())
+
+        msg = SFTPOpenMessage(
+            2, "newfile.txt", SSH_FXF_WRITE | SSH_FXF_CREAT, SFTPAttributes()
+        )
         with patch.object(sftp_server, "_send_message") as send_mock:
             sftp_server._handle_open(msg)
             sent = send_mock.call_args[0][0]
@@ -388,7 +390,7 @@ class TestHandleReadWrite:
             assert isinstance(sent, SFTPDataMessage)
 
     def test_handle_read_eof(self, sftp_server):
-        handle = self._add_file_handle(sftp_server, content=b"")
+        self._add_file_handle(sftp_server, content=b"")
         msg = SFTPReadMessage(1, b"fh", 0, 100)
         with patch.object(sftp_server, "_send_message") as send_mock:
             sftp_server._handle_read(msg)
@@ -427,7 +429,9 @@ class TestHandleStatOperations:
         with patch.object(sftp_server, "_send_message") as send_mock:
             sftp_server._handle_stat(msg)
             sent = send_mock.call_args[0][0]
-            assert not isinstance(sent, SFTPStatusMessage) or sent.status_code == SSH_FX_OK
+            assert (
+                not isinstance(sent, SFTPStatusMessage) or sent.status_code == SSH_FX_OK
+            )
 
     def test_handle_stat_nonexistent(self, sftp_server):
         msg = SFTPStatMessage(2, "ghost_file.txt")
@@ -550,8 +554,11 @@ class TestGenerateHandle:
 class TestProcessMessagesBreak:
     def test_process_messages_breaks_on_eof(self, sftp_server):
         """_process_messages should break when it gets an EOF-like exception."""
-        with patch.object(sftp_server, "_receive_message",
-                          side_effect=SFTPError("connection closed", SSH_FX_FAILURE)):
+        with patch.object(
+            sftp_server,
+            "_receive_message",
+            side_effect=SFTPError("connection closed", SSH_FX_FAILURE),
+        ):
             sftp_server._process_messages()  # Should not raise and should return
 
     def test_process_messages_sends_error_on_unknown_exception(self, sftp_server):
@@ -564,10 +571,15 @@ class TestProcessMessagesBreak:
                 return real_msg
             raise SFTPError("closed", SSH_FX_FAILURE)
 
-        with patch.object(sftp_server, "_receive_message", side_effect=fake_receive), \
-             patch.object(sftp_server, "_handle_message",
-                          side_effect=RuntimeError("unexpected error")), \
-             patch.object(sftp_server, "_send_message") as send_mock:
+        with (
+            patch.object(sftp_server, "_receive_message", side_effect=fake_receive),
+            patch.object(
+                sftp_server,
+                "_handle_message",
+                side_effect=RuntimeError("unexpected error"),
+            ),
+            patch.object(sftp_server, "_send_message") as send_mock,
+        ):
             sftp_server._process_messages()
             # Error status should have been attempted
             if send_mock.call_count > 0:

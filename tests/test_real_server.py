@@ -7,14 +7,11 @@ Requires a live SSH server. Configure via .env:
 Run with:
     pytest tests/test_real_server.py -m real_server -v
 """
+
 import asyncio
-import io
 import os
-import stat
-import tempfile
 
 import pytest
-
 from spindlex import AsyncSSHClient, SSHClient
 from spindlex.hostkeys.policy import AutoAddPolicy, WarningPolicy
 
@@ -24,6 +21,7 @@ pytestmark = pytest.mark.real_server
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def make_client(host, port, user, password):
     client = SSHClient()
@@ -35,6 +33,7 @@ def make_client(host, port, user, password):
 # ===========================================================================
 # Sync SSH client tests
 # ===========================================================================
+
 
 class TestSyncConnect:
     def test_connect_and_transport_active(self, real_server_creds):
@@ -83,7 +82,9 @@ class TestSyncExecCommand:
         assert stdout.read().decode().strip() == "hello_spindlex"
 
     def test_exec_stderr(self, ssh_client):
-        stdin, stdout, stderr = ssh_client.exec_command("ls /nonexistent_path_xyz 2>&1; true")
+        stdin, stdout, stderr = ssh_client.exec_command(
+            "ls /nonexistent_path_xyz 2>&1; true"
+        )
         out = stdout.read().decode()
         # command succeeded (exit 0 because of "; true") but produced error text
         assert "No such file" in out or out == ""
@@ -110,7 +111,9 @@ class TestSyncExecCommand:
 
     @pytest.mark.slow
     def test_exec_large_output(self, ssh_client):
-        stdin, stdout, stderr = ssh_client.exec_command("dd if=/dev/urandom bs=1024 count=32 2>/dev/null | base64")
+        stdin, stdout, stderr = ssh_client.exec_command(
+            "dd if=/dev/urandom bs=1024 count=32 2>/dev/null | base64"
+        )
         data = stdout.read()
         assert len(data) > 30_000
 
@@ -269,6 +272,7 @@ class TestSyncTransport:
 # Async SSH client tests
 # ===========================================================================
 
+
 class TestAsyncConnect:
     def test_async_connect(self, real_server_creds):
         host, port, user, password = real_server_creds
@@ -379,7 +383,9 @@ class TestAsyncExecCommand:
             async with AsyncSSHClient() as client:
                 client.set_missing_host_key_policy(WarningPolicy())
                 await client.connect(host, port=port, username=user, password=password)
-                stdin, stdout, stderr = await client.exec_command("echo err >&2; echo out")
+                stdin, stdout, stderr = await client.exec_command(
+                    "echo err >&2; echo out"
+                )
                 out = (await stdout.read()).decode().strip()
                 err = (await stderr.read()).decode().strip()
                 assert out == "out"
@@ -494,7 +500,9 @@ class TestAsyncSFTP:
 
                 async with await client.open_sftp() as sftp:
                     await sftp.put(str(local), "spindlex_async_rename_src.txt")
-                    await sftp.rename("spindlex_async_rename_src.txt", "spindlex_async_rename_dst.txt")
+                    await sftp.rename(
+                        "spindlex_async_rename_src.txt", "spindlex_async_rename_dst.txt"
+                    )
                     files = await sftp.listdir(".")
                     assert "spindlex_async_rename_dst.txt" in files
                     assert "spindlex_async_rename_src.txt" not in files
@@ -614,6 +622,7 @@ class TestAsyncSFTP:
 # Port forwarding tests
 # ===========================================================================
 
+
 class TestLocalPortForwarding:
     def test_local_forward_and_use(self, ssh_client):
         """Open a local port forward to the SSH server's own port 22."""
@@ -634,6 +643,7 @@ class TestLocalPortForwarding:
         try:
             assert tunnel_id is not None
             import time
+
             time.sleep(0.3)
 
             # Connect through the tunnel
@@ -651,13 +661,13 @@ class TestLocalPortForwarding:
 # Async port forwarding
 # ===========================================================================
 
+
 class TestAsyncPortForwarding:
     @pytest.mark.skip(reason="Async port forwarding has known connection setup issues")
     def test_async_local_forward(self, real_server_creds):
         host, port, user, password = real_server_creds
 
         async def run():
-            import socket as sock_mod
 
             async with AsyncSSHClient() as client:
                 client.set_missing_host_key_policy(WarningPolicy())
@@ -688,6 +698,7 @@ class TestAsyncPortForwarding:
 # ===========================================================================
 # Channel feature tests
 # ===========================================================================
+
 
 class TestChannelFeatures:
     def test_channel_timeout(self, ssh_client):

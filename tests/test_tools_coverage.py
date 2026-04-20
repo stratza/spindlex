@@ -1,12 +1,11 @@
 """Tests for spindlex.tools.keygen and benchmark CLI tools."""
+
 import sys
-import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-
-from spindlex.tools.keygen import generate_key, save_key_pair, main
+from spindlex.tools.keygen import generate_key, main, save_key_pair
 
 
 class TestGenerateKey:
@@ -44,7 +43,6 @@ class TestGenerateKey:
 
 class TestSaveKeyPair:
     def test_save_ed25519(self, tmp_path):
-        import sys
         priv, pub = generate_key("ed25519")
         filename = str(tmp_path / "id_ed25519")
         save_key_pair(priv, pub, filename)
@@ -99,7 +97,9 @@ class TestMainCLI:
 
     def test_main_with_comment(self, tmp_path):
         filename = str(tmp_path / "test_comment")
-        with patch("sys.argv", ["keygen", "-t", "ed25519", "-f", filename, "-C", "me@host"]):
+        with patch(
+            "sys.argv", ["keygen", "-t", "ed25519", "-f", filename, "-C", "me@host"]
+        ):
             main()
         pub = Path(f"{filename}.pub").read_text()
         assert "me@host" in pub
@@ -129,7 +129,9 @@ class TestMainCLI:
             main()
 
         # Overwrite with second
-        with patch("sys.argv", ["keygen", "-t", "ed25519", "-f", filename, "--overwrite"]):
+        with patch(
+            "sys.argv", ["keygen", "-t", "ed25519", "-f", filename, "--overwrite"]
+        ):
             main()
 
         assert Path(filename).exists()

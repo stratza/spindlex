@@ -4,20 +4,17 @@ Covers: load_private_key, save_to_file, from_string dispatch, get_fingerprint,
 get_openssh_string, get_public_key, PKey.generate factory, equality,
 sign/verify round-trips for all key types.
 """
-import io
-import os
+
 import struct
-import tempfile
 
 import pytest
-
 from spindlex.crypto.pkey import ECDSAKey, Ed25519Key, PKey, RSAKey
 from spindlex.exceptions import CryptoException
-
 
 # ---------------------------------------------------------------------------
 # PKey factory / from_string
 # ---------------------------------------------------------------------------
+
 
 class TestPKeyFactory:
     def test_generate_ed25519(self):
@@ -129,6 +126,7 @@ class TestPKeyGetPublicKey:
 # Ed25519Key
 # ---------------------------------------------------------------------------
 
+
 class TestEd25519Key:
     def test_sign_verify_roundtrip(self):
         key = Ed25519Key.generate()
@@ -200,6 +198,7 @@ class TestEd25519Key:
 # ECDSAKey
 # ---------------------------------------------------------------------------
 
+
 class TestECDSAKey:
     def test_sign_verify_roundtrip(self):
         key = ECDSAKey.generate()
@@ -221,7 +220,7 @@ class TestECDSAKey:
         pub_bytes = key.get_public_key_bytes()
         # First 4 bytes are length of algorithm name
         algo_len = struct.unpack(">I", pub_bytes[:4])[0]
-        algo = pub_bytes[4:4+algo_len].decode()
+        algo = pub_bytes[4 : 4 + algo_len].decode()
         assert "ecdsa" in algo
 
     def test_save_and_reload(self, tmp_path):
@@ -251,6 +250,7 @@ class TestECDSAKey:
 # RSAKey
 # ---------------------------------------------------------------------------
 
+
 class TestRSAKey:
     def test_sign_verify_roundtrip(self):
         key = RSAKey.generate(bits=2048)
@@ -271,7 +271,7 @@ class TestRSAKey:
         key = RSAKey.generate(bits=2048)
         pub_bytes = key.get_public_key_bytes()
         algo_len = struct.unpack(">I", pub_bytes[:4])[0]
-        algo = pub_bytes[4:4+algo_len].decode()
+        algo = pub_bytes[4 : 4 + algo_len].decode()
         assert "rsa" in algo
 
     def test_save_creates_file(self, tmp_path):
@@ -279,6 +279,7 @@ class TestRSAKey:
         filename = str(tmp_path / "id_rsa_save")
         key.save_to_file(filename)
         from pathlib import Path
+
         assert Path(filename).exists()
         assert b"OPENSSH PRIVATE KEY" in Path(filename).read_bytes()
 

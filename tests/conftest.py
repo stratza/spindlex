@@ -1,10 +1,12 @@
 """Shared pytest fixtures for SpindleX test suite."""
+
 import os
 
 import pytest
 
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
 except ImportError:
     pass
@@ -23,11 +25,15 @@ _REAL_SERVER_AVAILABLE = bool(SSH_HOST and SSH_USER)
 
 
 def pytest_configure(config):
-    config.addinivalue_line("markers", "real_server: requires a live SSH server via .env")
+    config.addinivalue_line(
+        "markers", "real_server: requires a live SSH server via .env"
+    )
 
 
 def pytest_collection_modifyitems(config, items):
-    skip = pytest.mark.skip(reason="No SSH server configured (set SSH_HOST, SSH_USER in .env)")
+    skip = pytest.mark.skip(
+        reason="No SSH server configured (set SSH_HOST, SSH_USER in .env)"
+    )
     for item in items:
         if "real_server" in item.keywords and not _REAL_SERVER_AVAILABLE:
             item.add_marker(skip)
@@ -36,6 +42,7 @@ def pytest_collection_modifyitems(config, items):
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(scope="session")
 def real_server_creds():

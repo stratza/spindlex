@@ -143,7 +143,9 @@ class Channel:
                 except Exception as e:
                     # Ignore timeout errors from pump
                     if "timeout" not in str(e).lower():
-                        raise ChannelException(f"Transport error during send: {e}") from e
+                        raise ChannelException(
+                            f"Transport error during send: {e}"
+                        ) from e
                 finally:
                     self._lock.acquire()
 

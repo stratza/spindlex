@@ -1455,7 +1455,9 @@ class Transport:
         banner_lines = 0
         while True:
             if banner_lines > _MAX_BANNER_LINES:
-                raise ProtocolException("Too many banner lines before SSH version string")
+                raise ProtocolException(
+                    "Too many banner lines before SSH version string"
+                )
             banner_lines += 1
             current_line = b""
             # Read character by character until line ending
@@ -1704,7 +1706,9 @@ class Transport:
                             self._check_rekey()
 
                         # ALWAYS increment sequence number for EVERY packet received
-                        self._sequence_number_in = (self._sequence_number_in + 1) & 0xFFFFFFFF
+                        self._sequence_number_in = (
+                            self._sequence_number_in + 1
+                        ) & 0xFFFFFFFF
 
                         # Handle internal messages and extensions
                         # 7 = MSG_EXT_INFO (RFC 8308)

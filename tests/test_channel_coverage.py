@@ -4,19 +4,17 @@ Covers: EOF handling, stderr, window adjust, channel request callbacks,
 send_eof, recv_stderr, exec_command, invoke_shell, request_pty,
 recv_exit_status, send_exit_status, and close.
 """
-import threading
-import time
-from unittest.mock import MagicMock, call
+
+from unittest.mock import MagicMock
 
 import pytest
-
 from spindlex.exceptions import ChannelException
 from spindlex.transport.channel import Channel
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def mock_transport():
@@ -40,6 +38,7 @@ def channel(mock_transport):
 # settimeout / gettimeout
 # ---------------------------------------------------------------------------
 
+
 class TestTimeoutAccessors:
     def test_set_and_get_timeout(self, channel):
         channel.settimeout(5.0)
@@ -56,6 +55,7 @@ class TestTimeoutAccessors:
 # ---------------------------------------------------------------------------
 # send / send_eof
 # ---------------------------------------------------------------------------
+
 
 class TestSendEOF:
     def test_send_eof_sends_once(self, channel, mock_transport):
@@ -102,6 +102,7 @@ class TestSendEOF:
 # recv_stderr
 # ---------------------------------------------------------------------------
 
+
 class TestRecvStderr:
     def test_recv_stderr_from_buffer(self, channel):
         channel._stderr_buffer.append(b"err data")
@@ -139,6 +140,7 @@ class TestRecvStderr:
 # recv
 # ---------------------------------------------------------------------------
 
+
 class TestRecv:
     def test_recv_from_buffer(self, channel):
         channel._handle_data(b"hello world")
@@ -170,6 +172,7 @@ class TestRecv:
 # recv_exactly
 # ---------------------------------------------------------------------------
 
+
 class TestRecvExactly:
     def test_recv_exactly_success(self, channel):
         channel._handle_data(b"exactdata")
@@ -185,6 +188,7 @@ class TestRecvExactly:
 # ---------------------------------------------------------------------------
 # exec_command, invoke_shell, invoke_subsystem
 # ---------------------------------------------------------------------------
+
 
 class TestChannelRequests:
     def _make_channel_with_immediate_success(self, mock_transport):
@@ -248,6 +252,7 @@ class TestChannelRequests:
 # exit status
 # ---------------------------------------------------------------------------
 
+
 class TestExitStatus:
     def test_get_exit_status_default(self, channel):
         assert channel.get_exit_status() == -1
@@ -284,6 +289,7 @@ class TestExitStatus:
 # ---------------------------------------------------------------------------
 # Internal handlers
 # ---------------------------------------------------------------------------
+
 
 class TestInternalHandlers:
     def test_handle_data(self, channel):
@@ -340,6 +346,7 @@ class TestInternalHandlers:
 # ---------------------------------------------------------------------------
 # close
 # ---------------------------------------------------------------------------
+
 
 class TestClose:
     def test_close_calls_transport(self, channel, mock_transport):

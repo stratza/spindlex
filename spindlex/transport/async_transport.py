@@ -670,6 +670,7 @@ class AsyncTransport(Transport):
         # Close channels outside the state lock to avoid deadlock
         # (AsyncChannel.close() also acquires _state_lock)
         from .async_channel import AsyncChannel
+
         for c in channels_to_close:
             try:
                 if isinstance(c, AsyncChannel):

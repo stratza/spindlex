@@ -4,32 +4,25 @@ Tests _negotiate_algorithms, _choose_algorithm, _compute_exchange_hash,
 _compute_ecdh_exchange_hash, _compute_curve25519_exchange_hash, and
 _generate_session_keys using a mocked transport.
 """
-import struct
+
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-from spindlex.crypto.ciphers import CipherSuite
-from spindlex.exceptions import CryptoException, ProtocolException
+from spindlex.exceptions import CryptoException
 from spindlex.protocol.constants import (
     KEX_CURVE25519_SHA256,
     KEX_DH_GROUP14_SHA256,
     KEX_ECDH_SHA2_NISTP256,
-    MSG_KEXDH_INIT,
-    MSG_KEXDH_REPLY,
-    MSG_KEX_ECDH_INIT,
-    MSG_KEX_ECDH_REPLY,
-    MSG_KEXINIT,
     MSG_NEWKEYS,
 )
-from spindlex.protocol.messages import KexInitMessage, Message
-from spindlex.protocol.utils import write_mpint, write_string
+from spindlex.protocol.messages import KexInitMessage
+from spindlex.protocol.utils import write_mpint
 from spindlex.transport.kex import KeyExchange
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def make_kexinit():
     return KexInitMessage(
@@ -70,6 +63,7 @@ def make_kex(server_mode=False):
 # Negotiate algorithms
 # ---------------------------------------------------------------------------
 
+
 class TestNegotiateAlgorithms:
     def test_negotiate_success(self):
         kex, transport = make_kex()
@@ -104,16 +98,14 @@ class TestChooseAlgorithm:
     def test_chooses_first_match(self):
         kex, _ = make_kex()
         result = kex._choose_algorithm(
-            ["aes256-ctr", "aes128-ctr"],
-            ["aes128-ctr", "aes256-ctr"]
+            ["aes256-ctr", "aes128-ctr"], ["aes128-ctr", "aes256-ctr"]
         )
         assert result == "aes256-ctr"  # first match in client list
 
     def test_filters_extensions(self):
         kex, _ = make_kex()
         result = kex._choose_algorithm(
-            ["ext-info-c", "kex-strict-c-v00@openssh.com", "aes256-ctr"],
-            ["aes256-ctr"]
+            ["ext-info-c", "kex-strict-c-v00@openssh.com", "aes256-ctr"], ["aes256-ctr"]
         )
         assert result == "aes256-ctr"
 
@@ -126,6 +118,7 @@ class TestChooseAlgorithm:
 # ---------------------------------------------------------------------------
 # Exchange hash computations
 # ---------------------------------------------------------------------------
+
 
 class TestComputeExchangeHash:
     def _setup_kex_with_data(self):
@@ -217,21 +210,27 @@ class TestComputeECDHExchangeHash:
         kex._shared_secret = write_mpint(1)
         kex._ecdh_public_key_bytes = b"\x04" + b"\x00" * 64
         with pytest.raises(CryptoException, match="Missing client KEXINIT"):
-            kex._compute_ecdh_exchange_hash(b"\x00" * 5, b"\x04" + b"\x00" * 64, b"\x00" * 5)
+            kex._compute_ecdh_exchange_hash(
+                b"\x00" * 5, b"\x04" + b"\x00" * 64, b"\x00" * 5
+            )
 
     def test_ecdh_hash_missing_client_pub_raises(self):
         kex, _ = make_kex()
         kex._shared_secret = write_mpint(1)
         kex._ecdh_public_key_bytes = None  # no override and no attribute
         with pytest.raises(CryptoException, match="Missing ECDH client public key"):
-            kex._compute_ecdh_exchange_hash(b"\x00" * 5, b"\x04" + b"\x00" * 64, b"\x00" * 5)
+            kex._compute_ecdh_exchange_hash(
+                b"\x00" * 5, b"\x04" + b"\x00" * 64, b"\x00" * 5
+            )
 
     def test_ecdh_hash_missing_shared_secret_raises(self):
         kex, _ = make_kex()
         kex._shared_secret = None
         kex._ecdh_public_key_bytes = b"\x04" + b"\x00" * 64
         with pytest.raises(CryptoException, match="Missing shared secret"):
-            kex._compute_ecdh_exchange_hash(b"\x00" * 5, b"\x04" + b"\x00" * 64, b"\x00" * 5)
+            kex._compute_ecdh_exchange_hash(
+                b"\x00" * 5, b"\x04" + b"\x00" * 64, b"\x00" * 5
+            )
 
 
 class TestComputeCurve25519ExchangeHash:
@@ -251,6 +250,7 @@ class TestComputeCurve25519ExchangeHash:
 # ---------------------------------------------------------------------------
 # Key derivation / _generate_session_keys
 # ---------------------------------------------------------------------------
+
 
 class TestGenerateSessionKeys:
     def _make_kex_ready(self):
@@ -307,15 +307,20 @@ class TestGenerateSessionKeys:
 
     def test_generate_keys_uses_exchange_hash_as_session_id(self):
         kex, transport = self._make_kex_ready()
-        kex._session_id = None  # first handshake – session_id should equal exchange_hash
+        kex._session_id = (
+            None  # first handshake – session_id should equal exchange_hash
+        )
         kex._generate_session_keys()
         # Transport gets the exchange hash as session id
-        assert transport._session_id is None  # kex sets it but session_id was None in kex
+        assert (
+            transport._session_id is None
+        )  # kex sets it but session_id was None in kex
 
 
 # ---------------------------------------------------------------------------
 # Send/receive NEWKEYS helpers
 # ---------------------------------------------------------------------------
+
 
 class TestNewkeys:
     def test_send_newkeys(self):
@@ -334,6 +339,7 @@ class TestNewkeys:
 # ---------------------------------------------------------------------------
 # _perform_client_kex dispatch
 # ---------------------------------------------------------------------------
+
 
 class TestPerformClientKex:
     def test_dispatches_curve25519(self):
