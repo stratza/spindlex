@@ -83,7 +83,10 @@ class PublicKeyAuth:
             #  string    public key algorithm name
             #  string    public key blob
 
-            auth_algo = "ssh-rsa"
+            # Per RFC 4252 §7 the algorithm name in the signed blob must match
+            # the one sent in the request, so use the key's own algorithm name
+            # (ssh-ed25519, ecdsa-sha2-nistp256, rsa-sha2-256, ...).
+            auth_algo = key.algorithm_name
             sig_blob = bytearray()
             sig_blob.extend(self._transport.session_id)
             sig_blob.append(MSG_USERAUTH_REQUEST)

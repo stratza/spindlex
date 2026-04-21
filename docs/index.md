@@ -33,10 +33,10 @@ pip install spindlex
 
     ```python
     from spindlex import SSHClient
-    from spindlex.hostkeys.policy import AutoAddPolicy
 
+    # Default policy is RejectPolicy — load ~/.ssh/known_hosts first.
     with SSHClient() as client:
-        client.set_missing_host_key_policy(AutoAddPolicy())
+        client.get_host_keys().load()
         client.connect('example.com', username='user', password='password')
 
         stdin, stdout, stderr = client.exec_command('ls -la')

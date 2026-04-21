@@ -202,7 +202,10 @@ class SFTPServer:
             start_thread: Whether to start the message processing thread (default: True)
         """
         self._channel = channel
-        self._root_path = os.path.abspath(root_path)
+        # Resolve the root once, up front: every subsequent path check compares
+        # realpath(candidate) against this canonical root, so a symlinked root
+        # cannot be sidestepped later by replacing it mid-session.
+        self._root_path = os.path.realpath(os.path.abspath(root_path))
         self._handles: dict[bytes, SFTPHandle] = {}
         self._handle_counter = 0
         self._handle_lock = threading.Lock()
@@ -418,6 +421,11 @@ class SFTPServer:
         Raises:
             SFTPError: If path is outside root directory
         """
+        # Reject NUL bytes outright — they can truncate paths in some native
+        # APIs and have no legitimate use in SFTP paths.
+        if "\x00" in path:
+            raise SFTPError("Invalid path", SSH_FX_PERMISSION_DENIED)
+
         # Normalize SFTP path (always use forward slashes in SFTP)
         path = path.replace("\\", "/")
 
@@ -431,20 +439,16 @@ class SFTPServer:
 
         # Fully resolve path (resolve symlinks and ..)
         resolved = os.path.realpath(full_path)
-        root_real = os.path.realpath(self._root_path)
+        root_real = self._root_path  # already realpath()'d in __init__
 
-        # Check if resolved path is within root
-        try:
-            # Use normcase to ensure case-insensitive comparison on Windows
-            resolved_norm = os.path.normcase(resolved)
-            root_norm = os.path.normcase(root_real)
+        # Check if resolved path is within root. Using prefix comparison with a
+        # trailing separator avoids the classic /var/www vs /var/wwwbad bypass
+        # and sidesteps commonpath's ValueError on mixed drives (Windows).
+        resolved_norm = os.path.normcase(resolved)
+        root_norm = os.path.normcase(root_real)
+        root_with_sep = root_norm.rstrip(os.sep) + os.sep
 
-            # commonpath expects original strings but compares their parts
-            common = os.path.commonpath([resolved_norm, root_norm])
-            if os.path.normcase(common) != root_norm:
-                raise SFTPError("Path outside root directory", SSH_FX_PERMISSION_DENIED)
-        except (ValueError, OSError):
-            # Paths are on different drives (Windows) or other error
+        if resolved_norm != root_norm and not resolved_norm.startswith(root_with_sep):
             raise SFTPError("Path outside root directory", SSH_FX_PERMISSION_DENIED)
 
         return resolved

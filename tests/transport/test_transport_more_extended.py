@@ -2,6 +2,7 @@ import socket
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from spindlex.exceptions import AuthenticationException
 from spindlex.protocol.constants import *
 from spindlex.protocol.messages import (

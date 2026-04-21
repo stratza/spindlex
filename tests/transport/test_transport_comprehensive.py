@@ -3,6 +3,7 @@ import struct
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from spindlex.exceptions import ProtocolException, TransportException
 from spindlex.protocol.constants import (
     MSG_GLOBAL_REQUEST,

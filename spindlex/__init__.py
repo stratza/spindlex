@@ -27,14 +27,51 @@ from .exceptions import (
     TimeoutException,
     TransportException,
 )
+from .logging.sanitizer import LogSanitizer as _LogSanitizer
 from .logging.sanitizer import SanitizingFilter as _SanitizingFilter
 from .server.sftp_server import SFTPServer
 from .server.ssh_server import SSHServer, SSHServerManager
 from .transport.transport import Transport
 
-# Attach sanitizing filter to the spindlex logger so all child loggers
-# automatically redact credentials, keys, and sensitive addresses.
+# Install the sanitizing filter on the spindlex root logger AND wrap the
+# LogRecord factory so child loggers (e.g. spindlex.transport.transport)
+# are also scrubbed — Python's logging framework does NOT apply ancestor
+# logger filters to propagated records, only ancestor handlers.
 _stdlib_logging.getLogger("spindlex").addFilter(_SanitizingFilter())
+
+_original_record_factory = _stdlib_logging.getLogRecordFactory()
+
+
+def _spindlex_record_factory(
+    *args: object, **kwargs: object
+) -> _stdlib_logging.LogRecord:
+    record = _original_record_factory(*args, **kwargs)
+    # Only scrub records emitted from this package; leave other loggers alone.
+    # `logging.makeLogRecord` creates a placeholder record with name=None
+    # before copying attributes over, so guard against that.
+    name = record.name or ""
+    if name == "spindlex" or name.startswith("spindlex."):
+        try:
+            record.msg = _LogSanitizer.sanitize_message(str(record.msg))
+            if record.args:
+                if isinstance(record.args, dict):
+                    record.args = _LogSanitizer.sanitize_dict(record.args)
+                else:
+                    record.args = tuple(
+                        (
+                            _LogSanitizer.sanitize_message(str(a))
+                            if isinstance(a, str)
+                            else a
+                        )
+                        for a in record.args
+                    )
+        except Exception:
+            # Never let sanitization break logging itself.
+            pass
+    return record
+
+
+_stdlib_logging.setLogRecordFactory(_spindlex_record_factory)
 
 __all__ = [
     "__version__",

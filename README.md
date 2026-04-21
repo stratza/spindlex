@@ -25,6 +25,9 @@
 
 SpindleX is a modern SSH protocol implementation engineered for **speed**, **security**, and a **seamless developer experience**. It provides a clean, performant alternative to legacy Python SSH libraries.
 
+> [!WARNING]
+> **Beta software.** The 0.6.x line is stabilising the core protocol, transport, and SFTP layers. Review [meta/SECURITY.md](meta/SECURITY.md) before deploying in production-facing workflows, pin exact versions, and audit your host key policy.
+
 ## ✨ Key Features
 
 *   🚀 **High Performance**: Optimized protocol implementation with internal buffering designed for high-throughput SFTP and command execution.
@@ -54,15 +57,19 @@ uv pip install spindlex
 
 ```python
 from spindlex import SSHClient
-from spindlex.hostkeys.policy import AutoAddPolicy
 
+# The default policy is RejectPolicy, which requires the server's
+# host key to be present in the client's known-hosts store.
 with SSHClient() as client:
-    client.set_missing_host_key_policy(AutoAddPolicy())
+    client.get_host_keys().load()  # loads ~/.ssh/known_hosts by default
     client.connect('example.com', username='admin')
-    
+
     stdin, stdout, stderr = client.exec_command('uptime')
     print(f"Status: {stdout.read().decode().strip()}")
 ```
+
+> [!CAUTION]
+> `AutoAddPolicy` is available for throw-away test environments only — it silently trusts first-seen server keys and therefore offers **no MITM protection**. In production, use the default `RejectPolicy` with a managed `known_hosts` file.
 </details>
 
 <details>

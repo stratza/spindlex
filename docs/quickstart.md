@@ -26,13 +26,18 @@ pip install spindlex[gssapi]
 
 === "Sync"
 
+    !!! warning "Host key verification"
+        The default `RejectPolicy` requires the server's host key to already
+        be trusted (for example, recorded in `~/.ssh/known_hosts`). Only use
+        `AutoAddPolicy` in disposable test environments — it disables
+        MITM protection.
+
     ```python
     from spindlex import SSHClient
-    from spindlex.hostkeys.policy import AutoAddPolicy
 
-    # Create and configure client
+    # Create and configure client; default policy is RejectPolicy
     client = SSHClient()
-    client.set_missing_host_key_policy(AutoAddPolicy())
+    client.get_host_keys().load()  # load ~/.ssh/known_hosts
 
     try:
         # Connect to server

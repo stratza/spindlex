@@ -154,7 +154,8 @@ class TestEd25519Key:
         key = Ed25519Key.generate()
         filename = str(tmp_path / "id_ed25519")
         key.save_to_file(filename)
-        pem_data = open(filename, "rb").read()
+        with open(filename, "rb") as fh:
+            pem_data = fh.read()
 
         key2 = Ed25519Key()
         key2.load_private_key(pem_data)
@@ -235,7 +236,8 @@ class TestECDSAKey:
         key = ECDSAKey.generate()
         filename = str(tmp_path / "id_ecdsa_pem")
         key.save_to_file(filename)
-        pem_data = open(filename, "rb").read()
+        with open(filename, "rb") as fh:
+            pem_data = fh.read()
 
         key2 = ECDSAKey()
         key2.load_private_key(pem_data)

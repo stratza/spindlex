@@ -128,6 +128,7 @@ class LocalPortForwarder:
             if tunnel_id in self._tunnels:
                 raise SSHException(f"Tunnel already exists: {tunnel_id}")
 
+            server_socket: socket.socket | None = None
             try:
                 # Create listening socket
                 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -167,6 +168,13 @@ class LocalPortForwarder:
                     except Exception:
                         pass
                     del self._servers[tunnel_id]
+                # If bind/listen failed before the socket was stored in
+                # _servers, close it here so the fd isn't leaked.
+                elif server_socket is not None:
+                    try:
+                        server_socket.close()
+                    except Exception:
+                        pass
 
                 raise SSHException(
                     f"Failed to create local port forwarding: {e}"

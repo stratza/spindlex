@@ -2,6 +2,7 @@ import socket
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from spindlex.exceptions import TransportException
 from spindlex.protocol.constants import MSG_KEXINIT
 from spindlex.transport.transport import Transport

@@ -1588,8 +1588,9 @@ class Transport:
             self._logger.debug("Rekeying handshake complete.")
 
         except Exception as e:
-            self._kex_in_progress = False
-            self._active = False
+            # _kex_in_progress / _active are reset under the lock in finally
+            with self._lock:
+                self._active = False
             try:
                 self.close()
             except Exception:
@@ -1598,14 +1599,14 @@ class Transport:
                 raise
             raise TransportException(f"Rekeying failed or timed out: {e}") from e
         finally:
+            # Clear flags and reset byte counter atomically under the lock so
+            # _check_rekey / _send_packet observers see a consistent snapshot.
             with self._lock:
                 self._kex_in_progress = False
                 self._kex_thread = None  # type: ignore[assignment]
-                self._kex_condition.notify_all()
-
-            # Reset byte count after successful rekey
-            with self._lock:
                 self._bytes_since_rekey = 0
+                self._last_rekey_time = time.time()
+                self._kex_condition.notify_all()
 
             try:
                 if self._socket and self._socket.fileno() != -1:
@@ -2035,9 +2036,12 @@ class Transport:
                 nonce = self._iv_out_active + struct.pack(
                     ">Q", self._sequence_number_out
                 )
-                self._logger.debug(
-                    f"AEAD Encrypt: cipher={cipher_name}, nonce={nonce.hex()}, data_len={len(packet)}"
-                )
+                if self._logger.isEnabledFor(logging.DEBUG):
+                    self._logger.debug(
+                        "AEAD encrypt cipher=%s data_len=%d",
+                        cipher_name,
+                        len(packet),
+                    )
                 encrypted = self._crypto_backend.encrypt(
                     cipher_name, self._encryption_key_out_active, nonce, packet
                 )
@@ -2175,9 +2179,12 @@ class Transport:
 
                 # 3. Decrypt and verify
                 full_packet = len_data + rest_of_packet
-                self._logger.info(
-                    f"AEAD Decrypt: cipher={cipher_name}, nonce={nonce.hex()}, data_len={len(full_packet)}"
-                )
+                if self._logger.isEnabledFor(logging.DEBUG):
+                    self._logger.debug(
+                        "AEAD decrypt cipher=%s data_len=%d",
+                        cipher_name,
+                        len(full_packet),
+                    )
                 decrypted = self._crypto_backend.decrypt(
                     cipher_name, self._encryption_key_in_active, nonce, full_packet
                 )
@@ -2205,7 +2212,9 @@ class Transport:
             received_mac = self._recv_bytes(mac_len)
 
             mac_data = (
-                struct.pack(">I", self._sequence_number_in) + length_data + packet_data
+                struct.pack(">I", self._sequence_number_in & 0xFFFFFFFF)
+                + length_data
+                + packet_data
             )
             expected_mac = self._crypto_backend.compute_mac(
                 self._mac_in_active, self._mac_key_in_active, mac_data

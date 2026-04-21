@@ -6,6 +6,7 @@ from collections import deque
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from spindlex.exceptions import TransportException
 from spindlex.transport.async_transport import AsyncTransport
 
@@ -134,7 +135,8 @@ async def test_recv_version_async_empty_raises():
 # ── _build_keyboard_interactive_data ─────────────────────────────────────────
 
 
-def test_build_keyboard_interactive_data():
+@pytest.mark.asyncio
+async def test_build_keyboard_interactive_data():
     t = _make_transport()
     data = t._build_keyboard_interactive_data()
     assert isinstance(data, bytes)
@@ -144,7 +146,8 @@ def test_build_keyboard_interactive_data():
 # ── _send_message bridge ──────────────────────────────────────────────────────
 
 
-def test_send_message_no_loop_uses_super():
+@pytest.mark.asyncio
+async def test_send_message_no_loop_uses_super():
     t = _make_transport()
     t._loop = None
     msg = MagicMock()
@@ -153,7 +156,8 @@ def test_send_message_no_loop_uses_super():
         mock_super.assert_called_once_with(msg)
 
 
-def test_send_message_loop_not_running_uses_super():
+@pytest.mark.asyncio
+async def test_send_message_loop_not_running_uses_super():
     t = _make_transport()
     loop = MagicMock()
     loop.is_running.return_value = False
@@ -167,7 +171,8 @@ def test_send_message_loop_not_running_uses_super():
 # ── _recv_message bridge ──────────────────────────────────────────────────────
 
 
-def test_recv_message_no_loop_uses_super():
+@pytest.mark.asyncio
+async def test_recv_message_no_loop_uses_super():
     t = _make_transport()
     t._loop = None
     msg = MagicMock()
@@ -181,7 +186,8 @@ def test_recv_message_no_loop_uses_super():
 # ── _recv_bytes bridge ────────────────────────────────────────────────────────
 
 
-def test_recv_bytes_no_reader_raises():
+@pytest.mark.asyncio
+async def test_recv_bytes_no_reader_raises():
     t = _make_transport()
     t._reader = None
     t._loop = None
@@ -463,10 +469,10 @@ async def test_close_closes_sync_channels():
 # ── _handle_forwarded_tcpip_open ──────────────────────────────────────────────
 
 
-def test_handle_forwarded_no_manager_sends_failure():
+@pytest.mark.asyncio
+async def test_handle_forwarded_no_manager_sends_failure():
     t = _make_transport()
     t._port_forwarding_manager = None
-    t._loop = asyncio.get_event_loop()
 
     with patch.object(t, "_send_message") as m:
         t._handle_forwarded_tcpip_open(5, 65536, 32768, b"")
@@ -474,21 +480,27 @@ def test_handle_forwarded_no_manager_sends_failure():
     m.assert_called_once()
 
 
-def test_handle_forwarded_with_manager_schedules():
+@pytest.mark.asyncio
+async def test_handle_forwarded_with_manager_schedules():
     t = _make_transport()
     mgr = MagicMock()
     mgr.handle_forwarded_connection_async = AsyncMock(return_value=None)
     t._port_forwarding_manager = mgr
 
-    loop = asyncio.new_event_loop()
-    t._loop = loop
+    # Use the running loop from pytest-asyncio
+    t._loop = asyncio.get_running_loop()
 
-    try:
-        with patch("asyncio.run_coroutine_threadsafe") as m:
-            t._handle_forwarded_tcpip_open(5, 65536, 32768, b"")
-            m.assert_called_once()
-    finally:
-        loop.close()
+    # The real asyncio.run_coroutine_threadsafe takes ownership of the
+    # coroutine and awaits it on the target loop; our patch replaces it
+    # with a mock, so we must close the coroutine ourselves to avoid a
+    # "coroutine was never awaited" warning that would leak into later tests.
+    def _capture(coro, _loop):
+        coro.close()
+        return MagicMock()
+
+    with patch("asyncio.run_coroutine_threadsafe", side_effect=_capture) as m:
+        t._handle_forwarded_tcpip_open(5, 65536, 32768, b"")
+        m.assert_called_once()
 
 
 # ── start_client already active ───────────────────────────────────────────────
