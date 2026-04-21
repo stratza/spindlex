@@ -70,7 +70,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: uv pip install --system -e ".[test]"
-      - run: pytest tests/ -v -m "not integration" --cov=spindlex --cov-report=xml
+      - run: pytest tests/ -v -m "not integration and not real_server" --cov=spindlex --cov-report=xml
       - name: Upload coverage
         if: matrix.python-version == '3.11'
         uses: codecov/codecov-action@v5
@@ -93,6 +93,21 @@ jobs:
           uv pip install --system -e ".[test]" pytest-docker
           pytest tests/integration/ -v
 
+  real-server-tests:
+    name: Real Server Tests (OpenSSH Docker)
+    needs: [ruff]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run Real Server Test Suite
+        run: |
+          uv pip install --system -e ".[test]" pytest-docker
+          pytest tests/real_server/ -v -m "real_server"
+
   # --- 3. Documentation & Quality ---
   docs-build:
     name: Verify Docs Build
@@ -112,7 +127,7 @@ jobs:
   check:
     name: Quality Gate
     if: always()
-    needs: [ruff, mypy, security, unit-tests, integration-tests, docs-build]
+    needs: [ruff, mypy, security, unit-tests, integration-tests, real-server-tests, docs-build]
     runs-on: ubuntu-latest
     steps:
       - name: Result
@@ -122,5 +137,6 @@ jobs:
           if [ "${{ needs.security.result }}" != "success" ]; then exit 1; fi
           if [ "${{ needs.unit-tests.result }}" != "success" ]; then exit 1; fi
           if [ "${{ needs.integration-tests.result }}" != "success" ]; then exit 1; fi
+          if [ "${{ needs.real-server-tests.result }}" != "success" ]; then exit 1; fi
           if [ "${{ needs.docs-build.result }}" != "success" ]; then exit 1; fi
           echo "All checks passed!"

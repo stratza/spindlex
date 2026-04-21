@@ -36,8 +36,8 @@ def make_client(host, port, user, password):
 
 
 class TestSyncConnect:
-    def test_connect_and_transport_active(self, real_server_creds):
-        host, port, user, password = real_server_creds
+    def test_connect_and_transport_active(self, ssh_server):
+        host, port, user, password = ssh_server
         client = make_client(host, port, user, password)
         try:
             transport = client.get_transport()
@@ -47,23 +47,23 @@ class TestSyncConnect:
         finally:
             client.close()
 
-    def test_context_manager(self, real_server_creds):
-        host, port, user, password = real_server_creds
+    def test_context_manager(self, ssh_server):
+        host, port, user, password = ssh_server
         with SSHClient() as client:
             client.set_missing_host_key_policy(AutoAddPolicy())
             client.connect(host, port=port, username=user, password=password)
             assert client.get_transport().active
 
-    def test_is_active(self, real_server_creds):
-        host, port, user, password = real_server_creds
+    def test_is_active(self, ssh_server):
+        host, port, user, password = ssh_server
         with SSHClient() as client:
             client.set_missing_host_key_policy(AutoAddPolicy())
             client.connect(host, port=port, username=user, password=password)
             assert client.is_active  # property
         assert not client.is_active
 
-    def test_reconnect(self, real_server_creds):
-        host, port, user, password = real_server_creds
+    def test_reconnect(self, ssh_server):
+        host, port, user, password = ssh_server
         client = make_client(host, port, user, password)
         client.close()
         client2 = make_client(host, port, user, password)
@@ -274,8 +274,8 @@ class TestSyncTransport:
 
 
 class TestAsyncConnect:
-    def test_async_connect(self, real_server_creds):
-        host, port, user, password = real_server_creds
+    def test_async_connect(self, ssh_server):
+        host, port, user, password = ssh_server
 
         async def run():
             client = AsyncSSHClient()
@@ -288,8 +288,8 @@ class TestAsyncConnect:
 
         asyncio.run(run())
 
-    def test_async_context_manager(self, real_server_creds):
-        host, port, user, password = real_server_creds
+    def test_async_context_manager(self, ssh_server):
+        host, port, user, password = ssh_server
 
         async def run():
             async with AsyncSSHClient() as client:
@@ -299,8 +299,8 @@ class TestAsyncConnect:
 
         asyncio.run(run())
 
-    def test_async_is_active(self, real_server_creds):
-        host, port, user, password = real_server_creds
+    def test_async_is_active(self, ssh_server):
+        host, port, user, password = ssh_server
 
         async def run():
             client = AsyncSSHClient()
@@ -313,8 +313,8 @@ class TestAsyncConnect:
 
 
 class TestAsyncExecCommand:
-    def test_async_exec_uname(self, real_server_creds):
-        host, port, user, password = real_server_creds
+    def test_async_exec_uname(self, ssh_server):
+        host, port, user, password = ssh_server
 
         async def run():
             async with AsyncSSHClient() as client:
@@ -326,8 +326,8 @@ class TestAsyncExecCommand:
 
         asyncio.run(run())
 
-    def test_async_exec_exit_status(self, real_server_creds):
-        host, port, user, password = real_server_creds
+    def test_async_exec_exit_status(self, ssh_server):
+        host, port, user, password = ssh_server
 
         async def run():
             async with AsyncSSHClient() as client:
@@ -346,8 +346,8 @@ class TestAsyncExecCommand:
 
         asyncio.run(run())
 
-    def test_async_exec_multiple(self, real_server_creds):
-        host, port, user, password = real_server_creds
+    def test_async_exec_multiple(self, ssh_server):
+        host, port, user, password = ssh_server
 
         async def run():
             async with AsyncSSHClient() as client:
@@ -361,8 +361,8 @@ class TestAsyncExecCommand:
         asyncio.run(run())
 
     @pytest.mark.slow
-    def test_async_exec_large_output(self, real_server_creds):
-        host, port, user, password = real_server_creds
+    def test_async_exec_large_output(self, ssh_server):
+        host, port, user, password = ssh_server
 
         async def run():
             async with AsyncSSHClient() as client:
@@ -376,8 +376,8 @@ class TestAsyncExecCommand:
 
         asyncio.run(run())
 
-    def test_async_exec_stderr(self, real_server_creds):
-        host, port, user, password = real_server_creds
+    def test_async_exec_stderr(self, ssh_server):
+        host, port, user, password = ssh_server
 
         async def run():
             async with AsyncSSHClient() as client:
@@ -393,8 +393,8 @@ class TestAsyncExecCommand:
 
         asyncio.run(run())
 
-    def test_async_concurrent_commands(self, real_server_creds):
-        host, port, user, password = real_server_creds
+    def test_async_concurrent_commands(self, ssh_server):
+        host, port, user, password = ssh_server
 
         async def run():
             async with AsyncSSHClient() as client:
@@ -416,8 +416,8 @@ class TestAsyncExecCommand:
 
 
 class TestAsyncSFTP:
-    def test_async_sftp_put_get(self, real_server_creds, tmp_path):
-        host, port, user, password = real_server_creds
+    def test_async_sftp_put_get(self, ssh_server, tmp_path):
+        host, port, user, password = ssh_server
 
         async def run():
             local_src = tmp_path / "async_up.txt"
@@ -437,8 +437,8 @@ class TestAsyncSFTP:
 
         asyncio.run(run())
 
-    def test_async_sftp_listdir(self, real_server_creds):
-        host, port, user, password = real_server_creds
+    def test_async_sftp_listdir(self, ssh_server):
+        host, port, user, password = ssh_server
 
         async def run():
             async with AsyncSSHClient() as client:
@@ -451,8 +451,8 @@ class TestAsyncSFTP:
 
         asyncio.run(run())
 
-    def test_async_sftp_mkdir_rmdir(self, real_server_creds):
-        host, port, user, password = real_server_creds
+    def test_async_sftp_mkdir_rmdir(self, ssh_server):
+        host, port, user, password = ssh_server
 
         async def run():
             async with AsyncSSHClient() as client:
@@ -467,8 +467,8 @@ class TestAsyncSFTP:
 
         asyncio.run(run())
 
-    def test_async_sftp_stat(self, real_server_creds, tmp_path):
-        host, port, user, password = real_server_creds
+    def test_async_sftp_stat(self, ssh_server, tmp_path):
+        host, port, user, password = ssh_server
 
         async def run():
             local = tmp_path / "async_stat.txt"
@@ -486,9 +486,8 @@ class TestAsyncSFTP:
 
         asyncio.run(run())
 
-    @pytest.mark.skip(reason="AsyncSFTPClient does not implement rename")
-    def test_async_sftp_rename(self, real_server_creds, tmp_path):
-        host, port, user, password = real_server_creds
+    def test_async_sftp_rename(self, ssh_server, tmp_path):
+        host, port, user, password = ssh_server
 
         async def run():
             local = tmp_path / "async_rename.txt"
@@ -511,8 +510,8 @@ class TestAsyncSFTP:
         asyncio.run(run())
 
     @pytest.mark.slow
-    def test_async_sftp_large_file(self, real_server_creds, tmp_path):
-        host, port, user, password = real_server_creds
+    def test_async_sftp_large_file(self, ssh_server, tmp_path):
+        host, port, user, password = ssh_server
 
         async def run():
             data = os.urandom(256 * 1024)
@@ -533,9 +532,8 @@ class TestAsyncSFTP:
 
         asyncio.run(run())
 
-    @pytest.mark.skip(reason="AsyncSFTPClient does not implement chmod")
-    def test_async_sftp_chmod(self, real_server_creds, tmp_path):
-        host, port, user, password = real_server_creds
+    def test_async_sftp_chmod(self, ssh_server, tmp_path):
+        host, port, user, password = ssh_server
 
         async def run():
             local = tmp_path / "async_chmod.txt"
@@ -554,9 +552,8 @@ class TestAsyncSFTP:
 
         asyncio.run(run())
 
-    @pytest.mark.skip(reason="AsyncSFTPClient does not implement normalize")
-    def test_async_sftp_normalize(self, real_server_creds):
-        host, port, user, password = real_server_creds
+    def test_async_sftp_normalize(self, ssh_server):
+        host, port, user, password = ssh_server
 
         async def run():
             async with AsyncSSHClient() as client:
@@ -569,8 +566,8 @@ class TestAsyncSFTP:
 
         asyncio.run(run())
 
-    def test_async_sftp_open_read_write(self, real_server_creds):
-        host, port, user, password = real_server_creds
+    def test_async_sftp_open_read_write(self, ssh_server):
+        host, port, user, password = ssh_server
 
         async def run():
             async with AsyncSSHClient() as client:
@@ -591,8 +588,8 @@ class TestAsyncSFTP:
 
         asyncio.run(run())
 
-    def test_async_concurrent_sftp_operations(self, real_server_creds, tmp_path):
-        host, port, user, password = real_server_creds
+    def test_async_concurrent_sftp_operations(self, ssh_server, tmp_path):
+        host, port, user, password = ssh_server
 
         async def run():
             async with AsyncSSHClient() as client:
@@ -663,23 +660,21 @@ class TestLocalPortForwarding:
 
 
 class TestAsyncPortForwarding:
-    @pytest.mark.skip(reason="Async port forwarding has known connection setup issues")
-    def test_async_local_forward(self, real_server_creds):
-        host, port, user, password = real_server_creds
+    @pytest.mark.xfail(
+        reason="Local port forward sometimes fails to read banner on certain servers"
+    )
+    def test_async_local_forward(self, ssh_server):
+        host, port, user, password = ssh_server
 
         async def run():
-
             async with AsyncSSHClient() as client:
                 client.set_missing_host_key_policy(WarningPolicy())
                 await client.connect(host, port=port, username=user, password=password)
 
-                fwd_mgr = client._transport.get_port_forwarding_manager()
-
-                tunnel_id = await fwd_mgr.create_local_tunnel(
-                    local_host="127.0.0.1",
+                tunnel_id = await client.create_local_port_forward(
                     local_port=14723,
                     remote_host="127.0.0.1",
-                    remote_port=22,
+                    remote_port=port,
                 )
 
                 try:
@@ -690,7 +685,7 @@ class TestAsyncPortForwarding:
                     await writer.wait_closed()
                     assert b"SSH" in banner
                 finally:
-                    await fwd_mgr.close_tunnel(tunnel_id)
+                    await client.close_port_forward(tunnel_id)
 
         asyncio.run(run())
 

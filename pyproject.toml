@@ -157,6 +157,8 @@ addopts = [
     "-v",
     "-m not slow and not performance",
 ]
+asyncio_mode = "auto"
+asyncio_default_test_loop_scope = "function"
 markers = [
     "unit: Unit tests",
     "integration: Integration tests requiring external services",

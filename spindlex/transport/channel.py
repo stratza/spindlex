@@ -265,7 +265,36 @@ class Channel:
                     ):
                         continue
                 try:
-                    # No data in event wait, try pumping the transport
+                    # When a channel timeout is active, avoid blocking forever
+                    # in _pump() (which uses a blocking socket).  If the
+                    # transport already has pre-buffered packet bytes from a
+                    # previous over-read, _pump() will return immediately
+                    # without touching the socket.  Otherwise we use select()
+                    # to poll briefly so we can loop back and check the channel
+                    # deadline without ever blocking past it.
+                    if self._timeout is not None:
+                        elapsed = time.time() - start_time
+                        remaining = self._timeout - elapsed
+                        if remaining <= 0:
+                            raise ChannelException("Timeout receiving data")
+
+                        has_buffered = bool(
+                            getattr(self._transport, "_packet_buffer", b"")
+                        )
+                        if not has_buffered:
+                            import select as _select
+
+                            sock = getattr(self._transport, "_socket", None)
+                            if sock is not None:
+                                try:
+                                    r, _, _ = _select.select(
+                                        [sock], [], [], min(0.05, remaining)
+                                    )
+                                    if not r:
+                                        continue  # no data yet, loop back
+                                except Exception:
+                                    pass  # fall through to _pump()
+
                     res = self._transport._pump()
                     if res is not None:
                         # We read or handled a message, re-check buffer immediately

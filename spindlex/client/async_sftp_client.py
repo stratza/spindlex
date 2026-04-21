@@ -11,6 +11,7 @@ from typing import Any, Optional
 from ..exceptions import SFTPError
 from ..protocol.sftp_constants import (
     SFTP_VERSION,
+    SSH_FILEXFER_ATTR_PERMISSIONS,
     SSH_FX_EOF,
     SSH_FX_OK,
     SSH_FXF_APPEND,
@@ -34,7 +35,10 @@ from ..protocol.sftp_messages import (
     SFTPOpenMessage,
     SFTPReadDirMessage,
     SFTPReadMessage,
+    SFTPRealPathMessage,
+    SFTPRenameMessage,
     SFTPRmdirMessage,
+    SFTPSetStatMessage,
     SFTPStatMessage,
     SFTPStatusMessage,
     SFTPVersionMessage,
@@ -414,6 +418,73 @@ class AsyncSFTPClient:
             if isinstance(e, SFTPError):
                 raise
             raise SFTPError(f"File open failed: {e}") from e
+
+    async def rename(self, oldpath: str, newpath: str) -> None:
+        """Rename remote file or directory."""
+        try:
+            request_id = self._get_next_request_id()
+            rename_msg = SFTPRenameMessage(
+                request_id=request_id, oldpath=oldpath, newpath=newpath
+            )
+            await self._send_message(rename_msg)
+            response = await self._wait_for_response(request_id)
+            if isinstance(response, SFTPStatusMessage):
+                if response.status_code != SSH_FX_OK:
+                    raise SFTPError(
+                        f"Rename failed: {response.message}", response.status_code
+                    )
+            else:
+                raise SFTPError("Unexpected response to rename request")
+        except Exception as e:
+            if isinstance(e, SFTPError):
+                raise
+            raise SFTPError(f"Rename failed: {e}") from e
+
+    async def chmod(self, path: str, mode: int) -> None:
+        """Change remote file permissions."""
+        try:
+            attrs = SFTPAttributes()
+            attrs.flags = SSH_FILEXFER_ATTR_PERMISSIONS
+            attrs.permissions = mode
+            request_id = self._get_next_request_id()
+            setstat_msg = SFTPSetStatMessage(
+                request_id=request_id, path=path, attrs=attrs
+            )
+            await self._send_message(setstat_msg)
+            response = await self._wait_for_response(request_id)
+            if isinstance(response, SFTPStatusMessage):
+                if response.status_code != SSH_FX_OK:
+                    raise SFTPError(
+                        f"Chmod failed: {response.message}", response.status_code
+                    )
+            else:
+                raise SFTPError("Unexpected response to setstat request")
+        except Exception as e:
+            if isinstance(e, SFTPError):
+                raise
+            raise SFTPError(f"Chmod failed: {e}") from e
+
+    async def normalize(self, path: str) -> str:
+        """Resolve remote path to its absolute canonical form."""
+        try:
+            request_id = self._get_next_request_id()
+            realpath_msg = SFTPRealPathMessage(request_id=request_id, path=path)
+            await self._send_message(realpath_msg)
+            response = await self._wait_for_response(request_id)
+            if isinstance(response, SFTPNameMessage):
+                if response.names:
+                    return response.names[0][0]
+                raise SFTPError("Empty response to realpath request")
+            elif isinstance(response, SFTPStatusMessage):
+                raise SFTPError(
+                    f"Normalize failed: {response.message}", response.status_code
+                )
+            else:
+                raise SFTPError("Unexpected response to realpath request")
+        except Exception as e:
+            if isinstance(e, SFTPError):
+                raise
+            raise SFTPError(f"Normalize failed: {e}") from e
 
     async def close(self) -> None:
         """Close SFTP client and cleanup resources."""
