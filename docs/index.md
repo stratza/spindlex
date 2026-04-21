@@ -62,7 +62,6 @@ pip install spindlex
 
 *   [**Quick Start**](quickstart.md) - Get up and running in minutes.
 *   [**User Guide**](user_guide/index.md) - Deep dive into SpindleX features.
-*   [**Migration Guide**](migration/paramiko.md) - Switching from Paramiko? Start here.
 *   [**Cookbook**](cookbook/index.md) - Real-world recipes for common tasks.
 *   [**API Reference**](api_reference/index.md) - Detailed technical documentation.
 *   [**Performance**](performance.md) - Benchmarks and optimization tips.

@@ -96,6 +96,9 @@ SFTP_DEFAULT_BUFFER_SIZE = 32768
 # SFTP Subsystem Name
 SFTP_SUBSYSTEM = "sftp"
 
+# Limits
+MAX_SFTP_HANDLES = 100
+
 # Status Code Messages
 SFTP_STATUS_MESSAGES = {
     SSH_FX_OK: "Success",

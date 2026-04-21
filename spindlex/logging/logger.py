@@ -23,6 +23,15 @@ class SSHLogger:
         """
         self.name = name
         self.logger = logger or logging.getLogger(name)
+
+        # Bug #4 Fixed: Enforce log sanitization by attaching the filter
+        # to the logger instance if it's not already there.
+        from .sanitizer import SanitizingFilter
+
+        has_filter = any(isinstance(f, SanitizingFilter) for f in self.logger.filters)
+        if not has_filter:
+            self.logger.addFilter(SanitizingFilter())
+
         self._security_logger: Optional[logging.Logger] = None
         self._performance_logger: Optional[logging.Logger] = None
 

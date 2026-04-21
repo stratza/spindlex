@@ -14,8 +14,8 @@ logging.basicConfig(level=logging.DEBUG)
 # Ensure local 'spindlex' module is used instead of any installed package
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from spindlex import AsyncSSHClient
-from spindlex.hostkeys.policy import AutoAddPolicy
+from spindlex import AsyncSSHClient  # noqa: E402
+from spindlex.hostkeys.policy import AutoAddPolicy  # noqa: E402
 
 # --- CONFIGURATION ---
 SSH_HOST = "my.server.com"

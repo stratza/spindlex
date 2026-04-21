@@ -13,11 +13,11 @@ class LogSanitizer:
     # Patterns for sensitive data that should be redacted
     SENSITIVE_PATTERNS: dict[str, Pattern[str]] = {
         # Passwords and secrets (Captured prefix and value) - handles multiple separators
-        "password": re.compile(r'(?i)(password(?:[\s:=]|is\b)+)([^\s,"}]+)'),
-        "secret": re.compile(r'(?i)(secret(?:[\s:=]|is\b)+)([^\s,"}]+)'),
-        "token": re.compile(r'(?i)(token(?:[\s:=]|is\b)+)([^\s,"}]+)'),
-        "key": re.compile(r'(?i)(key(?:[\s:=]|is\b)+)([^\s,"}]+)'),
-        "passphrase": re.compile(r'(?i)(passphrase(?:[\s:=]|is\b)+)([^\s,"}]+)'),
+        "password": re.compile(r'(?i)(\bpassword(?:[\s:=]|is\b)+)([^\s,"}]+)'),
+        "secret": re.compile(r'(?i)(\bsecret(?:[\s:=]|is\b)+)([^\s,"}]+)'),
+        "token": re.compile(r'(?i)(\btoken(?:[\s:=]|is\b)+)([^\s,"}]+)'),
+        "key": re.compile(r'(?i)(\bkey(?:[\s:=]|is\b)+)([^\s,"}]+)'),
+        "passphrase": re.compile(r'(?i)(\bpassphrase(?:[\s:=]|is\b)+)([^\s,"}]+)'),
         # SSH key material (base64 encoded)
         "ssh_key": re.compile(r"AAAA[A-Za-z0-9+/]{20,}={0,2}"),
         # Private key headers/footers

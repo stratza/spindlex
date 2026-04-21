@@ -284,7 +284,8 @@ class AsyncTransport(Transport):
 
     def _read_single_packet(self) -> Message | None:
         """Read exactly one SSH packet and dispatch it if it is a channel message.
-        Returns the message if it needs to be queued, or None if it was dispatched internally."""
+        Returns the message if it needs to be queued, or None if it was dispatched internally.
+        """
         return super()._read_message(single_pump=True)
 
     async def _pump_async(self) -> None:

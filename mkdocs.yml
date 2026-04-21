@@ -90,8 +90,6 @@ nav:
       - Client Usage: user_guide/client.md
       - SFTP Operations: user_guide/sftp.md
       - Server Usage: user_guide/server.md
-  - Migration:
-      - From Paramiko: migration/paramiko.md
   - Cookbook:
       - Overview: cookbook/index.md
       - SFTP Recipes: cookbook/sftp_recipes.md

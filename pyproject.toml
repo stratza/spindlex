@@ -16,7 +16,7 @@ authors = [
 maintainers = [
     {name = "Di3Z1E"}
 ]
-keywords = ["ssh", "sftp", "client", "server", "cryptography", "security", "automation", "devops", "asyncio", "high-performance", "paramiko-alternative", "remote-execution", "file-transfer", "modern-ssh", "secure-shell"]
+keywords = ["ssh", "sftp", "client", "server", "cryptography", "security", "automation", "devops", "asyncio", "high-performance", "remote-execution", "file-transfer", "modern-ssh", "secure-shell"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -173,6 +173,9 @@ omit = [
     "*/tests/*",
     "*/test_*",
     "setup.py",
+    "*/demo/*",
+    "*/examples/*",
+    "spindlex/tools/benchmark.py",
 ]
 
 [tool.coverage.paths]

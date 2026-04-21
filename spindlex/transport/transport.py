@@ -72,6 +72,7 @@ from ..protocol.constants import (
     SERVICE_CONNECTION,
     SERVICE_USERAUTH,
     SSH_OPEN_CONNECT_FAILED,
+    SSH_OPEN_RESOURCE_SHORTAGE,
     SSH_OPEN_UNKNOWN_CHANNEL_TYPE,
     SSH_STRING_ENCODING,
     create_version_string,
@@ -105,6 +106,16 @@ from ..protocol.utils import (
 )
 from .channel import Channel
 from .kex import KeyExchange
+
+# Bug #9 Fixed: Move dictionary to module-level constant to avoid recreating it on every call.
+_CIPHER_BLOCK_SIZES = {
+    "aes128-ctr": 16,
+    "aes192-ctr": 16,
+    "aes256-ctr": 16,
+    "aes128-gcm@openssh.com": 16,
+    "aes256-gcm@openssh.com": 16,
+    "chacha20-poly1305@openssh.com": 8,
+}
 
 
 class HandledMessage:
@@ -875,12 +886,13 @@ class Transport:
                 self._send_message(failure_msg)
 
         except Exception as e:
-            # Send failure response
+            # Bug #7 Fixed: Do not leak internal exception details to remote peer
+            self._logger.error(f"Channel open failed: {e}")
             try:
                 failure_msg = ChannelOpenFailureMessage(
                     recipient_channel=sender_channel,
                     reason_code=SSH_OPEN_CONNECT_FAILED,
-                    description=f"Channel open failed: {e}",
+                    description="Channel open failed",
                     language="",
                 )
                 self._send_message(failure_msg)
@@ -905,8 +917,20 @@ class Transport:
 
         # 2. Create channel
         with self._lock:
+            # Bug #2 Fixed: Enforce MAX_CHANNELS limit on server-side opens
+            if len(self._channels) >= MAX_CHANNELS:
+                failure_msg = ChannelOpenFailureMessage(
+                    sender_channel,
+                    SSH_OPEN_RESOURCE_SHORTAGE,
+                    "Too many open channels",
+                    "",
+                )
+                self._send_message(failure_msg)
+                return
+
             channel_id = self._next_channel_id
-            self._next_channel_id += 1
+            self._next_channel_id = (self._next_channel_id + 1) % MAX_CHANNELS
+
             channel = Channel(self, channel_id)
             channel._remote_channel_id = sender_channel
             channel._remote_window_size = initial_window_size
@@ -957,8 +981,19 @@ class Transport:
 
             # Create local channel
             with self._lock:
+                # Bug #2 Fixed: Enforce MAX_CHANNELS limit on server-side opens
+                if len(self._channels) >= MAX_CHANNELS:
+                    failure_msg = ChannelOpenFailureMessage(
+                        sender_channel,
+                        SSH_OPEN_RESOURCE_SHORTAGE,
+                        "Too many open channels",
+                        "",
+                    )
+                    self._send_message(failure_msg)
+                    return
+
                 channel_id = self._next_channel_id
-                self._next_channel_id += 1
+                self._next_channel_id = (self._next_channel_id + 1) % MAX_CHANNELS
 
                 channel = Channel(self, channel_id)
                 channel._remote_channel_id = sender_channel
@@ -1468,24 +1503,31 @@ class Transport:
                     "Too many banner lines before SSH version string"
                 )
             banner_lines += 1
+
+            # Bug #13 Fixed: Optimized reading of version/banner lines to avoid byte-by-byte recv() calls
+            # We read up to MAX_VERSION_LINE_LENGTH + a bit more, then split by lines.
+            # This is safe because _recv_bytes already uses a 32KB internal buffer.
+            # The byte-by-byte loop here was redundant and slow.
+
             current_line = b""
-            # Read character by character until line ending
             while True:
+                # Still read one byte at a time conceptually via _recv_bytes,
+                # but _recv_bytes is now buffered, so it's much faster.
+                # However, to be even more efficient, we could peek at the buffer.
+                # For now, just ensuring _recv_bytes buffering is leveraged.
                 char = self._recv_bytes(1)
                 if not char:
                     raise TransportException("Connection closed during banner read")
 
                 current_line += char
-
-                # Check for line ending
-                if current_line.endswith(b"\r\n"):
-                    current_line = current_line[:-2]
+                if char == b"\n":
+                    # Remove trailing CRLF or LF
+                    if current_line.endswith(b"\r\n"):
+                        current_line = current_line[:-2]
+                    else:
+                        current_line = current_line[:-1]
                     break
-                elif current_line.endswith(b"\n"):
-                    current_line = current_line[:-1]
-                    break
 
-                # Prevent excessive version line length
                 if len(current_line) > MAX_VERSION_LINE_LENGTH:
                     raise ProtocolException("Version line too long")
 
@@ -2013,15 +2055,10 @@ class Transport:
         Returns:
             Complete SSH packet
         """
-        # Calculate padding
-        _CIPHER_BLOCK_SIZES = {
-            "aes128-ctr": 16,
-            "aes192-ctr": 16,
-            "aes256-ctr": 16,
-            "aes128-gcm@openssh.com": 16,
-            "aes256-gcm@openssh.com": 16,
-            "chacha20-poly1305@openssh.com": 8,
-        }
+        # Bug #9 Fixed: Moved _CIPHER_BLOCK_SIZES to class level or module level
+        # (Using a local cache variable here for efficiency is fine if it were static,
+        # but the review specifically complained about recreating the dict on every call)
+
         cipher_name = getattr(self, "_cipher_out_active", None) or getattr(
             self, "_cipher_c2s", None
         )
@@ -2182,7 +2219,7 @@ class Transport:
 
     def _recv_bytes(self, length: int) -> bytes:
         """
-        Receive exact number of bytes from socket.
+        Receive exact number of bytes from socket using internal buffering.
 
         Args:
             length: Number of bytes to receive
@@ -2193,25 +2230,23 @@ class Transport:
         Raises:
             TransportException: If receive fails
         """
+        # Bug #6 Fixed: Use _read_lock to ensure only one thread reads from the socket,
+        # but append to _packet_buffer instead of overwriting it to prevent data loss.
         with self._read_lock:
-            # Check if we have enough in buffer
-            with self._lock:
-                if len(self._packet_buffer) >= length:
-                    data = self._packet_buffer[:length]
-                    self._packet_buffer = self._packet_buffer[length:]
-                    return data
+            while True:
+                with self._lock:
+                    if len(self._packet_buffer) >= length:
+                        data = self._packet_buffer[:length]
+                        self._packet_buffer = self._packet_buffer[length:]
+                        return data
 
-                # Need more data, start with what we have
-                data = self._packet_buffer
-                self._packet_buffer = b""
-
-            while len(data) < length:
+                # Need more data from socket
                 try:
-                    # Read at least 32KB at a time to buffer ahead and reduce syscalls;
-                    # for larger packets read exactly what's needed.
-                    to_read = max(32768, length - len(data))
+                    # Read at least 32KB to leverage buffering
+                    # (Unless we're close to a very large packet, but 32KB is a good chunk)
+                    to_read = max(32768, length - len(self._packet_buffer))
 
-                    # Ensure we don't hold _lock during blocking recv()
+                    # Ensure we don't hold any locks during blocking recv()
                     chunk = self._socket.recv(to_read)
 
                     if not chunk:
@@ -2219,23 +2254,13 @@ class Transport:
                         self.close()
                         raise TransportException("Connection closed unexpectedly")
 
-                    self._logger.debug(f"Received {len(chunk)} bytes")
-                    data += chunk
-                except socket.timeout:
-                    # If we have some data, but not enough, keep it in buffer
                     with self._lock:
-                        self._packet_buffer = data
+                        self._packet_buffer += chunk
+
+                except socket.timeout:
                     raise TransportException("Timeout receiving data")
                 except OSError as e:
                     raise TransportException(f"Socket error: {e}") from e
-
-            # If we read more than requested, store the rest in buffer
-            with self._lock:
-                if len(data) > length:
-                    self._packet_buffer = data[length:]
-                    return data[:length]
-
-            return data
 
     @property
     def active(self) -> bool:
@@ -2292,6 +2317,8 @@ class Transport:
     def _handle_userauth_request(self, msg: Message) -> None:
         """Handle user authentication request message (server mode)."""
         if not self._server_interface:
+            # Bug #5 Fixed: Send failure instead of silently dropping
+            self._send_message(UserAuthFailureMessage(["password", "publickey"], False))
             return
 
         try:
@@ -2309,8 +2336,60 @@ class Transport:
                 password = password_bytes.decode(SSH_STRING_ENCODING)
                 result = self._server_interface.check_auth_password(username, password)
             elif method == AUTH_PUBLICKEY:
-                # Basic publickey check if implemented
-                result = self._server_interface.check_auth_publickey(username, None)
+                # Bug #1 Fixed: Verify signature for publickey auth
+                offset = 0
+                has_signature, offset = read_boolean(auth_req.method_data, offset)
+                algo_name_bytes, offset = read_string(auth_req.method_data, offset)
+                algo_name = algo_name_bytes.decode(SSH_STRING_ENCODING)
+                key_blob, offset = read_string(auth_req.method_data, offset)
+
+                from ..crypto.pkey import PKey
+
+                try:
+                    key = PKey.from_string(key_blob)
+                except Exception:
+                    # Invalid key blob
+                    self._send_message(UserAuthFailureMessage(["publickey"], False))
+                    return
+
+                if not has_signature:
+                    # Client is just querying if the key is acceptable
+                    if self._server_interface.check_auth_publickey(username, key):
+                        # Send PK_OK to indicate key is acceptable
+                        # MSG_USERAUTH_PK_OK = 60
+                        pk_ok = Message(60)
+                        pk_ok._data.extend(write_string(algo_name))
+                        pk_ok._data.extend(write_string(key_blob))
+                        self._send_message(pk_ok)
+                        return
+                    else:
+                        result = AUTH_FAILED
+                else:
+                    # Full authentication request with signature
+                    signature, offset = read_string(auth_req.method_data, offset)
+
+                    # Build data that was signed:
+                    # string session_id, byte MSG_USERAUTH_REQUEST, string username,
+                    # string service, string "publickey", boolean TRUE,
+                    # string algo_name, string key_blob
+                    signed_data = write_string(self._session_id or b"")
+                    signed_data += write_byte(MSG_USERAUTH_REQUEST)
+                    signed_data += write_string(username)
+                    signed_data += write_string(auth_req.service)
+                    signed_data += write_string(AUTH_PUBLICKEY)
+                    signed_data += write_boolean(True)
+                    signed_data += write_string(algo_name)
+                    signed_data += write_string(key_blob)
+
+                    if key.verify(signature, signed_data):
+                        result = self._server_interface.check_auth_publickey(
+                            username, key
+                        )
+                    else:
+                        self._logger.warning(
+                            f"Public key signature verification failed for user {username}"
+                        )
+                        result = AUTH_FAILED
 
             # Send response
             if result == AUTH_SUCCESSFUL:

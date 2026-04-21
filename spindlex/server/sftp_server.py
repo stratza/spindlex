@@ -13,6 +13,7 @@ from typing import BinaryIO, Optional
 
 from ..exceptions import SFTPError
 from ..protocol.sftp_constants import (
+    MAX_SFTP_HANDLES,
     SFTP_MAX_READ_SIZE,
     SFTP_VERSION,
     SSH_FILEXFER_ATTR_ACMODTIME,
@@ -550,6 +551,16 @@ class SFTPServer:
                 )
 
                 with self._handle_lock:
+                    # Bug #12 Fixed: Enforce limit on open file handles
+                    if len(self._handles) >= MAX_SFTP_HANDLES:
+                        error_msg = SFTPStatusMessage(
+                            message.request_id,
+                            SSH_FX_FAILURE,
+                            "Too many open handles",
+                        )
+                        self._send_message(error_msg)
+                        return
+
                     self._handles[handle_id] = handle
 
                 # Send handle response
@@ -1188,7 +1199,7 @@ class SFTPServer:
                 error_msg = SFTPStatusMessage(
                     message.request_id,
                     SSH_FX_PERMISSION_DENIED,
-                    "Read access denied",
+                    "Write access denied",
                 )
                 self._send_message(error_msg)
                 return
