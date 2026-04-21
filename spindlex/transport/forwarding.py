@@ -128,7 +128,7 @@ class LocalPortForwarder:
             if tunnel_id in self._tunnels:
                 raise SSHException(f"Tunnel already exists: {tunnel_id}")
 
-            server_socket: socket.socket | None = None
+            server_socket: Union[socket.socket, None] = None
             try:
                 # Create listening socket
                 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

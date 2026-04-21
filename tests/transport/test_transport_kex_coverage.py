@@ -8,7 +8,6 @@ _generate_session_keys using a mocked transport.
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from spindlex.exceptions import CryptoException
 from spindlex.protocol.constants import (
     KEX_CURVE25519_SHA256,
