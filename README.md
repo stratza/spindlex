@@ -1,7 +1,7 @@
 <div align="center">
   <img src="docs/_static/figure.png" width="160" height="160" alt="SpindleX - High-Performance SSH and SFTP Library for Python">
   <h1>SpindleX</h1>
-  <p><strong>Modern, pure-Python SSH library for secure automation, recursive SFTP, and minimal-dependency deployments.</strong></p>
+  <p><strong>Modern SSH library for secure automation, recursive SFTP, and high-performance deployments.</strong></p>
 
 [![CI Status](https://img.shields.io/github/actions/workflow/status/Di3Z1E/spindlex/ci.yml?branch=main&style=for-the-badge&logo=github)](https://github.com/Di3Z1E/spindlex/actions)
 [![Coverage](https://img.shields.io/codecov/c/github/Di3Z1E/spindlex?style=for-the-badge&logo=codecov)](https://codecov.io/gh/Di3Z1E/spindlex)

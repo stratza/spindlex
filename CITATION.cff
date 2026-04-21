@@ -8,7 +8,7 @@ title: "SpindleX"
 version: 0.6.3
 date-released: 2026-04-20
 url: "https://github.com/Di3Z1E/spindlex"
-abstract: "A modern, high-performance, pure-Python SSHv2 and SFTP library focused on speed, security, and developer experience."
+abstract: "A modern, high-performance SSHv2 and SFTP library focused on speed, security, and developer experience."
 keywords:
   - ssh
   - sftp
