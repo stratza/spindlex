@@ -7,6 +7,7 @@ import socket
 from unittest.mock import MagicMock
 
 import pytest
+
 from spindlex.exceptions import SSHException
 from spindlex.transport.forwarding import (
     ForwardingTunnel,

@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+
 from spindlex.tools.keygen import generate_key, main, save_key_pair
 
 

@@ -1,4 +1,5 @@
 import pytest
+
 from spindlex.client.ssh_client import SSHClient
 from spindlex.crypto.pkey import Ed25519Key
 from spindlex.hostkeys.policy import AutoAddPolicy
