@@ -1203,7 +1203,10 @@ class Transport:
 
             channel = self._channels[channel_id]
 
-            # Check window size
+            # Defensive check only — the channel layer owns _remote_window_size
+            # and is the single decrement point (mirrors the async path in
+            # AsyncChannel.send). Transport must not decrement here, otherwise
+            # the window would be debited twice per send.
             self._logger.debug(
                 f"Channel {channel_id} window: remote={channel._remote_window_size}, max_packet={channel._remote_max_packet_size}, data={len(data)}"
             )
@@ -1213,13 +1216,9 @@ class Transport:
             if len(data) > channel._remote_max_packet_size:
                 raise TransportException("Remote max packet size exceeded")
 
-            # Send data message
             if channel._remote_channel_id is not None:
                 data_msg = ChannelDataMessage(channel._remote_channel_id, data)
                 self._send_message(data_msg)
-
-            # Update remote window size
-            channel._remote_window_size -= len(data)
 
     def _send_channel_window_adjust(self, channel_id: int, bytes_to_add: int) -> None:
         """
