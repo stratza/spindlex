@@ -16,3 +16,24 @@ services:
     volumes:
       - ./config:/config
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2222"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  dropbear-server:
+    image: luvletter2333/dropbear:latest
+    container_name: spindlex-dropbear-server
+    environment:
+      - USERNAME=testuser
+      - PASSWORD=password123
+    ports:
+      - 2223:22
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "22"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
