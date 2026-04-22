@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 """
 Example: Backing up Proxmox configuration files recursively.
-This script demonstrates using SFTP for downloading configuration directories.
+
+This script demonstrates using SFTP for downloading configuration directories
+with SpindleX's secure-by-default host key verification. Before running, add
+the target server's host key to ``~/.ssh/known_hosts`` (for example by
+connecting once with OpenSSH).
 """
 
 import os
 
 from spindlex import SSHClient
-from spindlex.hostkeys.policy import AutoAddPolicy
+from spindlex.exceptions import SSHException
+from spindlex.hostkeys.policy import RejectPolicy
 
 
 def download_recursive(sftp, remote_path, local_path):
@@ -36,7 +41,13 @@ def main():
     local_backup_dir = "./backups/proxmox"
 
     with SSHClient() as client:
-        client.set_missing_host_key_policy(AutoAddPolicy())
+        # Secure default: reject unknown host keys, then load known_hosts.
+        client.set_missing_host_key_policy(RejectPolicy())
+        try:
+            client.get_host_keys().load()
+        except SSHException as exc:
+            print(f"Warning: could not load known_hosts: {exc}")
+
         client.connect(hostname, username=username, password=password)
 
         with client.open_sftp() as sftp:

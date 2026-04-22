@@ -3,15 +3,49 @@
 Basic SpindleX Usage Examples
 
 This module demonstrates fundamental SSH operations using SpindleX.
+
+Security notes
+--------------
+All examples use the secure-by-default ``RejectPolicy`` host-key policy.
+Before running these examples, make sure the target server's host key is
+already recorded in your ``known_hosts`` file — e.g. by connecting once
+with OpenSSH (``ssh user@host``) or by calling
+``client.get_host_keys().load()``.
+
+Do **not** replace the policy with ``AutoAddPolicy`` outside of short-lived
+disposable test environments: it trusts every first-seen key and disables
+MITM protection.
 """
 
-from spindlex import AutoAddPolicy, RejectPolicy, SSHClient
+from spindlex import SSHClient
 from spindlex.crypto.pkey import PKey
 from spindlex.exceptions import (
     AuthenticationException,
+    BadHostKeyException,
     ChannelException,
     SSHException,
 )
+from spindlex.hostkeys.policy import RejectPolicy
+
+
+def _configure_client(client: SSHClient) -> None:
+    """
+    Apply secure defaults to an SSHClient instance.
+
+    The default policy is already ``RejectPolicy``; we set it explicitly to
+    make the security posture obvious in the example, and we load the user's
+    known_hosts file so verification can succeed.
+    """
+    client.set_missing_host_key_policy(RejectPolicy())
+    # Populate storage from the user's ~/.ssh/known_hosts (best-effort: the
+    # HostKeyStorage constructor already attempts this, but we trigger a
+    # reload explicitly so failures surface as warnings, not silent gaps).
+    try:
+        client.get_host_keys().load()
+    except SSHException as exc:
+        # Not fatal — just means no known_hosts entries are available and
+        # every connection will be rejected unless the caller adds one.
+        print(f"Warning: could not load known_hosts: {exc}")
 
 
 def basic_connection_example():
@@ -19,7 +53,7 @@ def basic_connection_example():
     print("=== Basic Connection Example ===")
 
     client = SSHClient()
-    client.set_missing_host_key_policy(AutoAddPolicy())
+    _configure_client(client)
 
     try:
         # Connect to server
@@ -35,7 +69,7 @@ def basic_connection_example():
         # Read and display output
         output = stdout.read().decode("utf-8").strip()
         error = stderr.read().decode("utf-8").strip()
-        exit_code = stdout._channel.get_exit_status()
+        exit_code = stdout.channel.get_exit_status()
 
         print(f"Command output: {output}")
         if error:
@@ -44,6 +78,8 @@ def basic_connection_example():
 
     except AuthenticationException:
         print("Authentication failed - check your credentials")
+    except BadHostKeyException as e:
+        print(f"Host key verification failed: {e}")
     except SSHException as e:
         print(f"SSH error: {e}")
     finally:
@@ -59,10 +95,10 @@ def key_based_authentication_example():
     private_key = PKey.generate("ed25519")
 
     # In practice, you would load an existing key:
-    # private_key = load_key_from_file('/path/to/private_key')
+    # private_key = PKey.from_private_key_file('/path/to/private_key')
 
     client = SSHClient()
-    client.set_missing_host_key_policy(AutoAddPolicy())
+    _configure_client(client)
 
     try:
         client.connect(hostname="example.com", username="demo", pkey=private_key)
@@ -76,6 +112,8 @@ def key_based_authentication_example():
 
     except AuthenticationException:
         print("Key authentication failed")
+    except BadHostKeyException as e:
+        print(f"Host key verification failed: {e}")
     except SSHException as e:
         print(f"SSH error: {e}")
     finally:
@@ -87,7 +125,7 @@ def multiple_commands_example():
     print("\n=== Multiple Commands Example ===")
 
     client = SSHClient()
-    client.set_missing_host_key_policy(AutoAddPolicy())
+    _configure_client(client)
 
     try:
         client.connect(hostname="example.com", username="demo", password="password")
@@ -112,7 +150,7 @@ def interactive_shell_example():
     print("\n=== Interactive Shell Example ===")
 
     client = SSHClient()
-    client.set_missing_host_key_policy(AutoAddPolicy())
+    _configure_client(client)
 
     try:
         client.connect(hostname="example.com", username="demo", password="password")
@@ -154,7 +192,7 @@ def context_manager_example():
 
     try:
         with SSHClient() as client:
-            client.set_missing_host_key_policy(AutoAddPolicy())
+            _configure_client(client)
             client.connect(hostname="example.com", username="demo", password="password")
 
             print("Connected using context manager")
@@ -176,7 +214,8 @@ def error_handling_example():
     print("\n=== Error Handling Example ===")
 
     client = SSHClient()
-    client.set_missing_host_key_policy(RejectPolicy())  # Strict host key checking
+    # Strict host key checking is the default; shown here to reinforce intent.
+    client.set_missing_host_key_policy(RejectPolicy())
 
     try:
         # This will likely fail due to strict host key policy
@@ -189,10 +228,10 @@ def error_handling_example():
 
     except AuthenticationException:
         print("Authentication failed - credentials are incorrect")
+    except BadHostKeyException as e:
+        print(f"Host key verification failed: {e}")
     except SSHException as e:
         print(f"SSH connection failed: {e}")
-    except Exception as e:
-        print(f"Unexpected error: {e}")
     finally:
         client.close()
 
@@ -202,26 +241,24 @@ def connection_info_example():
     print("\n=== Connection Information Example ===")
 
     client = SSHClient()
-    client.set_missing_host_key_policy(AutoAddPolicy())
+    _configure_client(client)
 
     try:
         client.connect(hostname="example.com", username="demo", password="password")
 
         # Get transport information
         transport = client.get_transport()
+        if transport is None:
+            print("No transport available")
+            return
 
         print(f"Connected: {transport.active}")
-        print(f"Server version: {transport._server_version}")
-        print(f"Client version: {transport._client_version}")
-
-        # Get security information
-        print(f"Cipher: {transport._cipher_c2s}")
-        print(f"MAC: {transport._mac_c2s}")
 
         # Get host key information
         host_key = transport.get_server_host_key()
-        print(f"Host key type: {host_key.get_name()}")
-        print(f"Host key fingerprint: {host_key.get_fingerprint()}")
+        if host_key is not None:
+            print(f"Host key type: {host_key.get_name()}")
+            print(f"Host key fingerprint: {host_key.get_fingerprint()}")
 
     except SSHException as e:
         print(f"SSH error: {e}")

@@ -3,14 +3,31 @@
 SFTP File Transfer Examples
 
 This module demonstrates file transfer operations using SpindleX's SFTP client.
+
+Security notes
+--------------
+All examples use the secure-by-default ``RejectPolicy``. Populate your
+``~/.ssh/known_hosts`` with the target server's key before running these
+examples. Never use ``AutoAddPolicy`` in production — it trusts every
+first-seen key and disables MITM protection.
 """
 
 import os
 import tempfile
 from pathlib import Path
 
-from spindlex import AutoAddPolicy, SSHClient
-from spindlex.exceptions import SFTPError, SSHException
+from spindlex import SSHClient
+from spindlex.exceptions import BadHostKeyException, SFTPError, SSHException
+from spindlex.hostkeys.policy import RejectPolicy
+
+
+def _configure_client(client: SSHClient) -> None:
+    """Apply secure defaults: RejectPolicy + load known_hosts."""
+    client.set_missing_host_key_policy(RejectPolicy())
+    try:
+        client.get_host_keys().load()
+    except SSHException as exc:
+        print(f"Warning: could not load known_hosts: {exc}")
 
 
 def basic_file_transfer_example():
@@ -18,7 +35,7 @@ def basic_file_transfer_example():
     print("=== Basic File Transfer Example ===")
 
     client = SSHClient()
-    client.set_missing_host_key_policy(AutoAddPolicy())
+    _configure_client(client)
 
     try:
         client.connect(hostname="example.com", username="demo", password="password")
@@ -31,6 +48,7 @@ def basic_file_transfer_example():
             temp_file.write("Hello, SFTP World!\nThis is a test file.")
             local_file = temp_file.name
 
+        download_file = local_file + ".downloaded"
         try:
             # Upload file
             remote_file = "/tmp/test_upload.txt"
@@ -39,7 +57,6 @@ def basic_file_transfer_example():
             print("Upload completed")
 
             # Download file
-            download_file = local_file + ".downloaded"
             print(f"Downloading {remote_file} to {download_file}")
             sftp.get(remote_file, download_file)
             print("Download completed")
@@ -53,12 +70,20 @@ def basic_file_transfer_example():
 
         finally:
             # Clean up temporary files
-            os.unlink(local_file)
+            try:
+                os.unlink(local_file)
+            except OSError:
+                pass
             if os.path.exists(download_file):
-                os.unlink(download_file)
+                try:
+                    os.unlink(download_file)
+                except OSError:
+                    pass
 
             sftp.close()
 
+    except BadHostKeyException as e:
+        print(f"Host key verification failed: {e}")
     except SSHException as e:
         print(f"SSH error: {e}")
     finally:
@@ -70,7 +95,7 @@ def directory_operations_example():
     print("\n=== Directory Operations Example ===")
 
     client = SSHClient()
-    client.set_missing_host_key_policy(AutoAddPolicy())
+    _configure_client(client)
 
     try:
         client.connect(hostname="example.com", username="demo", password="password")
@@ -98,7 +123,7 @@ def directory_operations_example():
         # Create a file in the directory
         test_file = f"{test_dir}/test_file.txt"
         with sftp.open(test_file, "w") as remote_file:
-            remote_file.write("This is a test file created via SFTP")
+            remote_file.write(b"This is a test file created via SFTP")
 
         print(f"Created file: {test_file}")
 
@@ -113,6 +138,8 @@ def directory_operations_example():
 
         sftp.close()
 
+    except BadHostKeyException as e:
+        print(f"Host key verification failed: {e}")
     except SSHException as e:
         print(f"SSH error: {e}")
     finally:
@@ -124,7 +151,7 @@ def file_attributes_example():
     print("\n=== File Attributes Example ===")
 
     client = SSHClient()
-    client.set_missing_host_key_policy(AutoAddPolicy())
+    _configure_client(client)
 
     try:
         client.connect(hostname="example.com", username="demo", password="password")
@@ -134,7 +161,7 @@ def file_attributes_example():
         # Create a test file
         test_file = "/tmp/attr_test.txt"
         with sftp.open(test_file, "w") as f:
-            f.write("Test file for attribute operations")
+            f.write(b"Test file for attribute operations")
 
         # Get file attributes
         attrs = sftp.stat(test_file)
@@ -157,6 +184,8 @@ def file_attributes_example():
 
         sftp.close()
 
+    except BadHostKeyException as e:
+        print(f"Host key verification failed: {e}")
     except SSHException as e:
         print(f"SSH error: {e}")
     finally:
@@ -168,7 +197,7 @@ def bulk_transfer_example():
     print("\n=== Bulk Transfer Example ===")
 
     client = SSHClient()
-    client.set_missing_host_key_policy(AutoAddPolicy())
+    _configure_client(client)
 
     try:
         client.connect(hostname="example.com", username="demo", password="password")
@@ -212,10 +241,10 @@ def bulk_transfer_example():
         print(f"Downloading {len(uploaded_files)} files...")
         for i, filename in enumerate(uploaded_files):
             remote_file = f"{remote_dir}/{filename}"
-            local_file = download_dir / filename
+            local_path = download_dir / filename
 
             print(f"Downloading {i + 1}/{len(uploaded_files)}: {filename}")
-            sftp.get(remote_file, str(local_file))
+            sftp.get(remote_file, str(local_path))
 
         print("Download completed!")
 
@@ -231,6 +260,8 @@ def bulk_transfer_example():
 
         sftp.close()
 
+    except BadHostKeyException as e:
+        print(f"Host key verification failed: {e}")
     except SSHException as e:
         print(f"SSH error: {e}")
     finally:
@@ -242,7 +273,7 @@ def streaming_transfer_example():
     print("\n=== Streaming Transfer Example ===")
 
     client = SSHClient()
-    client.set_missing_host_key_policy(AutoAddPolicy())
+    _configure_client(client)
 
     try:
         client.connect(hostname="example.com", username="demo", password="password")
@@ -308,6 +339,8 @@ def streaming_transfer_example():
 
         sftp.close()
 
+    except BadHostKeyException as e:
+        print(f"Host key verification failed: {e}")
     except SSHException as e:
         print(f"SSH error: {e}")
     finally:
@@ -320,7 +353,7 @@ def sftp_context_manager_example():
 
     try:
         with SSHClient() as client:
-            client.set_missing_host_key_policy(AutoAddPolicy())
+            _configure_client(client)
             client.connect(hostname="example.com", username="demo", password="password")
 
             with client.open_sftp() as sftp:
@@ -331,7 +364,7 @@ def sftp_context_manager_example():
                 # Create and remove a test file
                 test_file = "/tmp/context_test.txt"
                 with sftp.open(test_file, "w") as f:
-                    f.write("Test file created with context manager")
+                    f.write(b"Test file created with context manager")
 
                 # Verify file exists
                 attrs = sftp.stat(test_file)
@@ -345,6 +378,8 @@ def sftp_context_manager_example():
 
         print("SSH connection automatically closed")
 
+    except BadHostKeyException as e:
+        print(f"Host key verification failed: {e}")
     except SSHException as e:
         print(f"SSH error: {e}")
 
