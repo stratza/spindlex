@@ -119,14 +119,35 @@ class CipherSuite:
             ),
         }
 
+        # Strict-KEX / extension markers must never be selected as the actual
+        # KEX algorithm even if both peers advertise them. They are signaling
+        # tokens, not key-exchange algorithms.
+        kex_markers = {
+            "ext-info-c",
+            "ext-info-s",
+            "kex-strict-c-v01@openssh.com",
+            "kex-strict-s-v01@openssh.com",
+        }
+
         for category, (key, preferred_list) in categories.items():
             client_list = client_algorithms.get(key, [])
             server_list = server_algorithms.get(key, [])
 
-            # Find first mutually supported algorithm
+            # Find first mutually supported algorithm. RFC 4253 §7.1 says the
+            # client's preference order wins; iterate the client list first
+            # and check that the algorithm is also in our preferred set so we
+            # never end up agreeing to something we cannot actually implement.
+            preferred_set = set(preferred_list)
+            server_set = set(server_list)
+            if category == "kex":
+                preferred_set -= kex_markers
+                server_set -= kex_markers
+
             selected = None
-            for algorithm in preferred_list:
-                if algorithm in client_list and algorithm in server_list:
+            for algorithm in client_list:
+                if algorithm in kex_markers and category == "kex":
+                    continue
+                if algorithm in preferred_set and algorithm in server_set:
                     selected = algorithm
                     break
 

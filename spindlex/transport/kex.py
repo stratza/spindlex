@@ -253,13 +253,16 @@ class KeyExchange:
 
     def _choose_algorithm(self, client_list: list[str], server_list: list[str]) -> str:
         """Choose first matching algorithm from client and server lists, excluding extensions."""
-        # Filter out SSH extensions from both lists
-        extensions = [
+        # Filter out SSH extensions and Terrapin/strict-KEX markers. Names must
+        # match what Transport advertises; the v00 spelling does not exist in
+        # any deployed implementation and previously let the v01 marker leak
+        # into the negotiation pool, silently disabling the strict-KEX defense.
+        extensions = {
             "ext-info-c",
             "ext-info-s",
-            "kex-strict-c-v00@openssh.com",
-            "kex-strict-s-v00@openssh.com",
-        ]
+            "kex-strict-c-v01@openssh.com",
+            "kex-strict-s-v01@openssh.com",
+        }
 
         client_algs = [alg for alg in client_list if alg not in extensions]
         server_algs = [alg for alg in server_list if alg not in extensions]
