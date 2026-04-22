@@ -18,7 +18,12 @@ if TYPE_CHECKING:
     from .forwarding import PortForwardingManager
 
 from ..crypto.backend import default_crypto_backend
-from ..exceptions import AuthenticationException, ProtocolException, TransportException
+from ..exceptions import (
+    AuthenticationException,
+    ProtocolException,
+    SSHException,
+    TransportException,
+)
 from ..protocol.constants import (
     AUTH_FAILED,
     AUTH_KEYBOARD_INTERACTIVE,
@@ -219,6 +224,7 @@ class Transport:
         self._timeout = 10.0
 
         self._logger = logging.getLogger(__name__)
+        self._strict_kex = False
 
     def get_timeout(self) -> Optional[float]:
         """
@@ -298,9 +304,9 @@ class Transport:
                 with self._lock:
                     self._active = True
 
-        except Exception as e:
+        except (OSError, struct.error, SSHException) as e:
             self.close()
-            if isinstance(e, (TransportException, ProtocolException)):
+            if isinstance(e, SSHException):
                 raise
             raise TransportException(f"Client start failed: {e}") from e
 
@@ -354,9 +360,9 @@ class Transport:
                 with self._lock:
                     self._active = True
 
-        except Exception as e:
+        except (OSError, struct.error, SSHException) as e:
             self.close()
-            if isinstance(e, (TransportException, ProtocolException)):
+            if isinstance(e, SSHException):
                 raise
             raise TransportException(f"Server start failed: {e}") from e
 
@@ -399,7 +405,7 @@ class Transport:
             # Wait for authentication response
             return self._handle_auth_response()
 
-        except Exception as e:
+        except (OSError, struct.error, SSHException) as e:
             if isinstance(e, AuthenticationException):
                 raise
             raise AuthenticationException(f"Password authentication failed: {e}") from e
@@ -429,7 +435,7 @@ class Transport:
             # For maximum compatibility and performance, we proceed directly to signature-based auth
             return self._auth_publickey_with_signature(username, key)
 
-        except Exception as e:
+        except (OSError, struct.error, SSHException) as e:
             if isinstance(e, AuthenticationException):
                 raise
             raise AuthenticationException(
@@ -558,7 +564,7 @@ class Transport:
 
             return result
 
-        except Exception as e:
+        except (OSError, struct.error, SSHException) as e:
             if isinstance(e, AuthenticationException):
                 raise
             raise AuthenticationException(
@@ -614,7 +620,7 @@ class Transport:
 
         except ImportError:
             raise AuthenticationException("GSSAPI authentication not available")
-        except Exception as e:
+        except (OSError, struct.error, SSHException) as e:
             if isinstance(e, AuthenticationException):
                 raise
             raise AuthenticationException(f"GSSAPI authentication failed: {e}") from e
@@ -751,12 +757,12 @@ class Transport:
                     f"Unexpected response to channel open: {type(response).__name__}"
                 )
 
-        except Exception as e:
+        except (OSError, struct.error, SSHException) as e:
             # Cleanup on error
             with self._lock:
                 if channel_id in self._channels:
                     del self._channels[channel_id]
-            if isinstance(e, TransportException):
+            if isinstance(e, SSHException):
                 raise
             raise TransportException(f"Failed to open channel: {e}") from e
 
@@ -789,7 +795,7 @@ class Transport:
                     try:
                         close_msg = ChannelCloseMessage(channel._remote_channel_id)
                         self._send_message(close_msg)
-                    except Exception:
+                    except (OSError, TransportException):
                         pass  # Ignore errors during close
 
                 # Remove from channels dict
@@ -854,6 +860,11 @@ class Transport:
         Args:
             msg: Channel open message
         """
+        # Parse the remote sender_channel up-front so we always have a valid
+        # id to reference in a failure response, even if later fields are
+        # malformed. If even this fails we cannot reply safely — the peer
+        # will time out, which is the expected behaviour for a garbage frame.
+        sender_channel: Optional[int] = None
         try:
             if not isinstance(msg, ChannelOpenMessage):
                 msg = ChannelOpenMessage.unpack(msg.pack())
@@ -885,9 +896,18 @@ class Transport:
                 )
                 self._send_message(failure_msg)
 
-        except Exception as e:
-            # Bug #7 Fixed: Do not leak internal exception details to remote peer
-            self._logger.error(f"Channel open failed: {e}")
+        except (
+            OSError,
+            struct.error,
+            ValueError,
+            UnicodeDecodeError,
+            SSHException,
+        ) as e:
+            # Do not leak internal exception details to the remote peer.
+            self._logger.error("Channel open failed: %s", e)
+            if sender_channel is None:
+                # No valid sender id parsed — can't send a targeted failure.
+                return
             try:
                 failure_msg = ChannelOpenFailureMessage(
                     recipient_channel=sender_channel,
@@ -896,8 +916,10 @@ class Transport:
                     language="",
                 )
                 self._send_message(failure_msg)
-            except Exception:
-                pass
+            except (TransportException, OSError) as send_err:
+                self._logger.debug(
+                    "Could not send channel open failure response: %s", send_err
+                )
 
     def _handle_session_open(
         self, sender_channel: int, initial_window_size: int, maximum_packet_size: int
@@ -1022,7 +1044,13 @@ class Transport:
                     channel, origin_addr, dest_addr
                 )
 
-        except Exception as e:
+        except (
+            OSError,
+            struct.error,
+            ValueError,
+            UnicodeDecodeError,
+            SSHException,
+        ) as e:
             # Send failure response
             failure_msg = ChannelOpenFailureMessage(
                 recipient_channel=sender_channel,
@@ -1157,7 +1185,7 @@ class Transport:
             channel._handle_exit_signal(
                 signal_name, core_dumped, error_message, language_tag
             )
-        except Exception:
+        except (struct.error, ValueError, UnicodeDecodeError, IndexError):
             # Ignore malformed exit signal data
             pass
 
@@ -1315,8 +1343,8 @@ class Transport:
 
             return True  # No reply requested
 
-        except Exception as e:
-            if isinstance(e, TransportException):
+        except (OSError, struct.error, SSHException) as e:
+            if isinstance(e, SSHException):
                 raise
             raise TransportException(f"Failed to send global request: {e}") from e
 
@@ -1358,13 +1386,13 @@ class Transport:
 
                 self._send_message(reply_msg)
 
-        except Exception:
+        except (OSError, struct.error, ValueError, UnicodeDecodeError, SSHException):
             # Send failure reply if requested
             if want_reply:
                 try:
                     reply_msg = Message(MSG_REQUEST_FAILURE)
                     self._send_message(reply_msg)
-                except Exception:
+                except (OSError, TransportException):
                     pass
 
     def _handle_tcpip_forward_request(self, data: bytes) -> bool:
@@ -1395,7 +1423,7 @@ class Transport:
             # Default to reject if no server interface
             return False
 
-        except Exception:
+        except (struct.error, ValueError, UnicodeDecodeError, IndexError):
             return False
 
     def _handle_cancel_tcpip_forward_request(self, data: bytes) -> bool:
@@ -1426,8 +1454,14 @@ class Transport:
             # Default to reject if no server interface
             return False
 
-        except Exception:
+        except (struct.error, ValueError, UnicodeDecodeError, IndexError):
             return False
+
+    def __enter__(self) -> "Transport":
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        self.close()
 
     def close(self) -> None:
         """Close transport and cleanup resources."""
@@ -1438,18 +1472,18 @@ class Transport:
             if self._socket:
                 try:
                     self._socket.shutdown(socket.SHUT_RDWR)
-                except Exception:
+                except OSError:
                     pass
                 try:
                     self._socket.close()
-                except Exception:
+                except OSError:
                     pass
 
             # Close all channels
             for channel in list(self._channels.values()):
                 try:
                     channel.close()
-                except Exception:
+                except (OSError, SSHException):
                     pass
             self._channels.clear()
 
@@ -1472,8 +1506,8 @@ class Transport:
             self._send_version()
             self._recv_version()
 
-        except Exception as e:
-            if isinstance(e, (TransportException, ProtocolException)):
+        except (OSError, struct.error, SSHException) as e:
+            if isinstance(e, SSHException):
                 raise
             raise TransportException(f"Error during version exchange: {e}") from e
 
@@ -1587,15 +1621,15 @@ class Transport:
             self._kex.start_kex()
             self._logger.debug("Rekeying handshake complete.")
 
-        except Exception as e:
+        except (OSError, struct.error, SSHException) as e:
             # _kex_in_progress / _active are reset under the lock in finally
             with self._lock:
                 self._active = False
             try:
                 self.close()
-            except Exception:
+            except (OSError, SSHException):
                 pass
-            if isinstance(e, (TransportException, ProtocolException)):
+            if isinstance(e, SSHException):
                 raise
             raise TransportException(f"Rekeying failed or timed out: {e}") from e
         finally:
@@ -1621,9 +1655,26 @@ class Transport:
         # Use algorithms from CipherSuite to ensure consistency
         cipher_suite = self._kex._cipher_suite
 
+        # Strict KEX (Terrapin defense)
+        kex_algorithms = list(cipher_suite.KEX_ALGORITHMS)
+        if self._server_mode:
+            # Server sends kex-strict-s
+            kex_algorithms = [
+                a for a in kex_algorithms if a != "kex-strict-c-v01@openssh.com"
+            ]
+            if "kex-strict-s-v01@openssh.com" not in kex_algorithms:
+                kex_algorithms.append("kex-strict-s-v01@openssh.com")
+            # Servers don't send ext-info-c
+            kex_algorithms = [a for a in kex_algorithms if a != "ext-info-c"]
+        else:
+            # Client sends kex-strict-c (already in list likely, but ensure s is out)
+            kex_algorithms = [
+                a for a in kex_algorithms if a != "kex-strict-s-v01@openssh.com"
+            ]
+
         kexinit_msg = KexInitMessage(
             cookie=cookie,
-            kex_algorithms=cipher_suite.KEX_ALGORITHMS,
+            kex_algorithms=kex_algorithms,
             server_host_key_algorithms=cipher_suite.HOST_KEY_ALGORITHMS,
             encryption_algorithms_client_to_server=cipher_suite.ENCRYPTION_ALGORITHMS,
             encryption_algorithms_server_to_client=cipher_suite.ENCRYPTION_ALGORITHMS,
@@ -1645,6 +1696,16 @@ class Transport:
 
         # Store peer's KEXINIT for algorithm negotiation
         self._peer_kexinit = msg
+
+        # Check for strict KEX marker from peer
+        peer_strict_marker = (
+            "kex-strict-c-v01@openssh.com"
+            if self._server_mode
+            else "kex-strict-s-v01@openssh.com"
+        )
+        if peer_strict_marker in msg.kex_algorithms:
+            self._strict_kex = True
+            self._logger.debug("Strict KEX mode enabled (Terrapin defense)")
 
     def _check_rekey(self) -> None:
         """Check if rekeying is needed and start it if so."""
@@ -1714,7 +1775,16 @@ class Transport:
 
                 self._sequence_number_out = (self._sequence_number_out + 1) & 0xFFFFFFFF
 
-        except Exception as e:
+                # Strict-KEX (kex-strict-*@openssh.com): after NEWKEYS, the next
+                # outbound packet must use sequence number 0. Reset happens AFTER
+                # the unconditional increment above so seq 0 is used for the next
+                # _send_message call; doing it in _activate_outbound_encryption
+                # would be clobbered by the increment and produce seq=1.
+                if message.msg_type == MSG_NEWKEYS and self._strict_kex:
+                    self._sequence_number_out = 0
+                    self._logger.debug("Sequence number (out) reset for strict KEX")
+
+        except (OSError, struct.error) as e:
             raise TransportException(f"Failed to send message: {e}") from e
 
     def _read_message(self, single_pump: bool = False) -> Optional[Message]:
@@ -1771,13 +1841,16 @@ class Transport:
                                 # Type ignore because we know d_msg is a DisconnectMessage here
                                 reason = getattr(d_msg, "description", "Unknown")
                                 code = getattr(d_msg, "reason_code", 0)
-                                raise TransportException(
-                                    f"Disconnected: {reason} (code: {code})"
-                                )
-                            except Exception as e:
-                                if isinstance(e, TransportException):
-                                    raise
+                            except (
+                                struct.error,
+                                ValueError,
+                                UnicodeDecodeError,
+                                IndexError,
+                            ):
                                 raise TransportException("Disconnected by peer")
+                            raise TransportException(
+                                f"Disconnected: {reason} (code: {code})"
+                            )
 
                         if msg.msg_type == MSG_NEWKEYS:
                             self._activate_inbound_encryption()
@@ -1819,8 +1892,8 @@ class Transport:
 
                         return msg
 
-            except Exception as e:
-                if isinstance(e, (TransportException, ProtocolException)):
+            except (OSError, struct.error, SSHException) as e:
+                if isinstance(e, SSHException):
                     raise
                 raise TransportException(f"Failed to receive message: {e}") from e
 
@@ -1923,7 +1996,7 @@ class Transport:
 
         try:
             return PKey.from_string(self._server_host_key_blob)
-        except Exception:
+        except (ValueError, struct.error, SSHException):
             return None
 
     def _activate_outbound_encryption(self) -> None:
@@ -1968,6 +2041,12 @@ class Transport:
         self._mac_out_active = mac_name
         self._mac_key_out_active = mac_key
 
+        # NOTE: strict-KEX outbound sequence reset happens in _send_message
+        # AFTER the unconditional ``seq_out += 1`` that follows this call,
+        # so the next packet after NEWKEYS goes out with sequence 0 as
+        # required by the kex-strict-*@openssh.com extension. Resetting
+        # here would be overwritten by the +1 and produce seq=1.
+
     def _activate_inbound_encryption(self) -> None:
         """Activate inbound encryption using negotiated parameters."""
         if self._server_mode:
@@ -2006,6 +2085,10 @@ class Transport:
 
         self._mac_in_active = mac_name
         self._mac_key_in_active = mac_key
+
+        if self._strict_kex:
+            self._sequence_number_in = 0
+            self._logger.debug("Sequence number (in) reset for strict KEX")
 
     def _encrypt_packet(self, packet: bytes) -> bytes:
         """Encrypt SSH packet and add MAC if needed."""
@@ -2320,7 +2403,13 @@ class Transport:
                 self._send_message(accept_msg)
             else:
                 self._logger.warning(f"Rejecting unsupported service: {service_name}")
-        except Exception as e:
+        except (
+            OSError,
+            struct.error,
+            ValueError,
+            UnicodeDecodeError,
+            SSHException,
+        ) as e:
             self._logger.error(f"Error handling service request: {e}")
 
     def _handle_userauth_request(self, msg: Message) -> None:
@@ -2356,7 +2445,7 @@ class Transport:
 
                 try:
                     key = PKey.from_string(key_blob)
-                except Exception:
+                except (ValueError, struct.error, SSHException):
                     # Invalid key blob
                     self._send_message(UserAuthFailureMessage(["publickey"], False))
                     return
@@ -2410,7 +2499,13 @@ class Transport:
                 allowed_methods = self._server_interface.get_allowed_auths(username)
                 self._send_message(UserAuthFailureMessage(allowed_methods, False))
 
-        except Exception as e:
+        except (
+            OSError,
+            struct.error,
+            ValueError,
+            UnicodeDecodeError,
+            SSHException,
+        ) as e:
             self._logger.error(f"Error handling userauth request: {e}")
             self._send_message(UserAuthFailureMessage(["password"], False))
 

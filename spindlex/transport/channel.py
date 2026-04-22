@@ -653,6 +653,12 @@ class Channel:
                 # Notify transport to close channel
                 self._transport._close_channel(self._channel_id)
 
+    def __enter__(self) -> "Channel":
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        self.close()
+
     def _adjust_window(self, bytes_consumed: int) -> None:
         """
         Adjust local window size.
