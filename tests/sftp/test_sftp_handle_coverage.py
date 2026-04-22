@@ -9,6 +9,7 @@ import tempfile
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from spindlex.exceptions import SFTPError
 from spindlex.protocol.sftp_constants import (
     SSH_FX_EOF,
@@ -576,7 +577,7 @@ class TestProcessMessagesBreak:
             patch.object(
                 sftp_server,
                 "_handle_message",
-                side_effect=RuntimeError("unexpected error"),
+                side_effect=OSError("unexpected error"),
             ),
             patch.object(sftp_server, "_send_message") as send_mock,
         ):

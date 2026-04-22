@@ -4,6 +4,7 @@ import tempfile
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from spindlex.exceptions import SFTPError
 from spindlex.protocol.sftp_constants import *
 from spindlex.protocol.sftp_messages import (
@@ -69,7 +70,7 @@ def test_sftp_handle_file(temp_root):
 def test_sftp_server_init_failure(mock_channel, temp_root):
     # Mock _receive_message to fail during INIT
     with patch.object(SFTPServer, "_receive_message") as mock_recv:
-        mock_recv.side_effect = Exception("Failed to receive INIT")
+        mock_recv.side_effect = OSError("Failed to receive INIT")
 
         with pytest.raises(SFTPError, match="SFTP initialization failed"):
             server = SFTPServer(mock_channel, temp_root, start_thread=False)
@@ -80,7 +81,7 @@ def test_sftp_server_init_success(mock_channel, temp_root):
     # Mock _receive_message to return INIT then stop
     with patch.object(SFTPServer, "_receive_message") as mock_recv:
         with patch.object(SFTPServer, "_send_message") as mock_send:
-            mock_recv.side_effect = [SFTPInitMessage(3), Exception("Stop")]
+            mock_recv.side_effect = [SFTPInitMessage(3), OSError("Stop")]
 
             # SFTPServer won't raise SFTPError if it stops in _process_messages
             server = SFTPServer(mock_channel, temp_root, start_thread=False)
@@ -172,6 +173,67 @@ def test_sftp_server_resolve_path_security(mock_channel, temp_root):
 
         with pytest.raises(SFTPError, match="outside root"):
             server._resolve_path("/../outside.txt")
+
+
+def test_sftp_server_resolve_path_hardening(mock_channel, temp_root):
+    """Targeted checks for the path-traversal hardening in _resolve_path.
+
+    Covers NUL bytes, Windows-style backslash separators, deeply nested
+    traversal, and prefix-boundary sibling directories (e.g.
+    ``/tmp/rootBAD`` when root is ``/tmp/root``). Symlink escape is
+    covered separately because symlink creation on Windows is usually
+    gated on developer-mode / admin rights.
+    """
+    with patch.object(SFTPServer, "_start_sftp_session"):
+        server = SFTPServer(mock_channel, temp_root, start_thread=False)
+
+        # NUL bytes are rejected outright.
+        with pytest.raises(SFTPError, match="Invalid path"):
+            server._resolve_path("ok\x00name")
+
+        # Backslash separators on any platform should be normalized before
+        # the traversal check — ``..\\..\\etc\\passwd`` must not bypass it.
+        with pytest.raises(SFTPError, match="outside root"):
+            server._resolve_path("..\\..\\etc\\passwd")
+
+        # Deeply-nested ``..`` sequences still resolve above the root.
+        with pytest.raises(SFTPError, match="outside root"):
+            server._resolve_path("/a/b/c/../../../../../outside.txt")
+
+        # Prefix-boundary bypass: a sibling directory whose name begins with
+        # the root's name (e.g. root=/tmp/xyz vs /tmp/xyzbad) must not be
+        # accepted. We create such a sibling and ensure the check rejects it.
+        sibling = temp_root + "_sibling"
+        os.makedirs(sibling, exist_ok=True)
+        try:
+            # Compute an SFTP-style path that navigates out of root and
+            # into the sibling by name.
+            rel = "/../" + os.path.basename(sibling) + "/file.txt"
+            with pytest.raises(SFTPError, match="outside root"):
+                server._resolve_path(rel)
+        finally:
+            shutil.rmtree(sibling, ignore_errors=True)
+
+
+def test_sftp_server_resolve_path_symlink_escape(mock_channel, temp_root):
+    """A symlink inside the root that targets outside it must be rejected
+    once ``realpath`` resolves the link. Skipped when the platform does
+    not permit unprivileged symlink creation (Windows without developer
+    mode/admin)."""
+    with patch.object(SFTPServer, "_start_sftp_session"):
+        server = SFTPServer(mock_channel, temp_root, start_thread=False)
+
+        outside = tempfile.mkdtemp()
+        try:
+            link_path = os.path.join(temp_root, "escape")
+            try:
+                os.symlink(outside, link_path)
+            except (OSError, NotImplementedError):
+                pytest.skip("symlink creation not supported on this platform")
+            with pytest.raises(SFTPError, match="outside root"):
+                server._resolve_path("escape/anything.txt")
+        finally:
+            shutil.rmtree(outside, ignore_errors=True)
 
 
 def test_sftp_server_stat(mock_channel, temp_root):

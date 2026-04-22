@@ -3,6 +3,7 @@ import tempfile
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from spindlex.protocol.sftp_constants import *
 from spindlex.protocol.sftp_messages import (
     SFTPAttributes,
@@ -131,6 +132,6 @@ def test_sftp_server_handle_realpath(sftp_server):
 def test_sftp_server_process_messages_break(sftp_server):
     # Mock _receive_message to raise error to break loop
     with patch.object(sftp_server, "_receive_message") as mock_recv:
-        mock_recv.side_effect = Exception("error")
+        mock_recv.side_effect = OSError("error")
         sftp_server._process_messages()  # Should return
         assert mock_recv.called

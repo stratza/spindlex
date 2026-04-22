@@ -45,6 +45,35 @@ def test_sftp_file_close():
     assert client._send_request_and_wait_response.called
 
 
+def test_sftp_file_close_idempotent():
+    client = MagicMock()
+    client._get_next_request_id.return_value = 1
+    ok_msg = SFTPStatusMessage(1, SSH_FX_OK, "OK")
+    client._send_request_and_wait_response.return_value = ok_msg
+
+    f = SFTPFile(client, b"handle", "r")
+    f.close()
+    f.close()
+    # Second close must not re-send SSH_FXP_CLOSE — otherwise the server
+    # sees an invalid handle and may error.
+    assert client._send_request_and_wait_response.call_count == 1
+
+
+def test_sftp_file_read_all_multi_chunk():
+    client = MagicMock()
+    client._get_next_request_id.side_effect = [1, 2, 3]
+
+    chunk_a = SFTPDataMessage(1, b"AAAA")
+    chunk_b = SFTPDataMessage(2, b"BBBB")
+    eof_msg = SFTPStatusMessage(3, SSH_FX_EOF, "EOF")
+    client._send_request_and_wait_response.side_effect = [chunk_a, chunk_b, eof_msg]
+
+    f = SFTPFile(client, b"handle", "r")
+    data = f.read(-1)
+    assert data == b"AAAABBBB"
+    assert f._offset == 8
+
+
 @patch("spindlex.client.sftp_client.SFTPClient._initialize_sftp")
 def test_sftp_client_context_manager(mock_init):
     with patch("spindlex.client.sftp_client.SFTPClient.close") as mock_close:
