@@ -3,6 +3,7 @@ import struct
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from spindlex.exceptions import (
     ProtocolException,
     TransportException,
@@ -140,10 +141,12 @@ def test_recv_bytes_closed(mock_socket):
 
 def test_start_client_failure(mock_socket):
     transport = Transport(mock_socket)
-    # Trigger an exception during handshake
-    mock_socket.recv.side_effect = Exception("Generic error")
+    # Trigger a socket error during handshake. The OSError is wrapped by
+    # _recv_bytes into a TransportException("Socket error: ..."), which
+    # propagates through _do_handshake's narrowed handler unchanged.
+    mock_socket.recv.side_effect = OSError("Generic error")
 
-    with pytest.raises(TransportException, match="Error during version exchange"):
+    with pytest.raises(TransportException, match="Socket error: Generic error"):
         transport.start_client()
 
     assert not transport.active

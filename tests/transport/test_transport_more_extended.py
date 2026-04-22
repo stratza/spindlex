@@ -2,6 +2,7 @@ import socket
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from spindlex.exceptions import AuthenticationException
 from spindlex.protocol.constants import *
 from spindlex.protocol.messages import (
@@ -89,6 +90,21 @@ def test_transport_handle_channel_message_eof_close(transport):
     transport._handle_channel_message(msg)
     channel._handle_close.assert_called_once()
     assert 1 not in transport._channels
+
+
+def test_transport_context_manager_calls_close(transport):
+    with patch.object(transport, "close") as mock_close:
+        with transport as t:
+            assert t is transport
+        mock_close.assert_called_once()
+
+
+def test_transport_context_manager_closes_on_exception(transport):
+    with patch.object(transport, "close") as mock_close:
+        with pytest.raises(RuntimeError):
+            with transport:
+                raise RuntimeError("boom")
+        mock_close.assert_called_once()
 
 
 def test_transport_close_channel(transport):

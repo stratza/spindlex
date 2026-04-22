@@ -4,6 +4,7 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from spindlex.exceptions import SSHException
 from spindlex.transport.async_forwarding import (
     AsyncForwardingTunnel,

@@ -2,6 +2,7 @@ import socket
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from spindlex.exceptions import TransportException
 from spindlex.protocol.constants import MSG_KEXINIT
 from spindlex.transport.transport import Transport
@@ -76,9 +77,9 @@ def test_expect_message_timeout(mock_socket):
 
 def test_read_message_error_handling(mock_socket):
     transport = Transport(mock_socket)
-    # Mock _recv_bytes to fail during packet length read
-    mock_socket.recv.side_effect = Exception("Unrecoverable error")
-    with pytest.raises(
-        TransportException, match="Failed to receive message: Unrecoverable error"
-    ):
+    # Mock _recv_bytes to fail during packet length read. _recv_bytes wraps
+    # OSError into TransportException("Socket error: ..."), and _read_message's
+    # narrowed handler re-raises SSHException subclasses unchanged.
+    mock_socket.recv.side_effect = OSError("Unrecoverable error")
+    with pytest.raises(TransportException, match="Socket error: Unrecoverable error"):
         transport._read_message()

@@ -6,6 +6,7 @@ from collections import deque
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from spindlex.exceptions import TransportException
 from spindlex.transport.async_transport import AsyncTransport
 
