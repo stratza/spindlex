@@ -1,4 +1,5 @@
 import pytest
+
 from spindlex.exceptions import ChannelException
 
 pytestmark = pytest.mark.real_server

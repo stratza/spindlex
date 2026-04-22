@@ -1,4 +1,5 @@
 import pytest
+
 from spindlex import AsyncSSHClient
 from spindlex.hostkeys.policy import AutoAddPolicy
 

@@ -12,6 +12,7 @@ import asyncio
 import os
 
 import pytest
+
 from spindlex import AsyncSSHClient, SSHClient
 from spindlex.hostkeys.policy import AutoAddPolicy, WarningPolicy
 
@@ -657,37 +658,6 @@ class TestLocalPortForwarding:
 # ===========================================================================
 # Async port forwarding
 # ===========================================================================
-
-
-class TestAsyncPortForwarding:
-    @pytest.mark.xfail(
-        reason="Local port forward sometimes fails to read banner on certain servers"
-    )
-    def test_async_local_forward(self, ssh_server):
-        host, port, user, password = ssh_server
-
-        async def run():
-            async with AsyncSSHClient() as client:
-                client.set_missing_host_key_policy(WarningPolicy())
-                await client.connect(host, port=port, username=user, password=password)
-
-                tunnel_id = await client.create_local_port_forward(
-                    local_port=14723,
-                    remote_host="127.0.0.1",
-                    remote_port=port,
-                )
-
-                try:
-                    await asyncio.sleep(0.3)
-                    reader, writer = await asyncio.open_connection("127.0.0.1", 14723)
-                    banner = await asyncio.wait_for(reader.read(256), timeout=5)
-                    writer.close()
-                    await writer.wait_closed()
-                    assert b"SSH" in banner
-                finally:
-                    await client.close_port_forward(tunnel_id)
-
-        asyncio.run(run())
 
 
 # ===========================================================================

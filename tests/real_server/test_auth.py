@@ -1,6 +1,7 @@
 import socket
 
 import pytest
+
 from spindlex.exceptions import AuthenticationException
 from spindlex.transport.transport import Transport
 

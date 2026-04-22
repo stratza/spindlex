@@ -1,4 +1,5 @@
 import pytest
+
 from spindlex.exceptions import SFTPError
 
 pytestmark = pytest.mark.real_server

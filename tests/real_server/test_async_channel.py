@@ -1,4 +1,5 @@
 import pytest
+
 from spindlex import AsyncSSHClient
 from spindlex.exceptions import ChannelException
 from spindlex.hostkeys.policy import AutoAddPolicy

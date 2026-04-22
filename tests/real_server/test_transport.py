@@ -1,6 +1,7 @@
 import socket
 
 import pytest
+
 from spindlex.transport.transport import Transport
 
 pytestmark = pytest.mark.real_server
