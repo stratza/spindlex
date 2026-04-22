@@ -24,6 +24,7 @@ class CipherSuite:
         "curve25519-sha256",
         "diffie-hellman-group-exchange-sha256",
         "diffie-hellman-group14-sha256",
+        "kex-strict-c-v01@openssh.com",
         "ext-info-c",
     ]
 

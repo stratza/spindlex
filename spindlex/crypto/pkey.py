@@ -8,6 +8,7 @@ with support for key loading, fingerprinting, and signature operations.
 import base64
 import hashlib
 import struct
+import warnings
 from typing import Any, Optional
 
 from cryptography.hazmat.backends import default_backend
@@ -40,6 +41,7 @@ class PKey:
         """
         self.crypto_backend = crypto_backend or default_crypto_backend
         self._key: Any = None
+        self.allow_sha1 = False
 
     def get_ssh_type(self) -> str:
         """Get the SSH key type name (e.g., 'ssh-rsa', 'ssh-ed25519')."""
@@ -892,6 +894,17 @@ class RSAKey(PKey):
                 hash_algo = hashes.SHA256()
             else:
                 # Default to SHA-1 for legacy ssh-rsa
+                if not self.allow_sha1:
+                    raise CryptoException(
+                        "RSA with SHA-1 (ssh-rsa) is disabled by default for security. "
+                        "Enable 'allow_sha1=True' on the key instance if you must use it."
+                    )
+                warnings.warn(
+                    "Signing with ssh-rsa (SHA-1) is deprecated and disabled in "
+                    "modern OpenSSH. Prefer rsa-sha2-256 or rsa-sha2-512.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
                 hash_algo = hashes.SHA1()  # nosec
 
             # Sign data with PKCS1v15 padding
@@ -978,6 +991,14 @@ class RSAKey(PKey):
             elif algorithm == "rsa-sha2-256":
                 hash_algo = hashes.SHA256()
             elif algorithm == "ssh-rsa":
+                if not self.allow_sha1:
+                    return False
+                warnings.warn(
+                    "Verifying an ssh-rsa (SHA-1) signature is deprecated and "
+                    "disabled in modern OpenSSH. Prefer rsa-sha2-256 or rsa-sha2-512.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
                 hash_algo = hashes.SHA1()  # nosec
             else:
                 return False
