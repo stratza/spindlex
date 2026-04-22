@@ -11,6 +11,7 @@ import time
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from spindlex import SSHClient
+from spindlex.hostkeys.policy import RejectPolicy
 
 # --- CONFIGURATION ---
 SSH_HOST = "my.server.com"
@@ -27,6 +28,10 @@ def main():
     print("=" * 50)
 
     client = SSHClient()
+    # SECURITY DEFAULT: SpindleX enforces RejectPolicy by default for unknown host keys.
+    # To run this demo, ensure your host key is in known_hosts, or temporarily
+    # use AutoAddPolicy() (Not recommended for production).
+    client.set_missing_host_key_policy(RejectPolicy())
 
     try:
         print(f"🔗 Connecting to {SSH_USER}@{SSH_HOST}...")

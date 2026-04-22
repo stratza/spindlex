@@ -30,12 +30,28 @@ if sys.platform == "win32":
 
 from spindlex import SSHClient
 from spindlex.crypto.pkey import Ed25519Key
-from spindlex.hostkeys.policy import AutoAddPolicy
+from spindlex.exceptions import SSHException
+from spindlex.hostkeys.policy import RejectPolicy
 
 # --- CONFIGURATION (Synced with other demos) ---
 SSH_HOST = "my.server.com"
 SSH_USER = "user"
 SSH_PASS = "my-password"
+
+
+def _configure_client(client: SSHClient) -> None:
+    """Apply secure defaults: RejectPolicy + load ~/.ssh/known_hosts.
+
+    SpindleX already defaults to RejectPolicy; we set it here explicitly so
+    the security posture is visible in the demo. The server's host key must
+    be present in known_hosts before connecting (for example by running
+    ``ssh user@host`` once with OpenSSH).
+    """
+    client.set_missing_host_key_policy(RejectPolicy())
+    try:
+        client.get_host_keys().load()
+    except SSHException as exc:
+        print(f"⚠️  Could not load known_hosts: {exc}")
 
 
 # ---------------------------------------------
@@ -69,7 +85,7 @@ def main():
     # STEP 2: Connect via Password
     print(f"\n[STEP 2] 🔐 Connecting to {SSH_HOST} using PASSWORD...")
     client = SSHClient()
-    client.set_missing_host_key_policy(AutoAddPolicy())
+    _configure_client(client)
 
     try:
         client.connect(hostname=SSH_HOST, username=SSH_USER, password=SSH_PASS)
@@ -150,7 +166,7 @@ def main():
         time.sleep(2)  # Brief pause for visual effect
 
         key_client = SSHClient()
-        key_client.set_missing_host_key_policy(AutoAddPolicy())
+        _configure_client(key_client)
 
         # Login using private key file, NO password
         key_client.connect(

@@ -12,6 +12,7 @@ import time
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from spindlex import SSHClient
+from spindlex.hostkeys.policy import RejectPolicy
 
 # --- CONFIGURATION ---
 SSH_HOST = "my.server.com"
@@ -27,6 +28,8 @@ def benchmark_spindlex(host, user, password, key_file, iterations=5):
     for i in range(iterations):
         start = time.time()
         client = SSHClient()
+        # Security First: Explicitly set (or rely on default) RejectPolicy
+        client.set_missing_host_key_policy(RejectPolicy())
         try:
             client.connect(
                 hostname=host, username=user, password=password, key_filename=key_file

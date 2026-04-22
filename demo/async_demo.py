@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.DEBUG)
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from spindlex import AsyncSSHClient  # noqa: E402
-from spindlex.hostkeys.policy import AutoAddPolicy  # noqa: E402
+from spindlex.hostkeys.policy import RejectPolicy  # noqa: E402
 
 # --- CONFIGURATION ---
 SSH_HOST = "my.server.com"
@@ -32,7 +32,8 @@ async def run_demo():
     print("=" * 50)
 
     client = AsyncSSHClient()
-    client.set_missing_host_key_policy(AutoAddPolicy())
+    # SECURITY DEFAULT: Explicitly enforcing RejectPolicy (SpindleX Default).
+    client.set_missing_host_key_policy(RejectPolicy())
 
     try:
         print(f"🔗 Connecting to {SSH_USER}@{SSH_HOST} asynchronously...")
