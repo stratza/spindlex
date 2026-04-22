@@ -2331,37 +2331,50 @@ class Transport:
         Raises:
             TransportException: If receive fails
         """
-        # Bug #6 Fixed: Use _read_lock to ensure only one thread reads from the socket,
-        # but append to _packet_buffer instead of overwriting it to prevent data loss.
-        with self._read_lock:
-            while True:
+        # Locking model:
+        # * ``self._lock`` guards ``self._packet_buffer`` and is held only for
+        #   short, non-blocking buffer slices.
+        # * ``self._read_lock`` serializes the actual blocking ``socket.recv``
+        #   call so two threads cannot race the kernel for the same socket.
+        # We do NOT hold ``self._read_lock`` while consuming from the buffer:
+        # any thread that already has buffered bytes available can return
+        # without contending with a peer that is blocked in ``recv``.
+        while True:
+            with self._lock:
+                if len(self._packet_buffer) >= length:
+                    data = self._packet_buffer[:length]
+                    self._packet_buffer = self._packet_buffer[length:]
+                    return data
+
+            with self._read_lock:
+                # Re-check buffer after acquiring _read_lock: another reader
+                # may have refilled it while we waited.
                 with self._lock:
                     if len(self._packet_buffer) >= length:
                         data = self._packet_buffer[:length]
                         self._packet_buffer = self._packet_buffer[length:]
                         return data
+                    short_by = length - len(self._packet_buffer)
 
-                # Need more data from socket
+                # Read at least 32KB to leverage buffering. The blocking
+                # ``recv`` happens with ``_read_lock`` held but ``self._lock``
+                # released, so other threads can both send messages and serve
+                # themselves from the existing buffer.
                 try:
-                    # Read at least 32KB to leverage buffering
-                    # (Unless we're close to a very large packet, but 32KB is a good chunk)
-                    to_read = max(32768, length - len(self._packet_buffer))
-
-                    # Ensure we don't hold any locks during blocking recv()
+                    to_read = max(32768, short_by)
                     chunk = self._socket.recv(to_read)
-
-                    if not chunk:
-                        self._logger.debug("Socket closed while receiving")
-                        self.close()
-                        raise TransportException("Connection closed unexpectedly")
-
-                    with self._lock:
-                        self._packet_buffer += chunk
-
                 except socket.timeout:
                     raise TransportException("Timeout receiving data")
                 except OSError as e:
                     raise TransportException(f"Socket error: {e}") from e
+
+                if not chunk:
+                    self._logger.debug("Socket closed while receiving")
+                    self.close()
+                    raise TransportException("Connection closed unexpectedly")
+
+                with self._lock:
+                    self._packet_buffer += chunk
 
     @property
     def active(self) -> bool:
