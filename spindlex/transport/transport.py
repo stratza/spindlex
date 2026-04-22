@@ -1465,26 +1465,36 @@ class Transport:
     def close(self) -> None:
         """Close transport and cleanup resources."""
         kex_thread: Optional[threading.Thread] = None
+        # Snapshot the channel list under the transport lock, then release it
+        # before calling Channel.close(). Channel.close() takes the channel
+        # lock and then re-enters _close_channel which takes the transport
+        # lock — holding the transport lock here while calling channel.close()
+        # would invert the order taken by any concurrent caller of
+        # Channel.close() and deadlock the two threads.
         with self._lock:
             self._active = False
             kex_thread = getattr(self, "_kex_thread", None)
-            if self._socket:
-                try:
-                    self._socket.shutdown(socket.SHUT_RDWR)
-                except OSError:
-                    pass
-                try:
-                    self._socket.close()
-                except OSError:
-                    pass
+            channels_snapshot = list(self._channels.values())
+            sock = self._socket
 
-            # Close all channels
-            for channel in list(self._channels.values()):
-                try:
-                    channel.close()
-                except (OSError, SSHException):
-                    pass
+        for channel in channels_snapshot:
+            try:
+                channel.close()
+            except (OSError, SSHException):
+                pass
+
+        with self._lock:
             self._channels.clear()
+
+        if sock is not None:
+            try:
+                sock.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+            try:
+                sock.close()
+            except OSError:
+                pass
 
         # Join kex thread outside lock to avoid deadlock.
         # Socket closure above ensures the thread unblocks promptly.
