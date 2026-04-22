@@ -1,4 +1,5 @@
 import pytest
+
 from spindlex.crypto.backend import CryptographyBackend
 from spindlex.exceptions import CryptoException
 

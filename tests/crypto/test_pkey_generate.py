@@ -1,4 +1,5 @@
 import pytest
+
 from spindlex.crypto.pkey import ECDSAKey, Ed25519Key, PKey, RSAKey
 from spindlex.exceptions import CryptoException
 

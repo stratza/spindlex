@@ -1,4 +1,5 @@
 import pytest
+
 from spindlex.crypto.kex import (
     Curve25519KeyExchange,
     DHGroup14KeyExchange,
