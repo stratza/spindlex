@@ -1,6 +1,7 @@
 import struct
 
 import pytest
+
 from spindlex.exceptions import ProtocolException
 from spindlex.protocol.utils import (
     extract_message_from_packet,

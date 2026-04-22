@@ -1,4 +1,5 @@
 import pytest
+
 from spindlex.protocol.constants import (
     create_version_string,
     is_supported_version,

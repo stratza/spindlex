@@ -1,4 +1,5 @@
 import pytest
+
 from spindlex.exceptions import ProtocolException
 from spindlex.protocol.constants import *
 from spindlex.protocol.messages import (

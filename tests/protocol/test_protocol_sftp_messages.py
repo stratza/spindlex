@@ -1,6 +1,7 @@
 import stat
 
 import pytest
+
 from spindlex.exceptions import ProtocolException
 from spindlex.protocol.sftp_constants import *
 from spindlex.protocol.sftp_messages import (
