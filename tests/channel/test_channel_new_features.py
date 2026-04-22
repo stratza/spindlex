@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock
 
 import pytest
+
 from spindlex.protocol.constants import SSH_STRING_ENCODING
 from spindlex.transport.channel import Channel
 

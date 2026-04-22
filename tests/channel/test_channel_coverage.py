@@ -8,6 +8,7 @@ recv_exit_status, send_exit_status, and close.
 from unittest.mock import MagicMock
 
 import pytest
+
 from spindlex.exceptions import ChannelException
 from spindlex.transport.channel import Channel
 
@@ -358,6 +359,19 @@ class TestClose:
         channel.close()
         channel.close()
         mock_transport._close_channel.assert_called_once()
+
+    def test_context_manager_closes(self, channel, mock_transport):
+        with channel as c:
+            assert c is channel
+        assert channel._closed
+        mock_transport._close_channel.assert_called_once_with(5)
+
+    def test_context_manager_closes_on_exception(self, channel, mock_transport):
+        with pytest.raises(RuntimeError):
+            with channel:
+                raise RuntimeError("boom")
+        assert channel._closed
+        mock_transport._close_channel.assert_called_once_with(5)
 
     def test_adjust_window_triggers_window_adjust(self, channel, mock_transport):
         # Force local_window_size to be low to trigger adjust
