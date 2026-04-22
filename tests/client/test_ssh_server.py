@@ -2,6 +2,7 @@ import socket
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from spindlex.crypto.pkey import PKey
 from spindlex.exceptions import TransportException
 from spindlex.protocol.constants import AUTH_FAILED, CHANNEL_SESSION
