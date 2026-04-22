@@ -299,3 +299,9 @@ ignore = [
 "tests/*" = ["S", "PT", "E501"]
 "examples/*" = ["S", "T201"]
 "scripts/*" = ["T201"]
+
+[tool.ruff.lint.isort]
+# Keep ruff's import sorter aligned with the standalone isort config
+# ([tool.isort]) so the two tools do not disagree about first-party
+# imports (blank line between ``import pytest`` and ``from spindlex...``).
+known-first-party = ["spindlex"]
