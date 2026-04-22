@@ -1,6 +1,5 @@
 import os
 import socket
-import time
 
 import pytest
 
@@ -51,32 +50,38 @@ def docker_compose_file(pytestconfig):
     return None
 
 
-@pytest.fixture(scope="session")
-def ssh_server(docker_ip=None, docker_services=None, pytestconfig=None):
+@pytest.fixture(scope="session", params=["openssh", "dropbear"])
+def ssh_server(request, docker_ip=None, docker_services=None, pytestconfig=None):
     """
     Ensure an SSH server is available.
-    Favors external config from .env, falls back to Docker.
+    Supports OpenSSH and Dropbear via Docker.
     """
+    server_type = request.param
+
     if _EXTERNAL_SERVER_AVAILABLE:
+        # If external server is provided, we only test against it once
+        # (or we could assume it's OpenSSH)
+        if server_type != "openssh":
+            pytest.skip("External server only supports OpenSSH tests")
         return SSH_HOST, SSH_PORT, SSH_USER, SSH_PASSWORD
 
     if not docker_services:
         pytest.skip("No SSH server configured and Docker not available")
 
-    port = docker_services.port_for("openssh-server", 2222)
+    service_name = "openssh-server" if server_type == "openssh" else "dropbear-server"
+    internal_port = 2222 if server_type == "openssh" else 22
+
+    port = docker_services.port_for(service_name, internal_port)
 
     def check():
         try:
-            with socket.create_connection((docker_ip, port), timeout=2):
+            with socket.create_connection((docker_ip, port), timeout=1):
                 return True
         except Exception:
             return False
 
     # Wait for SSH server responsive
-    docker_services.wait_until_responsive(timeout=60.0, pause=2.0, check=check)
-
-    # Give it a bit more time to settle
-    time.sleep(2)
+    docker_services.wait_until_responsive(timeout=30.0, pause=2.0, check=check)
 
     return docker_ip, port, "testuser", "password123"
 
