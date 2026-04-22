@@ -5,6 +5,9 @@ This document contains actual execution logs from the SpindleX demo scripts, sho
 > [!NOTE]
 > For security purposes, all server IPs and credentials have been replaced with placeholders (`my.server.com`, `user`, `my-password`).
 
+> [!IMPORTANT]
+> These logs represent **best-case scenarios** captured on a well-provisioned network with a single client and a responsive server. Real-world numbers will vary with latency, packet loss, CPU contention, disk throughput, concurrent sessions, and algorithm negotiation. Treat them as directional, not as a performance SLA.
+
 ## 1. SSH Command Execution (`ssh_demo.py`)
 Successfully executed commands on a remote Ubuntu 24.04 server.
 

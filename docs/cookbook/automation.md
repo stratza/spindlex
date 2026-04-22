@@ -10,12 +10,14 @@ Common tasks for connecting to servers and executing commands.
 
 ```python
 from spindlex import SSHClient
-from spindlex.hostkeys.policy import AutoAddPolicy
+from spindlex.hostkeys.policy import RejectPolicy
 
 with SSHClient() as client:
-    # Auto-add unknown host keys (use with caution)
-    client.set_missing_host_key_policy(AutoAddPolicy())
-    
+    # Secure default: reject unknown host keys. Make sure the server's key
+    # is in ~/.ssh/known_hosts before running (e.g. via `ssh user@host` once).
+    client.set_missing_host_key_policy(RejectPolicy())
+    client.get_host_keys().load()
+
     client.connect('server.example.com', username='admin', password='password')
     
     # exec_command returns (stdin, stdout, stderr)
