@@ -8,10 +8,11 @@ and customizable authorization hooks.
 import logging
 import os
 import stat
+import struct
 import threading
 from typing import BinaryIO, Optional
 
-from ..exceptions import SFTPError
+from ..exceptions import SFTPError, SSHException
 from ..protocol.sftp_constants import (
     MAX_SFTP_HANDLES,
     SFTP_MAX_READ_SIZE,
@@ -119,7 +120,7 @@ class SFTPHandle:
 
         try:
             return self.file_obj.read(length)
-        except Exception as e:
+        except (OSError, ValueError) as e:
             raise SFTPError(f"Read failed: {e}", SSH_FX_FAILURE)
 
     def write(self, data: bytes) -> int:
@@ -146,7 +147,7 @@ class SFTPHandle:
 
         try:
             return self.file_obj.write(data)
-        except Exception as e:
+        except (OSError, ValueError) as e:
             raise SFTPError(f"Write failed: {e}", SSH_FX_FAILURE)
 
     def seek(self, offset: int) -> None:
@@ -168,7 +169,7 @@ class SFTPHandle:
         try:
             self.file_obj.seek(offset)
             self.position = offset
-        except Exception as e:
+        except (OSError, ValueError) as e:
             raise SFTPError(f"Seek failed: {e}", SSH_FX_FAILURE)
 
     def close(self) -> None:
@@ -176,7 +177,7 @@ class SFTPHandle:
         if self.file_obj:
             try:
                 self.file_obj.close()
-            except Exception:
+            except OSError:
                 pass
             finally:
                 self.file_obj = None
@@ -226,7 +227,7 @@ class SFTPServer:
         """Run the SFTP server session."""
         try:
             self._start_sftp_session()
-        except Exception as e:
+        except (OSError, struct.error, SSHException) as e:
             self._logger.error(f"SFTP server session error: {e}")
             self.close()
 
@@ -260,8 +261,10 @@ class SFTPServer:
             # Start message processing loop
             self._process_messages()
 
-        except Exception as e:
+        except (OSError, struct.error, SSHException) as e:
             self._logger.error(f"SFTP session initialization failed: {e}")
+            if isinstance(e, SFTPError):
+                raise
             raise SFTPError(f"SFTP initialization failed: {e}") from e
 
     def _generate_handle(self) -> bytes:
@@ -288,7 +291,7 @@ class SFTPServer:
         try:
             data = message.pack()
             self._channel.send(data)
-        except Exception as e:
+        except (OSError, struct.error, SSHException) as e:
             raise SFTPError(f"Failed to send SFTP message: {e}") from e
 
     def _receive_message(self) -> SFTPMessage:
@@ -311,7 +314,7 @@ class SFTPServer:
             msg_data = length_data + payload
 
             return SFTPMessage.unpack(msg_data)
-        except Exception as e:
+        except (OSError, struct.error, ValueError, SSHException) as e:
             raise SFTPError(f"Failed to receive SFTP message: {e}") from e
 
     def _process_messages(self) -> None:
@@ -325,7 +328,7 @@ class SFTPServer:
             try:
                 message = self._receive_message()
                 self._handle_message(message)
-            except Exception as e:
+            except (OSError, struct.error, SSHException) as e:
                 err = str(e).lower()
                 # Treat EOF / connection-closed as a clean shutdown, not an error
                 if any(
@@ -351,7 +354,7 @@ class SFTPServer:
                                 message.request_id, SSH_FX_FAILURE, str(e)
                             )
                             self._send_message(error_msg)
-                    except Exception:
+                    except (OSError, SFTPError):
                         pass
                 break
 
@@ -571,11 +574,11 @@ class SFTPServer:
                 handle_msg = SFTPHandleMessage(message.request_id, handle_id)
                 self._send_message(handle_msg)
 
-            except Exception as e:
+            except OSError as e:
                 if file_obj:
                     try:
                         file_obj.close()
-                    except Exception:
+                    except OSError:
                         pass
                 if isinstance(e, FileNotFoundError):
                     error_msg = SFTPStatusMessage(
@@ -604,7 +607,7 @@ class SFTPServer:
                 message.request_id, e.status_code or SSH_FX_FAILURE, str(e)
             )
             self._send_message(error_msg)
-        except Exception as e:
+        except (OSError, ValueError, SSHException) as e:
             assert message.request_id is not None
             error_msg = SFTPStatusMessage(message.request_id, SSH_FX_FAILURE, str(e))
             self._send_message(error_msg)
@@ -630,7 +633,7 @@ class SFTPServer:
             status_msg = SFTPStatusMessage(message.request_id, SSH_FX_OK, "")
             self._send_message(status_msg)
 
-        except Exception as e:
+        except (OSError, SSHException) as e:
             error_msg = SFTPStatusMessage(message.request_id, SSH_FX_FAILURE, str(e))
             self._send_message(error_msg)
 
@@ -669,7 +672,7 @@ class SFTPServer:
                 message.request_id, e.status_code or SSH_FX_FAILURE, str(e)
             )
             self._send_message(error_msg)
-        except Exception as e:
+        except (OSError, ValueError, SSHException) as e:
             assert message.request_id is not None
             error_msg = SFTPStatusMessage(message.request_id, SSH_FX_FAILURE, str(e))
             self._send_message(error_msg)
@@ -707,7 +710,7 @@ class SFTPServer:
                 message.request_id, e.status_code or SSH_FX_FAILURE, str(e)
             )
             self._send_message(error_msg)
-        except Exception as e:
+        except (OSError, ValueError, SSHException) as e:
             assert message.request_id is not None
             error_msg = SFTPStatusMessage(message.request_id, SSH_FX_FAILURE, str(e))
             self._send_message(error_msg)
@@ -740,7 +743,7 @@ class SFTPServer:
                 message.request_id, e.status_code or SSH_FX_FAILURE, str(e)
             )
             self._send_message(error_msg)
-        except Exception as e:
+        except (OSError, SSHException) as e:
             assert message.request_id is not None
             error_msg = SFTPStatusMessage(message.request_id, SSH_FX_FAILURE, str(e))
             self._send_message(error_msg)
@@ -794,7 +797,7 @@ class SFTPServer:
                 message.request_id, e.status_code or SSH_FX_FAILURE, str(e)
             )
             self._send_message(error_msg)
-        except Exception as e:
+        except (OSError, SSHException) as e:
             assert message.request_id is not None
             error_msg = SFTPStatusMessage(message.request_id, SSH_FX_FAILURE, str(e))
             self._send_message(error_msg)
@@ -825,7 +828,7 @@ class SFTPServer:
                 message.request_id, e.status_code or SSH_FX_FAILURE, str(e)
             )
             self._send_message(error_msg)
-        except Exception as e:
+        except (OSError, SSHException) as e:
             assert message.request_id is not None
             error_msg = SFTPStatusMessage(message.request_id, SSH_FX_FAILURE, str(e))
             self._send_message(error_msg)
@@ -898,7 +901,7 @@ class SFTPServer:
                 message.request_id, e.status_code or SSH_FX_FAILURE, str(e)
             )
             self._send_message(error_msg)
-        except Exception as e:
+        except (OSError, SSHException) as e:
             assert message.request_id is not None
             error_msg = SFTPStatusMessage(message.request_id, SSH_FX_FAILURE, str(e))
             self._send_message(error_msg)
@@ -939,7 +942,7 @@ class SFTPServer:
                         # Create long name (ls -l style)
                         longname = self._format_longname(name, attrs)
                         entries.append((name, longname, attrs))
-                    except Exception:
+                    except (OSError, SFTPError):
                         # Skip entries we can't stat
                         continue
 
@@ -971,7 +974,7 @@ class SFTPServer:
                 message.request_id, e.status_code or SSH_FX_FAILURE, str(e)
             )
             self._send_message(error_msg)
-        except Exception as e:
+        except (OSError, SSHException) as e:
             assert message.request_id is not None
             error_msg = SFTPStatusMessage(message.request_id, SSH_FX_FAILURE, str(e))
             self._send_message(error_msg)
@@ -1016,7 +1019,7 @@ class SFTPServer:
             name_msg = SFTPNameMessage(message.request_id, batch_entries)
             self._send_message(name_msg)
 
-        except Exception as e:
+        except (OSError, SSHException) as e:
             error_msg = SFTPStatusMessage(message.request_id, SSH_FX_FAILURE, str(e))
             self._send_message(error_msg)
 
@@ -1083,7 +1086,7 @@ class SFTPServer:
                 message.request_id, e.status_code or SSH_FX_FAILURE, str(e)
             )
             self._send_message(error_msg)
-        except Exception as e:
+        except (OSError, SSHException) as e:
             assert message.request_id is not None
             error_msg = SFTPStatusMessage(message.request_id, SSH_FX_FAILURE, str(e))
             self._send_message(error_msg)
@@ -1137,7 +1140,7 @@ class SFTPServer:
                 message.request_id, e.status_code or SSH_FX_FAILURE, str(e)
             )
             self._send_message(error_msg)
-        except Exception as e:
+        except (OSError, SSHException) as e:
             assert message.request_id is not None
             error_msg = SFTPStatusMessage(message.request_id, SSH_FX_FAILURE, str(e))
             self._send_message(error_msg)
@@ -1185,7 +1188,7 @@ class SFTPServer:
                 message.request_id, e.status_code or SSH_FX_FAILURE, str(e)
             )
             self._send_message(error_msg)
-        except Exception as e:
+        except (OSError, SSHException) as e:
             assert message.request_id is not None
             error_msg = SFTPStatusMessage(message.request_id, SSH_FX_FAILURE, str(e))
             self._send_message(error_msg)
@@ -1244,7 +1247,7 @@ class SFTPServer:
                 message.request_id, e.status_code or SSH_FX_FAILURE, str(e)
             )
             self._send_message(error_msg)
-        except Exception as e:
+        except (OSError, SSHException) as e:
             assert message.request_id is not None
             error_msg = SFTPStatusMessage(message.request_id, SSH_FX_FAILURE, str(e))
             self._send_message(error_msg)
@@ -1283,7 +1286,7 @@ class SFTPServer:
                 message.request_id, e.status_code or SSH_FX_FAILURE, str(e)
             )
             self._send_message(error_msg)
-        except Exception as e:
+        except (OSError, SSHException) as e:
             assert message.request_id is not None
             error_msg = SFTPStatusMessage(message.request_id, SSH_FX_FAILURE, str(e))
             self._send_message(error_msg)
@@ -1425,5 +1428,5 @@ class SFTPServer:
         if self._channel:
             try:
                 self._channel.close()
-            except Exception:
+            except (OSError, SSHException):
                 pass
