@@ -2,6 +2,7 @@ import os
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from spindlex.crypto.pkey import Ed25519Key, RSAKey
 from spindlex.hostkeys.storage import HostKeyStorage
 
