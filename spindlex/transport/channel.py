@@ -248,9 +248,7 @@ class Channel:
             # rekey or in async mode), wait for it to deliver data via the
             # event.  Otherwise drive _pump() directly — without this,
             # sync-mode recv() pays 100ms of dead wait time per packet.
-            has_bg_thread = (
-                getattr(self._transport, "_kex_thread", None) is not None
-            )
+            has_bg_thread = getattr(self._transport, "_kex_thread", None) is not None
 
             if has_bg_thread:
                 wait_timeout = 0.1
@@ -271,9 +269,7 @@ class Channel:
                     if remaining <= 0:
                         raise ChannelException("Timeout receiving data")
 
-                    has_buffered = bool(
-                        getattr(self._transport, "_packet_buffer", b"")
-                    )
+                    has_buffered = bool(getattr(self._transport, "_packet_buffer", b""))
                     if not has_buffered:
                         import select as _select
 
@@ -523,9 +519,7 @@ class Channel:
                         "Timeout waiting for channel request response"
                     )
 
-            has_bg_thread = (
-                getattr(self._transport, "_kex_thread", None) is not None
-            )
+            has_bg_thread = getattr(self._transport, "_kex_thread", None) is not None
 
             if has_bg_thread:
                 wait_timeout = 0.1
@@ -621,9 +615,7 @@ class Channel:
 
             # Same fast path as recv(): in sync mode, drive _pump() directly
             # rather than waiting on _data_event (which nothing else sets).
-            has_bg_thread = (
-                getattr(self._transport, "_kex_thread", None) is not None
-            )
+            has_bg_thread = getattr(self._transport, "_kex_thread", None) is not None
 
             if has_bg_thread:
                 wait_timeout = 0.1
@@ -640,9 +632,7 @@ class Channel:
                     if remaining <= 0:
                         raise ChannelException("Timeout receiving stderr data")
 
-                    has_buffered = bool(
-                        getattr(self._transport, "_packet_buffer", b"")
-                    )
+                    has_buffered = bool(getattr(self._transport, "_packet_buffer", b""))
                     if not has_buffered:
                         import select as _select
 
