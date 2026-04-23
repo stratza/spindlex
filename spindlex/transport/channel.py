@@ -244,65 +244,55 @@ class Channel:
                 # Clear event before we start waiting
                 self._data_event.clear()
 
-            # Calculate wait timeout
-            wait_timeout = 0.1
-            if self._timeout is not None:
-                elapsed = time.time() - start_time
-                wait_timeout = max(0, min(0.1, self._timeout - elapsed))
+            # If a background thread is pumping the transport (e.g. during
+            # rekey or in async mode), wait for it to deliver data via the
+            # event.  Otherwise drive _pump() directly — without this,
+            # sync-mode recv() pays 100ms of dead wait time per packet.
+            has_bg_thread = (
+                getattr(self._transport, "_kex_thread", None) is not None
+            )
 
-            # Wait for data or timeout
-            if not self._data_event.wait(timeout=wait_timeout):
-                # Another thread (e.g. connection handler) may have already put
-                # data in the buffer while we were waiting.  Check before
-                # blocking on the socket – calling _pump() here would race with
-                # that thread and could block for the full socket timeout even
-                # though data is already available.
-                with self._lock:
-                    if (
-                        self._recv_buffer
-                        or self._eof_received
-                        or not self._transport.active
-                    ):
-                        continue
-                try:
-                    # When a channel timeout is active, avoid blocking forever
-                    # in _pump() (which uses a blocking socket).  If the
-                    # transport already has pre-buffered packet bytes from a
-                    # previous over-read, _pump() will return immediately
-                    # without touching the socket.  Otherwise we use select()
-                    # to poll briefly so we can loop back and check the channel
-                    # deadline without ever blocking past it.
-                    if self._timeout is not None:
-                        elapsed = time.time() - start_time
-                        remaining = self._timeout - elapsed
-                        if remaining <= 0:
-                            raise ChannelException("Timeout receiving data")
+            if has_bg_thread:
+                wait_timeout = 0.1
+                if self._timeout is not None:
+                    elapsed = time.time() - start_time
+                    wait_timeout = max(0, min(0.1, self._timeout - elapsed))
+                self._data_event.wait(timeout=wait_timeout)
+                continue
 
-                        has_buffered = bool(
-                            getattr(self._transport, "_packet_buffer", b"")
-                        )
-                        if not has_buffered:
-                            import select as _select
+            try:
+                # When a channel timeout is active, bound the socket wait via
+                # select() so the deadline is honoured.  When there is no
+                # channel timeout, _pump() blocks on socket.recv() until a
+                # packet arrives — which is what we want.
+                if self._timeout is not None:
+                    elapsed = time.time() - start_time
+                    remaining = self._timeout - elapsed
+                    if remaining <= 0:
+                        raise ChannelException("Timeout receiving data")
 
-                            sock = getattr(self._transport, "_socket", None)
-                            if sock is not None:
-                                try:
-                                    r, _, _ = _select.select(
-                                        [sock], [], [], min(0.05, remaining)
-                                    )
-                                    if not r:
-                                        continue  # no data yet, loop back
-                                except Exception:
-                                    pass  # fall through to _pump()
+                    has_buffered = bool(
+                        getattr(self._transport, "_packet_buffer", b"")
+                    )
+                    if not has_buffered:
+                        import select as _select
 
-                    res = self._transport._pump()
-                    if res is not None:
-                        # We read or handled a message, re-check buffer immediately
-                        continue
-                except Exception as e:
-                    if "timeout" not in str(e).lower():
-                        raise
-                    pass
+                        sock = getattr(self._transport, "_socket", None)
+                        if sock is not None:
+                            try:
+                                r, _, _ = _select.select(
+                                    [sock], [], [], min(1.0, remaining)
+                                )
+                                if not r:
+                                    continue  # no data yet, loop back
+                            except Exception:
+                                pass  # fall through to _pump()
+
+                self._transport._pump()
+            except Exception as e:
+                if "timeout" not in str(e).lower():
+                    raise
+                # Loop back so the channel-timeout check at the top fires.
 
     def recv_exactly(self, nbytes: int) -> bytes:
         """
@@ -533,19 +523,25 @@ class Channel:
                         "Timeout waiting for channel request response"
                     )
 
-            wait_timeout = 0.1
-            if self._timeout is not None:
-                elapsed = time.time() - start_time
-                wait_timeout = max(0, min(0.1, self._timeout - elapsed))
+            has_bg_thread = (
+                getattr(self._transport, "_kex_thread", None) is not None
+            )
 
-            if not self._request_event.wait(timeout=wait_timeout):
-                try:
-                    self._transport._pump()
-                except Exception as e:
-                    if "timeout" not in str(e).lower():
-                        raise ChannelException(
-                            f"Transport error during request: {e}"
-                        ) from e
+            if has_bg_thread:
+                wait_timeout = 0.1
+                if self._timeout is not None:
+                    elapsed = time.time() - start_time
+                    wait_timeout = max(0, min(0.1, self._timeout - elapsed))
+                self._request_event.wait(timeout=wait_timeout)
+                continue
+
+            try:
+                self._transport._pump()
+            except Exception as e:
+                if "timeout" not in str(e).lower():
+                    raise ChannelException(
+                        f"Transport error during request: {e}"
+                    ) from e
 
     def send_eof(self) -> None:
         """
@@ -623,27 +619,48 @@ class Channel:
                 # Clear event before we start waiting
                 self._data_event.clear()
 
-            # Calculate wait timeout
-            wait_timeout = 0.1
-            if self._timeout is not None:
-                elapsed = time.time() - start_time
-                wait_timeout = max(0, min(0.1, self._timeout - elapsed))
+            # Same fast path as recv(): in sync mode, drive _pump() directly
+            # rather than waiting on _data_event (which nothing else sets).
+            has_bg_thread = (
+                getattr(self._transport, "_kex_thread", None) is not None
+            )
 
-            # Wait for data or timeout
-            if not self._data_event.wait(timeout=wait_timeout):
-                with self._lock:
-                    if (
-                        self._stderr_buffer
-                        or self._eof_received
-                        or not self._transport.active
-                    ):
-                        continue
-                try:
-                    self._transport._pump()
-                except Exception as e:
-                    if "timeout" not in str(e).lower():
-                        raise
-                    pass
+            if has_bg_thread:
+                wait_timeout = 0.1
+                if self._timeout is not None:
+                    elapsed = time.time() - start_time
+                    wait_timeout = max(0, min(0.1, self._timeout - elapsed))
+                self._data_event.wait(timeout=wait_timeout)
+                continue
+
+            try:
+                if self._timeout is not None:
+                    elapsed = time.time() - start_time
+                    remaining = self._timeout - elapsed
+                    if remaining <= 0:
+                        raise ChannelException("Timeout receiving stderr data")
+
+                    has_buffered = bool(
+                        getattr(self._transport, "_packet_buffer", b"")
+                    )
+                    if not has_buffered:
+                        import select as _select
+
+                        sock = getattr(self._transport, "_socket", None)
+                        if sock is not None:
+                            try:
+                                r, _, _ = _select.select(
+                                    [sock], [], [], min(1.0, remaining)
+                                )
+                                if not r:
+                                    continue
+                            except Exception:
+                                pass
+
+                self._transport._pump()
+            except Exception as e:
+                if "timeout" not in str(e).lower():
+                    raise
 
     def close(self) -> None:
         """Close channel and cleanup resources."""
@@ -669,13 +686,13 @@ class Channel:
         with self._lock:
             self._local_window_size -= bytes_consumed
 
-            # Send window adjust if needed
+            # Send window adjust if needed.  _send_channel_window_adjust
+            # increments _local_window_size itself — do not double-count here.
             if self._local_window_size < DEFAULT_WINDOW_SIZE // 2:
                 bytes_to_add = DEFAULT_WINDOW_SIZE - self._local_window_size
                 self._transport._send_channel_window_adjust(
                     self._channel_id, bytes_to_add
                 )
-                self._local_window_size += bytes_to_add
 
     def _handle_data(self, data: bytes) -> None:
         """
