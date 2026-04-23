@@ -79,10 +79,10 @@ def update_pyproject_toml(version):
 
 
 def update_changelog(version, release_type):
-    """Update CHANGELOG.md with new version"""
-    changelog_file = Path("CHANGELOG.md")
+    """Update docs/changelog.md with new version"""
+    changelog_file = Path("docs/changelog.md")
     if not changelog_file.exists():
-        print(f"CHANGELOG.md not found: {changelog_file}")
+        print(f"changelog not found: {changelog_file}")
         sys.exit(1)
 
     content = changelog_file.read_text()
@@ -200,7 +200,7 @@ def main():
         print("🧪 Running tests...")
         if not args.dry_run:
             run_command(
-                "python -m pytest tests/unit/ --ignore=tests/unit/test_benchmarks.py --ignore=tests/unit/test_interoperability.py -v"
+                "python -m pytest tests --ignore=tests/integration --ignore=tests/real_server -q"
             )
         print("✅ Tests passed")
 

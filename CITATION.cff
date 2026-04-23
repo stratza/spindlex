@@ -5,8 +5,8 @@ authors:
   given-names: "David"
   alias: "Di3Z1E"
 title: "SpindleX"
-version: 0.6.3
-date-released: 2026-04-20
+version: 0.6.4
+date-released: 2026-04-23
 url: "https://github.com/Di3Z1E/spindlex"
 abstract: "A modern, high-performance SSHv2 and SFTP library focused on speed, security, and developer experience."
 keywords:

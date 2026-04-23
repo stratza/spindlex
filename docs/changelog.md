@@ -4,6 +4,36 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.4] - 2026-04-23
+
+### Fixed
+*   **Sync recv()/recv_stderr()/send_channel_request flat 100 ms penalty**: in sync mode each of these waited up to 100 ms on a `threading.Event` before driving `Transport._pump()`, but nothing else sets that event without a background pump thread. They now drive `_pump()` directly when no `_kex_thread` is present, with `select()` to bound the wait when a channel timeout is set. Warm `exec_command` dropped from ~215 ms → ~5 ms; large reads from ~5.3 s → ~20 ms; SFTP upload from ~8.4 s → ~80 ms.
+*   **SFTP downloads stalling after ~2 MiB**: `Channel._adjust_window` was incrementing `_local_window_size` *and* the transport-side helper was incrementing it again, double-counting the local view of the advertised window. The threshold check then stopped firing, no further `WINDOW_ADJUST` packets were sent, and the server's view of our window expired. Removed the duplicate increment; transport-side bookkeeping is now the single source of truth.
+*   **`_recv_bytes` lock scope**: `_read_lock` was held for the entire receive flow, including the buffer-served fast path. Restructured so `_lock` guards short non-blocking buffer slices and `_read_lock` is only held around the actual blocking `socket.recv`. Threads that already have buffered data return without contending with a peer blocked in `recv`.
+*   **Two-lock deadlock in `Transport.close()`**: held `self._lock` while calling `Channel.close()`, which re-takes its own lock and then `_close_channel` which re-takes `self._lock` — inverting the order taken by concurrent `Channel.close()` callers. Snapshot channels under the lock, drop it, close each channel, then re-acquire briefly to clear `self._channels`.
+*   **`Channel.send` halved the effective remote window**: both `Channel.send()` and `Transport._send_channel_data()` were decrementing `_remote_window_size`, causing premature flow-control stalls. Removed the duplicate decrement on the transport side; the defensive size check is preserved.
+*   **SFTPServer path traversal hardening**: `_resolve_path` now uses `realpath` containment checks and rejects NUL bytes; exception handlers narrowed.
+
+### Security
+*   **Strict-KEX / Terrapin defense**: the extension filter listed `kex-strict-{c,s}-v00@openssh.com`, but real implementations (and our own transport) advertise/detect the v01 spelling. The v01 marker leaked through the negotiator and the Terrapin defense could silently fail to activate against real OpenSSH peers. Filter now matches v01; `CipherSuite.negotiate_algorithms` also explicitly excludes all strict-KEX / `ext-info` markers from the KEX category and iterates the client's preference order per RFC 4253 §7.1.
+*   **Strict-KEX sequence-number reset** and channel-open hardening in transport.
+*   **Public-key auth signature algorithm bug**: the algorithm name was hardcoded as `ssh-rsa` in signatures regardless of the negotiated algorithm — fixed.
+*   **Atomic rekeying state transitions** under lock; aligned inbound MAC sequence-number wrap with the outbound path.
+*   **Global logging sanitizer bypass**: child loggers escaped sanitization; routed through a `LogRecordFactory` hook so the sanitizer applies uniformly.
+*   **SHA-1 RSA gated**: signatures over SHA-1 now require an explicit `allow_sha1=True` and emit a `DeprecationWarning`.
+*   **Defaults shifted to secure-by-default**: docs, examples, and shipped demos now lead with `RejectPolicy` and a known_hosts helper instead of `AutoAddPolicy`.
+
+### Added
+*   **`Channel` / `Transport` context-manager support** (`with channel:` / `with transport:`).
+*   **`AsyncSFTPClient.rename` / `chmod` / `normalize`** implementations.
+*   **`scripts/benchmark_compare.py`**: cross-library SSH/SFTP benchmark vs paramiko and asyncssh across handshake, exec_command (small + ~1.4 MB), SFTP upload/download, and 10 parallel handshakes. Per-library failures are isolated and rendered as `FAILED -- <error>` instead of aborting the run.
+
+### Changed
+*   **Test layout**: ~50 test files reorganized into per-component subfolders (`auth/`, `channel/`, `client/`, `crypto/`, `hostkeys/`, `log/`, `misc/`, `protocol/`, `real_server/`, `sftp/`, `transport/`); imports re-grouped per first-party isort rules.
+*   **CI**: added `real-server-tests` job (OpenSSH Docker); `real_server` marker excluded from the unit-tests job.
+*   **Channel timeout no longer hangs**: replaced blocking `_pump()` with `select()`-bounded waits when a channel timeout is set.
+*   **Project description**: dropped the technically inaccurate "pure-Python" claim.
+
 ## [0.6.3] - 2026-04-20
 
 ### Fixed
