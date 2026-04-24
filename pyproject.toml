@@ -279,6 +279,7 @@ ignore = [
     "E501", # Line too long (already handled by black)
     "UP035", # Use `typing` instead of `typing_extensions`
     "UP007", # Use `X | Y` for type annotations
+    "UP045", # Use `X | None` for type annotations
     "F403", # Star imports used
     "F405", # Undefined names from star imports
     "S110", # try-except-pass (silent errors in cleanup)
