@@ -10,7 +10,7 @@ import asyncio
 import socket
 import struct
 import threading
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .async_forwarding import AsyncPortForwardingManager
