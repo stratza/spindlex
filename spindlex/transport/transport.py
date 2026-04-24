@@ -41,6 +41,7 @@ from ..protocol.constants import (
     KEX_COOKIE_SIZE,
     MAX_CHANNELS,
     MAX_PACKET_SIZE,
+    MAX_QUEUE_SIZE,
     MAX_VERSION_LINE_LENGTH,
     MIN_PACKET_SIZE,
     MIN_PADDING_SIZE,
@@ -68,7 +69,6 @@ from ..protocol.constants import (
     MSG_SERVICE_ACCEPT,
     MSG_SERVICE_REQUEST,
     MSG_USERAUTH_FAILURE,
-    MSG_USERAUTH_PK_OK,
     MSG_USERAUTH_REQUEST,
     MSG_USERAUTH_SUCCESS,
     PACKET_LENGTH_SIZE,
@@ -386,40 +386,29 @@ class Transport:
         if self._authenticated:
             return True
 
-        try:
-            # Request ssh-userauth service if not already done
-            if not self._userauth_service_requested:
-                self._request_userauth_service()
+        # Request ssh-userauth service if not already done
+        if not self._userauth_service_requested:
+            self._request_userauth_service()
 
-            # Build password authentication request
-            auth_request = UserAuthRequestMessage(
-                username=username,
-                service=SERVICE_CONNECTION,
-                method=AUTH_PASSWORD,
-                method_data=self._build_password_auth_data(password),
-            )
+        from ..auth.password import PasswordAuth
 
-            # Send authentication request
-            self._send_message(auth_request)
-
-            # Wait for authentication response
-            return self._handle_auth_response()
-
-        except (OSError, struct.error, SSHException) as e:
-            if isinstance(e, AuthenticationException):
-                raise
-            raise AuthenticationException(f"Password authentication failed: {e}") from e
-
-    def _build_password_auth_data(self, password: str) -> bytes:
-        """Build password authentication method data."""
-        data = bytearray()
-        data.extend(write_boolean(False))  # password change request
-        data.extend(write_string(password))
-        return bytes(data)
+        auth = PasswordAuth(self)
+        msg = auth.authenticate(username, password)
+        return self._handle_auth_response_message(msg)
 
     def auth_publickey(self, username: str, key: Any) -> bool:
         """
         Authenticate using public key.
+
+        Args:
+            username: Username for authentication
+            key: Private key for authentication
+
+        Returns:
+            True if authentication successful
+
+        Raises:
+            AuthenticationException: If authentication fails
         """
         if not self._active:
             raise AuthenticationException("Transport not active")
@@ -427,96 +416,15 @@ class Transport:
         if self._authenticated:
             return True
 
-        try:
-            # Request ssh-userauth service if not already done
-            if not self._userauth_service_requested:
-                self._request_userauth_service()
+        # Request ssh-userauth service if not already done
+        if not self._userauth_service_requested:
+            self._request_userauth_service()
 
-            # For maximum compatibility and performance, we proceed directly to signature-based auth
-            return self._auth_publickey_with_signature(username, key)
+        from ..auth.publickey import PublicKeyAuth
 
-        except (OSError, struct.error, SSHException) as e:
-            if isinstance(e, AuthenticationException):
-                raise
-            raise AuthenticationException(
-                f"Public key authentication failed: {e}"
-            ) from e
-
-    def _auth_publickey_with_signature(self, username: str, key: Any) -> bool:
-        """Authenticate with public key signature."""
-        auth_request = UserAuthRequestMessage(
-            username=username,
-            service=SERVICE_CONNECTION,
-            method=AUTH_PUBLICKEY,
-            method_data=self._build_publickey_auth_data(username, key),
-        )
-
-        self._send_message(auth_request)
-
-        return self._handle_auth_response()
-
-    def _try_publickey_query(self, username: str, key: Any) -> bool:
-        """Try public key authentication without signature (query)."""
-        auth_request = UserAuthRequestMessage(
-            username=username,
-            service=SERVICE_CONNECTION,
-            method=AUTH_PUBLICKEY,
-            method_data=self._build_publickey_query_data(key),
-        )
-
-        self._send_message(auth_request)
-
-        msg = self._expect_message(MSG_USERAUTH_FAILURE, MSG_USERAUTH_PK_OK)
-
-        if isinstance(msg, UserAuthFailureMessage):
-            return False
-        elif msg.msg_type == MSG_USERAUTH_PK_OK:
-            return True
-        else:
-            return False
-
-    def _build_publickey_query_data(self, key: Any) -> bytes:
-        """Build public key query method data."""
-        data = bytearray()
-        data.extend(write_boolean(False))  # no signature
-        data.extend(write_string(key.get_ssh_type()))  # algorithm name
-        data.extend(write_string(key.get_public_key_bytes()))  # public key blob
-        return bytes(data)
-
-    def _build_publickey_auth_data(self, username: str, key: Any) -> bytes:
-        """Build public key authentication method data with signature."""
-        data = bytearray()
-        data.extend(write_boolean(True))  # has signature
-        data.extend(write_string(key.get_ssh_type()))
-        data.extend(write_string(key.get_public_key_bytes()))
-
-        # Build signature data
-        signature_data = self._build_signature_data(username, key)
-        signature = key.sign(signature_data)
-
-        if signature is None:
-            raise TransportException("Failed to sign authentication data")
-
-        # The signature includes its own length when wrapped by write_string
-        data.extend(write_string(signature))
-        return bytes(data)
-
-    def _build_signature_data(self, username: str, key: Any) -> bytes:
-        """Build signature data for public key authentication."""
-        if self._session_id is None:
-            raise TransportException("Session ID not set")
-
-        data = bytearray()
-        data.extend(write_string(self._session_id))
-
-        data.extend(write_byte(MSG_USERAUTH_REQUEST))
-        data.extend(write_string(username))
-        data.extend(write_string(SERVICE_CONNECTION))
-        data.extend(write_string(AUTH_PUBLICKEY))
-        data.extend(write_boolean(True))  # has signature
-        data.extend(write_string(key.get_ssh_type()))
-        data.extend(write_string(key.get_public_key_bytes()))
-        return bytes(data)
+        auth = PublicKeyAuth(self)
+        msg = auth.authenticate(username, key)
+        return self._handle_auth_response_message(msg)
 
     def auth_keyboard_interactive(self, username: str, handler: Any) -> bool:
         """
@@ -645,26 +553,52 @@ class Transport:
 
         self._userauth_service_requested = True
 
-    def _handle_auth_response(self) -> bool:
-        """Handle authentication response message."""
-        msg = self._expect_message(MSG_USERAUTH_SUCCESS, MSG_USERAUTH_FAILURE)
+    def _handle_auth_response_message(self, msg: Message) -> bool:
+        """
+        Handle a specific authentication response message.
 
+        Args:
+            msg: MSG_USERAUTH_SUCCESS or MSG_USERAUTH_FAILURE
+
+        Returns:
+            True if success
+
+        Raises:
+            AuthenticationException: If failure or unexpected message
+        """
         if isinstance(msg, UserAuthSuccessMessage):
             self._authenticated = True
             return True
         elif isinstance(msg, UserAuthFailureMessage):
             # Check if partial success
             if msg.partial_success:
-                # Partial success - more auth methods required
                 raise AuthenticationException(
                     f"Partial success - additional methods required: {', '.join(msg.authentications)}"
                 )
             else:
                 return False
+        elif msg.msg_type == MSG_USERAUTH_SUCCESS:
+            self._authenticated = True
+            return True
+        elif msg.msg_type == MSG_USERAUTH_FAILURE:
+            # Re-unpack as UserAuthFailureMessage to check partial_success
+            if not isinstance(msg, UserAuthFailureMessage):
+                msg = UserAuthFailureMessage.unpack(msg.pack())
+
+            if msg.partial_success:
+                raise AuthenticationException(
+                    f"Partial success - additional methods required: {', '.join(msg.authentications)}"
+                )
+            return False
         else:
             raise AuthenticationException(
-                f"Unexpected authentication response: {type(msg).__name__}"
+                f"Unexpected authentication response: {type(msg).__name__} (type {msg.msg_type})"
             )
+
+    def _handle_auth_response(self) -> bool:
+        """Receive and handle authentication response message."""
+        msg = self._expect_message(MSG_USERAUTH_SUCCESS, MSG_USERAUTH_FAILURE)
+        return self._handle_auth_response_message(msg)
 
     def open_channel(
         self, kind: str, dest_addr: Optional[tuple[str, int]] = None
@@ -725,7 +659,9 @@ class Transport:
 
             # Wait for response (CRITICAL: release lock before calling _expect_message)
             response = self._expect_message(
-                MSG_CHANNEL_OPEN_CONFIRMATION, MSG_CHANNEL_OPEN_FAILURE
+                MSG_CHANNEL_OPEN_CONFIRMATION,
+                MSG_CHANNEL_OPEN_FAILURE,
+                channel_id=channel_id,
             )
 
             if isinstance(response, ChannelOpenConfirmationMessage):
@@ -823,35 +759,65 @@ class Transport:
             recipient_channel, _ = read_uint32(msg._data, 0)
 
         if recipient_channel is not None:
+            channel = None
             with self._lock:
                 channel = self._channels.get(recipient_channel)
-                if channel:
+
+            if channel:
+                try:
                     if msg.msg_type == MSG_CHANNEL_DATA:
-                        self._handle_channel_data(msg)
+                        if not isinstance(msg, ChannelDataMessage):
+                            msg = ChannelDataMessage.unpack(msg.pack())
+                        channel._handle_data(msg.data)
                     elif msg.msg_type == MSG_CHANNEL_EXTENDED_DATA:
-                        self._handle_channel_extended_data(msg)
+                        data = msg._data
+                        _, offset = read_uint32(data, 0)
+                        data_type, offset = read_uint32(data, offset)
+                        message_data, _ = read_string(data, offset)
+                        channel._handle_extended_data(data_type, message_data)
                     elif msg.msg_type == MSG_CHANNEL_EOF:
                         channel._handle_eof()
                     elif msg.msg_type == MSG_CHANNEL_CLOSE:
                         channel._handle_close()
-                        # Remove from channels dict
-                        del self._channels[recipient_channel]
+                        with self._lock:
+                            if recipient_channel in self._channels:
+                                del self._channels[recipient_channel]
                     elif msg.msg_type == MSG_CHANNEL_WINDOW_ADJUST:
-                        self._handle_channel_window_adjust(msg)
+                        _, offset = read_uint32(msg._data, 0)
+                        bytes_to_add, _ = read_uint32(msg._data, offset)
+                        channel._handle_window_adjust(bytes_to_add)
                     elif msg.msg_type == MSG_CHANNEL_SUCCESS:
                         channel._handle_request_success()
                     elif msg.msg_type == MSG_CHANNEL_FAILURE:
                         channel._handle_request_failure()
                     elif msg.msg_type == MSG_CHANNEL_REQUEST:
-                        self._handle_channel_request(msg)
+                        data = msg._data
+                        _, offset = read_uint32(data, 0)
+                        request_type_bytes, offset = read_string(data, offset)
+                        want_reply, offset = read_boolean(data, offset)
+                        request_type = request_type_bytes.decode(SSH_STRING_ENCODING)
+                        request_data = data[offset:] if offset < len(data) else b""
+
+                        success = channel._handle_request(request_type, request_data)
+                        if want_reply:
+                            reply_msg = Message(
+                                MSG_CHANNEL_SUCCESS if success else MSG_CHANNEL_FAILURE
+                            )
+                            if channel._remote_channel_id is not None:
+                                reply_msg.add_uint32(channel._remote_channel_id)
+                                self._send_message(reply_msg)
                     else:
                         self._logger.debug(
                             f"Unhandled channel message type {msg.msg_type} for channel {recipient_channel}"
                         )
-                else:
-                    self._logger.debug(
-                        f"Message type {msg.msg_type} for unknown channel {recipient_channel}"
+                except Exception as e:
+                    self._logger.error(
+                        f"Error handling channel message {msg.msg_type}: {e}"
                     )
+            else:
+                self._logger.debug(
+                    f"Message type {msg.msg_type} for unknown channel {recipient_channel}"
+                )
 
     def _handle_channel_open(self, msg: Message) -> None:
         """
@@ -1063,14 +1029,14 @@ class Transport:
     def _handle_channel_data(self, msg: Message) -> None:
         """Handle channel data message."""
         if isinstance(msg, ChannelDataMessage):
+            channel = None
             with self._lock:
-                if msg.recipient_channel in self._channels:
-                    channel = self._channels[msg.recipient_channel]
-                    channel._handle_data(msg.data)
-                else:
-                    self._logger.debug(
-                        f"Data for UNKNOWN channel {msg.recipient_channel}"
-                    )
+                channel = self._channels.get(msg.recipient_channel)
+
+            if channel:
+                channel._handle_data(msg.data)
+            else:
+                self._logger.debug(f"Data for UNKNOWN channel {msg.recipient_channel}")
 
     def _handle_channel_extended_data(self, msg: Message) -> None:
         """Handle channel extended data message."""
@@ -1081,29 +1047,37 @@ class Transport:
         data_type, offset = read_uint32(data, offset)
         message_data, offset = read_string(data, offset)
 
+        channel = None
         with self._lock:
-            if recipient_channel in self._channels:
-                channel = self._channels[recipient_channel]
-                channel._handle_extended_data(data_type, message_data)
+            channel = self._channels.get(recipient_channel)
+
+        if channel:
+            channel._handle_extended_data(data_type, message_data)
 
     def _handle_channel_eof(self, msg: Message) -> None:
         """Handle channel EOF message."""
         recipient_channel, _ = read_uint32(msg._data, 0)
 
+        channel = None
         with self._lock:
-            if recipient_channel in self._channels:
-                channel = self._channels[recipient_channel]
-                channel._handle_eof()
+            channel = self._channels.get(recipient_channel)
+
+        if channel:
+            channel._handle_eof()
 
     def _handle_channel_close(self, msg: Message) -> None:
         """Handle channel close message."""
         if isinstance(msg, ChannelCloseMessage):
+            channel = None
             with self._lock:
-                if msg.recipient_channel in self._channels:
-                    channel = self._channels[msg.recipient_channel]
-                    channel._handle_close()
-                    # Remove from channels dict
-                    del self._channels[msg.recipient_channel]
+                channel = self._channels.get(msg.recipient_channel)
+
+            if channel:
+                channel._handle_close()
+                # Remove from channels dict
+                with self._lock:
+                    if msg.recipient_channel in self._channels:
+                        del self._channels[msg.recipient_channel]
 
     def _handle_channel_window_adjust(self, msg: Message) -> None:
         """Handle channel window adjust message."""
@@ -1112,28 +1086,34 @@ class Transport:
         recipient_channel, offset = read_uint32(data, offset)
         bytes_to_add, offset = read_uint32(data, offset)
 
+        channel = None
         with self._lock:
-            if recipient_channel in self._channels:
-                channel = self._channels[recipient_channel]
-                channel._handle_window_adjust(bytes_to_add)
+            channel = self._channels.get(recipient_channel)
+
+        if channel:
+            channel._handle_window_adjust(bytes_to_add)
 
     def _handle_channel_success(self, msg: Message) -> None:
         """Handle channel success message."""
         recipient_channel, _ = read_uint32(msg._data, 0)
 
+        channel = None
         with self._lock:
-            if recipient_channel in self._channels:
-                channel = self._channels[recipient_channel]
-                channel._handle_request_success()
+            channel = self._channels.get(recipient_channel)
+
+        if channel:
+            channel._handle_request_success()
 
     def _handle_channel_failure(self, msg: Message) -> None:
         """Handle channel failure message."""
         recipient_channel, _ = read_uint32(msg._data, 0)
 
+        channel = None
         with self._lock:
-            if recipient_channel in self._channels:
-                channel = self._channels[recipient_channel]
-                channel._handle_request_failure()
+            channel = self._channels.get(recipient_channel)
+
+        if channel:
+            channel._handle_request_failure()
 
     def _handle_channel_request(self, msg: Message) -> None:
         """Handle channel request message."""
@@ -1147,23 +1127,24 @@ class Transport:
         request_type = request_type_bytes.decode(SSH_STRING_ENCODING)
         request_data = data[offset:] if offset < len(data) else b""
 
+        channel = None
         with self._lock:
-            if recipient_channel in self._channels:
-                channel = self._channels[recipient_channel]
+            channel = self._channels.get(recipient_channel)
 
-                # Handle channel request
-                success = channel._handle_request(request_type, request_data)
+        if channel:
+            # Handle channel request
+            success = channel._handle_request(request_type, request_data)
 
-                # Send reply if requested
-                if want_reply:
-                    if success:
-                        reply_msg = Message(MSG_CHANNEL_SUCCESS)
-                    else:
-                        reply_msg = Message(MSG_CHANNEL_FAILURE)
+            # Send reply if requested
+            if want_reply:
+                if success:
+                    reply_msg = Message(MSG_CHANNEL_SUCCESS)
+                else:
+                    reply_msg = Message(MSG_CHANNEL_FAILURE)
 
-                    if channel._remote_channel_id is not None:
-                        reply_msg.add_uint32(channel._remote_channel_id)
-                        self._send_message(reply_msg)
+                if channel._remote_channel_id is not None:
+                    reply_msg.add_uint32(channel._remote_channel_id)
+                    self._send_message(reply_msg)
 
     def _handle_exit_signal_request(self, channel: Channel, data: bytes) -> None:
         """Handle exit signal request data."""
@@ -1793,7 +1774,9 @@ class Transport:
                     self._sequence_number_out = 0
                     self._logger.debug("Sequence number (out) reset for strict KEX")
 
-        except (OSError, struct.error) as e:
+        except (OSError, struct.error, TransportException) as e:
+            if isinstance(e, TransportException):
+                raise
             raise TransportException(f"Failed to send message: {e}") from e
 
     def _read_message(self, single_pump: bool = False) -> Optional[Message]:
@@ -1801,19 +1784,19 @@ class Transport:
         Read next message from socket and dispatch if needed.
         Does NOT check the message queue.
         """
-        while True:
-            # If rekeying is in progress, only the rekeying thread is allowed to read from the socket.
-            # Other threads must wait and check the queue (handled in _recv_message and _expect_message).
-            if (
-                self._kex_in_progress
-                and not getattr(self, "_is_async", False)
-                and threading.current_thread() != getattr(self, "_kex_thread", None)
-            ):
-                # We should not be here if called from _recv_message or _expect_message
-                # as they have their own yielding loops, but for safety:
-                return None
+        try:
+            while True:
+                # If rekeying is in progress, only the rekeying thread is allowed to read from the socket.
+                # Other threads must wait and check the queue (handled in _recv_message and _expect_message).
+                if (
+                    self._kex_in_progress
+                    and not getattr(self, "_is_async", False)
+                    and threading.current_thread() != getattr(self, "_kex_thread", None)
+                ):
+                    # We should not be here if called from _recv_message or _expect_message
+                    # as they have their own yielding loops, but for safety:
+                    return None
 
-            try:
                 # We need to hold the read_lock while reading from the socket to ensure
                 # only one thread reads a complete packet at a time.
                 with self._read_lock:
@@ -1869,9 +1852,10 @@ class Transport:
                             # multiple threads, then queue message and start KEX thread.
                             self._kex_in_progress = True
                             self._message_queue.append(msg)
-                            threading.Thread(
+                            self._kex_thread = threading.Thread(
                                 target=self._start_kex, daemon=True
-                            ).start()
+                            )
+                            self._kex_thread.start()
                             if single_pump:
                                 return HandledMessage()  # type: ignore[return-value]
                             continue
@@ -1901,10 +1885,10 @@ class Transport:
 
                         return msg
 
-            except (OSError, struct.error, SSHException) as e:
-                if isinstance(e, SSHException):
-                    raise
-                raise TransportException(f"Failed to receive message: {e}") from e
+        except (OSError, struct.error, SSHException, ProtocolException) as e:
+            if isinstance(e, (SSHException, ProtocolException)):
+                raise
+            raise TransportException(f"Failed to receive message: {e}") from e
 
     def _pump(self) -> Optional[Union[Message, type[HandledMessage]]]:
         """
@@ -1918,13 +1902,10 @@ class Transport:
         # First check if we already have messages in the queue
         with self._lock:
             if self._message_queue:
-                return self._message_queue[0]
+                return self._message_queue.popleft()
 
         msg = self._read_message(single_pump=True)
         if msg:
-            if isinstance(msg, Message):
-                with self._lock:
-                    self._message_queue.append(msg)
             return msg
         return None
 
@@ -1954,7 +1935,9 @@ class Transport:
             if msg is not None:
                 return msg
 
-    def _expect_message(self, *allowed_types: int) -> Message:
+    def _expect_message(
+        self, *allowed_types: int, channel_id: int | None = None
+    ) -> Message:
         """
         Receive next message and ensure it's one of the allowed types.
         Messages of other types are queued for later processing.
@@ -1965,6 +1948,18 @@ class Transport:
                 with self._lock:
                     for i, queued in enumerate(self._message_queue):
                         if queued.msg_type in allowed_types:
+                            # If channel_id is specified, check if it matches
+                            if channel_id is not None:
+                                msg_channel_id = getattr(
+                                    queued, "recipient_channel", None
+                                )
+                                if msg_channel_id is None and len(queued._data) >= 4:
+                                    # Fallback for messages not fully parsed or without attribute
+                                    msg_channel_id, _ = read_uint32(queued._data, 0)
+
+                                if msg_channel_id != channel_id:
+                                    continue
+
                             del self._message_queue[i]
                             return queued
 
@@ -1985,10 +1980,27 @@ class Transport:
                 continue
 
             if read_msg.msg_type in allowed_types:
+                # Check channel_id if specified
+                if channel_id is not None:
+                    msg_channel_id = getattr(read_msg, "recipient_channel", None)
+                    if msg_channel_id is None and len(read_msg._data) >= 4:
+                        msg_channel_id, _ = read_uint32(read_msg._data, 0)
+
+                    if msg_channel_id != channel_id:
+                        # Not for this channel, queue it for others and continue looking
+                        with self._lock:
+                            if len(self._message_queue) >= MAX_QUEUE_SIZE:
+                                raise TransportException(
+                                    "Message queue size limit exceeded"
+                                )
+                            self._message_queue.append(read_msg)
+                        continue
                 return read_msg
 
             # 3. Not what we wanted, queue it for others
             with self._lock:
+                if len(self._message_queue) >= MAX_QUEUE_SIZE:
+                    raise TransportException("Message queue size limit exceeded")
                 self._message_queue.append(read_msg)
 
     def get_server_host_key(self) -> Optional[Any]:
@@ -2158,7 +2170,12 @@ class Transport:
         cipher_name = getattr(self, "_cipher_out_active", None) or getattr(
             self, "_cipher_c2s", None
         )
-        block_size = _CIPHER_BLOCK_SIZES.get(cipher_name, 8) if cipher_name else 8
+        if cipher_name:
+            if cipher_name not in _CIPHER_BLOCK_SIZES:
+                raise TransportException(f"Unknown cipher: {cipher_name}")
+            block_size = _CIPHER_BLOCK_SIZES[cipher_name]
+        else:
+            block_size = 8
 
         padding_length = block_size - (
             (len(payload) + PADDING_LENGTH_SIZE + PACKET_LENGTH_SIZE) % block_size
@@ -2370,7 +2387,6 @@ class Transport:
 
                 if not chunk:
                     self._logger.debug("Socket closed while receiving")
-                    self.close()
                     raise TransportException("Connection closed unexpectedly")
 
                 with self._lock:
