@@ -198,7 +198,7 @@ class AsyncTransport(Transport):
             )
             return fut.result()
 
-    def _expect_message(self, *allowed_types: int, channel_id: Optional[int] = None) -> Message:
+    def _expect_message(self, *allowed_types: int, channel_id: int | None = None) -> Message:
         """Bridge sync expect_message."""
         if not self._loop:
             return super()._expect_message(*allowed_types, channel_id=channel_id)

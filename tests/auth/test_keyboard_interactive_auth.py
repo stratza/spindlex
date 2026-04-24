@@ -140,9 +140,9 @@ async def test_async_keyboard_interactive_auth_loop():
 
 
 def test_console_handler():
-    from unittest.mock import patch
     import io
     from contextlib import redirect_stdout
+    from unittest.mock import patch
     with patch("builtins.input", return_value="1111"), \
          patch("getpass.getpass", return_value="2222"), \
          redirect_stdout(io.StringIO()):
