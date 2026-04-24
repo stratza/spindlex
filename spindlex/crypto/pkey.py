@@ -1079,7 +1079,7 @@ def load_public_key_from_string(key_string: str) -> PKey:
             key = Ed25519Key()
         elif algorithm == "ecdsa-sha2-nistp256":
             key = ECDSAKey()
-        elif algorithm in ["rsa-sha2-256", "rsa-sha2-512"]:
+        elif algorithm in ["rsa-sha2-256", "rsa-sha2-512", "ssh-rsa"]:
             key = RSAKey()
         else:
             raise CryptoException(f"Unsupported key algorithm: {algorithm}")

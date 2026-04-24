@@ -10,7 +10,7 @@ import asyncio
 import socket
 import struct
 import threading
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
     from .async_forwarding import AsyncPortForwardingManager
@@ -18,8 +18,6 @@ if TYPE_CHECKING:
 from ..exceptions import ProtocolException, TransportException
 from ..protocol.constants import (
     AUTH_KEYBOARD_INTERACTIVE,
-    AUTH_PASSWORD,
-    AUTH_PUBLICKEY,
     DEFAULT_MAX_PACKET_SIZE,
     DEFAULT_WINDOW_SIZE,
     MSG_CHANNEL_OPEN_CONFIRMATION,
@@ -31,9 +29,6 @@ from ..protocol.constants import (
     MSG_REQUEST_FAILURE,
     MSG_REQUEST_SUCCESS,
     MSG_SERVICE_ACCEPT,
-    MSG_USERAUTH_FAILURE,
-    MSG_USERAUTH_PK_OK,
-    MSG_USERAUTH_SUCCESS,
     SERVICE_CONNECTION,
     SERVICE_USERAUTH,
     SSH_OPEN_CONNECT_FAILED,
@@ -53,10 +48,7 @@ from ..protocol.messages import (
     KexInitMessage,
     Message,
     ServiceRequestMessage,
-    UserAuthFailureMessage,
-    UserAuthPKOKMessage,
     UserAuthRequestMessage,
-    UserAuthSuccessMessage,
 )
 from ..protocol.utils import write_string
 from .transport import Transport
@@ -206,10 +198,10 @@ class AsyncTransport(Transport):
             )
             return fut.result()
 
-    def _expect_message(self, *allowed_types: int) -> Message:
+    def _expect_message(self, *allowed_types: int, channel_id: Optional[int] = None) -> Message:
         """Bridge sync expect_message."""
         if not self._loop:
-            return super()._expect_message(*allowed_types)
+            return super()._expect_message(*allowed_types, channel_id=channel_id)
 
         try:
             asyncio.get_running_loop()
@@ -220,7 +212,7 @@ class AsyncTransport(Transport):
             if not self._loop:
                 raise TransportException("Event loop not available")
             fut = asyncio.run_coroutine_threadsafe(
-                self._expect_message_async(*allowed_types), self._loop
+                self._expect_message_async(*allowed_types, channel_id=channel_id), self._loop
             )
             return fut.result()
 
@@ -386,20 +378,11 @@ class AsyncTransport(Transport):
             await self._expect_message_async(MSG_SERVICE_ACCEPT)
             self._userauth_service_requested = True
 
-        auth_msg = UserAuthRequestMessage(
-            username=username,
-            service=SERVICE_CONNECTION,
-            method=AUTH_PASSWORD,
-            method_data=self._build_password_auth_data(password),
-        )
-        await self._send_message_async(auth_msg)
-        res = await self._expect_message_async(
-            MSG_USERAUTH_SUCCESS, MSG_USERAUTH_FAILURE
-        )
-        if isinstance(res, UserAuthSuccessMessage):
-            self._authenticated = True
-            return True
-        return False
+        from ..auth.password import PasswordAuth
+
+        auth = PasswordAuth(self)
+        msg = await auth.authenticate_async(username, password)
+        return self._handle_auth_response_message(msg)
 
     async def auth_publickey(self, username: str, key: Any) -> bool:  # type: ignore[override]
         """Authenticate using public key method asynchronously."""
@@ -408,42 +391,11 @@ class AsyncTransport(Transport):
             await self._expect_message_async(MSG_SERVICE_ACCEPT)
             self._userauth_service_requested = True
 
-        # 1. Query if key is acceptable
-        query_msg = UserAuthRequestMessage(
-            username=username,
-            service=SERVICE_CONNECTION,
-            method=AUTH_PUBLICKEY,
-            method_data=self._build_publickey_query_data(key),
-        )
-        await self._send_message_async(query_msg)
-        res = await self._expect_message_async(MSG_USERAUTH_FAILURE, MSG_USERAUTH_PK_OK)
+        from ..auth.publickey import PublicKeyAuth
 
-        if isinstance(res, UserAuthFailureMessage):
-            return False
-
-        # If it's type 60, it's a generic Message that we need to unpack
-        if not isinstance(res, UserAuthPKOKMessage):
-            try:
-                res = UserAuthPKOKMessage._unpack_data(res._data)
-            except Exception as e:
-                raise ProtocolException(f"Failed to unpack PK_OK message: {e}") from e
-
-        # 2. Key accepted, send signature
-        auth_msg = UserAuthRequestMessage(
-            username=username,
-            service=SERVICE_CONNECTION,
-            method=AUTH_PUBLICKEY,
-            method_data=self._build_publickey_auth_data(username, key),
-        )
-        await self._send_message_async(auth_msg)
-        res = await self._expect_message_async(
-            MSG_USERAUTH_SUCCESS, MSG_USERAUTH_FAILURE
-        )
-
-        if isinstance(res, UserAuthSuccessMessage):
-            self._authenticated = True
-            return True
-        return False
+        auth = PublicKeyAuth(self)
+        msg = await auth.authenticate_async(username, key)
+        return self._handle_auth_response_message(msg)
 
     async def auth_gssapi(  # type: ignore[override]
         self,

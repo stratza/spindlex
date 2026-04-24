@@ -237,6 +237,7 @@ class SSHClient:
         password: Optional[str] = None,
         pkey: Optional[PKey] = None,
         key_filename: Optional[str] = None,
+        key_password: Optional[str] = None,
         timeout: Optional[float] = None,
         compress: bool = False,
         sock: Optional[socket.socket] = None,
@@ -315,6 +316,7 @@ class SSHClient:
                     password,
                     pkey,
                     key_filename,
+                    key_password,
                     gss_auth,
                     gss_host,
                     gss_deleg_creds,
@@ -351,8 +353,7 @@ class SSHClient:
             server_key = self._transport.get_server_host_key()
 
             if server_key is None:
-                self._logger.warning("No host key received from server")
-                return
+                raise SSHException("No host key received from server")
 
             # Check if we have any known host keys for this hostname
             known_keys = self._host_key_storage.get_all(hostname)
@@ -363,12 +364,11 @@ class SSHClient:
 
                 try:
                     self._host_key_policy.missing_host_key(self, hostname, server_key)
-                except BadHostKeyException:
-                    # Policy rejected the key
+                except (BadHostKeyException, SSHException):
                     raise
                 except Exception as e:
-                    # Policy had an error but didn't reject
-                    self._logger.warning(f"Host key policy error: {e}")
+                    # Policy had an unexpected error - fail closed
+                    raise SSHException(f"Host key policy error: {e}") from e
             else:
                 # Check if server key matches ANY stored key for this host
                 self._logger.debug(f"Found known host key(s) for {hostname}")
@@ -378,11 +378,11 @@ class SSHClient:
                 ):
                     raise BadHostKeyException(hostname, server_key, known_keys[0])
 
-        except BadHostKeyException:
+        except (BadHostKeyException, SSHException):
             raise
         except Exception as e:
             self._logger.error(f"Host key verification error: {e}")
-            raise BadHostKeyException(hostname, None)
+            raise SSHException(f"Host key verification failed: {e}") from e
 
     def auth_password(self, username: str, password: str) -> None:
         """
@@ -488,6 +488,7 @@ class SSHClient:
         password: Optional[str] = None,
         pkey: Optional[PKey] = None,
         key_filename: Optional[str] = None,
+        key_password: Optional[str] = None,
         gss_auth: bool = False,
         gss_host: Optional[str] = None,
         gss_deleg_creds: bool = False,
@@ -500,6 +501,7 @@ class SSHClient:
             password: Password for authentication
             pkey: Private key for authentication
             key_filename: Path to private key file
+            key_password: Password for private key file
             gss_auth: Whether to use GSSAPI authentication
             gss_host: GSSAPI hostname override
             gss_deleg_creds: Whether to delegate GSSAPI credentials
@@ -525,7 +527,12 @@ class SSHClient:
             try:
                 from ..crypto.pkey import PKey
 
-                pkey = PKey.from_private_key_file(key_filename, password)
+                # Use key_password if provided, otherwise fall back to password
+                # (backward compatibility for when password was used for both)
+                effective_key_password = (
+                    key_password if key_password is not None else password
+                )
+                pkey = PKey.from_private_key_file(key_filename, effective_key_password)
             except Exception as e:
                 self._logger.debug(f"Failed to load key from {key_filename}: {e}")
 
