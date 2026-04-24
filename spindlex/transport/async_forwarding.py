@@ -69,6 +69,9 @@ class AsyncLocalPortForwarder:
         remote_port: int,
         local_host: str = "127.0.0.1",
     ) -> str:
+        if not (0 <= local_port <= 65535):
+            raise SSHException(f"Invalid local port: {local_port}")
+
         tunnel_id = f"local_{local_host}_{local_port}_{remote_host}_{remote_port}"
 
         if tunnel_id in self._tunnels:
@@ -207,6 +210,12 @@ class AsyncRemotePortForwarder:
     async def create_tunnel(
         self, remote_port: int, local_host: str, local_port: int, remote_host: str = ""
     ) -> str:
+        if not (0 <= remote_port <= 65535):
+            raise SSHException(f"Invalid remote port: {remote_port}")
+
+        if not (0 <= local_port <= 65535):
+            raise SSHException(f"Invalid local port: {local_port}")
+
         tunnel_id = f"remote_{remote_host}_{remote_port}_{local_host}_{local_port}"
 
         if tunnel_id in self._tunnels:

@@ -125,15 +125,43 @@ class LocalPortForwarder:
         remote_addr = (remote_host, remote_port)
 
         with self._lock:
+            if not (0 <= local_port <= 65535):
+                raise SSHException(f"Invalid local port: {local_port}")
+
             if tunnel_id in self._tunnels:
                 raise SSHException(f"Tunnel already exists: {tunnel_id}")
 
             server_socket: Union[socket.socket, None] = None
             try:
+                # Bug #2.3 Fixed: Use getaddrinfo to support IPv6 and dual-stack
+                addr_info = socket.getaddrinfo(
+                    local_host,
+                    local_port,
+                    socket.AF_UNSPEC,
+                    socket.SOCK_STREAM,
+                    0,
+                    socket.AI_PASSIVE,
+                )
+                if not addr_info:
+                    raise SSHException(f"Could not resolve bind address: {local_host}")
+
+                # Use the first available address info
+                af, socktype, proto, canonname, sa = addr_info[0]
+
                 # Create listening socket
-                server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                server_socket = socket.socket(af, socktype, proto)
                 server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                server_socket.bind(local_addr)
+
+                # For IPv6, try to enable dual-stack if local_host is empty or ::
+                if af == socket.AF_INET6:
+                    try:
+                        server_socket.setsockopt(
+                            socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0
+                        )
+                    except (AttributeError, OSError):
+                        pass
+
+                server_socket.bind(sa)
                 server_socket.listen(socket.SOMAXCONN)
 
                 # Create tunnel object
@@ -421,6 +449,12 @@ class RemotePortForwarder:
         local_addr = (local_host, local_port)
 
         with self._lock:
+            if not (0 <= remote_port <= 65535):
+                raise SSHException(f"Invalid remote port: {remote_port}")
+
+            if not (0 <= local_port <= 65535):
+                raise SSHException(f"Invalid local port: {local_port}")
+
             if tunnel_id in self._tunnels:
                 raise SSHException(f"Tunnel already exists: {tunnel_id}")
 
@@ -486,15 +520,15 @@ class RemotePortForwarder:
     def handle_forwarded_connection(
         self,
         channel: "Channel",
-        origin_addr: tuple[str, int],
-        dest_addr: tuple[str, int],
+        origin_addr: tuple[str, int, ...],
+        dest_addr: tuple[str, int, ...],
     ) -> None:
         """
         Handle incoming forwarded connection from remote server.
 
         Args:
             channel: SSH channel for the forwarded connection
-            origin_addr: Origin address of the connection
+            origin_addr: Origin address of the connection (may be 2-tuple or 4-tuple)
             dest_addr: Destination address (should match our tunnel)
         """
         # Find matching tunnel
@@ -511,12 +545,25 @@ class RemotePortForwarder:
             channel.close()
             return
 
-        conn_id = f"{tunnel.tunnel_id}_{origin_addr[0]}_{origin_addr[1]}_{time.time()}"
+        # Handle IPv6 address tuples which can be 4 elements long
+        origin_host = origin_addr[0]
+        origin_port = origin_addr[1]
+        conn_id = f"{tunnel.tunnel_id}_{origin_host}_{origin_port}_{time.time()}"
 
         try:
+            # Bug #2.3 Fixed: Use getaddrinfo for local destination to support IPv6
+            local_host, local_port = tunnel.local_addr
+            addr_info = socket.getaddrinfo(
+                local_host, local_port, socket.AF_UNSPEC, socket.SOCK_STREAM
+            )
+            if not addr_info:
+                raise SSHException(f"Could not resolve local destination: {local_host}")
+
+            af, socktype, proto, canonname, sa = addr_info[0]
+
             # Connect to local destination
-            local_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            local_socket.connect(tunnel.local_addr)
+            local_socket = socket.socket(af, socktype, proto)
+            local_socket.connect(sa)
 
             # Store connection
             with tunnel._lock:

@@ -161,7 +161,7 @@ class TestLocalPortForwarder:
 
     def test_create_tunnel_on_invalid_port_raises(self):
         forwarder, transport = self._make_forwarder()
-        with pytest.raises(SSHException, match="Failed to create"):
+        with pytest.raises(SSHException, match="Invalid local port"):
             forwarder.create_tunnel(
                 local_port=99999,  # invalid port
                 remote_host="127.0.0.1",
