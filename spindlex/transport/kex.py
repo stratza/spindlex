@@ -155,8 +155,7 @@ class KeyExchange:
         elif self._kex_algorithm == KEX_DH_GROUP14_SHA256:
             self._perform_dh_group14_sha256()
         else:
-            self._kex_algorithm = KEX_DH_GROUP14_SHA256
-            self._perform_dh_group14_sha256()
+            raise CryptoException(f"Unsupported KEX algorithm: {self._kex_algorithm}")
 
     def _perform_server_kex(self) -> None:
         """Perform server-side key exchange."""
@@ -170,8 +169,7 @@ class KeyExchange:
         elif self._kex_algorithm == KEX_DH_GROUP14_SHA256:
             self._perform_dh_group14_sha256_server()
         else:
-            self._kex_algorithm = KEX_DH_GROUP14_SHA256
-            self._perform_dh_group14_sha256_server()
+            raise CryptoException(f"Unsupported KEX algorithm: {self._kex_algorithm}")
 
     def _send_kexinit(self) -> None:
         """Send KEXINIT message with supported algorithms."""
@@ -251,30 +249,6 @@ class KeyExchange:
         self._compression_algorithm_c2s = COMPRESS_NONE
         self._compression_algorithm_s2c = COMPRESS_NONE
 
-    def _choose_algorithm(self, client_list: list[str], server_list: list[str]) -> str:
-        """Choose first matching algorithm from client and server lists, excluding extensions."""
-        # Filter out SSH extensions and Terrapin/strict-KEX markers. Names must
-        # match what Transport advertises; the v00 spelling does not exist in
-        # any deployed implementation and previously let the v01 marker leak
-        # into the negotiation pool, silently disabling the strict-KEX defense.
-        extensions = {
-            "ext-info-c",
-            "ext-info-s",
-            "kex-strict-c-v01@openssh.com",
-            "kex-strict-s-v01@openssh.com",
-        }
-
-        client_algs = [alg for alg in client_list if alg not in extensions]
-        server_algs = [alg for alg in server_list if alg not in extensions]
-
-        for client_alg in client_algs:
-            if client_alg in server_algs:
-                return client_alg
-
-        raise CryptoException(
-            f"No matching algorithms: client={client_algs}, server={server_algs}"
-        )
-
     def _perform_dh_group14_sha256(self) -> None:
         """Perform Diffie-Hellman Group 14 SHA256 key exchange."""
         try:
@@ -312,11 +286,10 @@ class KeyExchange:
             server_host_key_blob, offset = read_string(reply_msg._data, offset)
 
             # Extract server's DH public key (f)
-            # We need the blob for hash computation and the int for DH
-            server_dh_public_blob, offset = read_string(reply_msg._data, offset)
-            server_public_int = int.from_bytes(
-                server_dh_public_blob, "big", signed=True
-            )
+            server_public_int, offset = read_mpint(reply_msg._data, offset)
+
+            # Re-serialize for hash computation (H = hash(... || f || ...))
+            server_dh_public_blob = write_mpint(server_public_int)[4:]
 
             signature_blob, offset = read_string(reply_msg._data, offset)
 
