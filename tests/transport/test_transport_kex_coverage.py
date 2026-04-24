@@ -14,10 +14,8 @@ from spindlex.protocol.constants import (
     KEX_CURVE25519_SHA256,
     KEX_DH_GROUP14_SHA256,
     KEX_ECDH_SHA2_NISTP256,
-    MSG_NEWKEYS,
 )
 from spindlex.protocol.messages import KexInitMessage
-from spindlex.protocol.utils import write_mpint
 from spindlex.transport.kex import KeyExchange
 
 # ---------------------------------------------------------------------------
