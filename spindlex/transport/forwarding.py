@@ -50,7 +50,7 @@ class ForwardingTunnel:
         self.tunnel_type = tunnel_type
         self.active = False
         self.connections: dict[
-            str, dict[str, Union[socket.socket, Channel, tuple[str, int, Any]]]
+            str, dict[str, Union[socket.socket, Channel, tuple[str, int]]]
         ] = {}
         self._lock = threading.RLock()
         self._logger = logging.getLogger(__name__)
