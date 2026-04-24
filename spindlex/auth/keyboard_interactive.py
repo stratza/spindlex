@@ -183,8 +183,8 @@ def console_handler(
     """
     Default handler for keyboard-interactive authentication.
 
-    By default, interactive prompts are disabled to prevent hanging headless
-    or GUI applications. Callers MUST provide their own handler implementation.
+    Interactive prompts are handled via standard input/output.
+    Password prompts use getpass for secure entry.
 
     Args:
         title: Authentication title from server
@@ -193,11 +193,20 @@ def console_handler(
 
     Returns:
         List of strings containing the user's responses
-
-    Raises:
-        NotImplementedError: Always raised unless overridden.
     """
-    raise NotImplementedError(
-        "Interactive console handler is disabled by default. "
-        "Please provide a custom handler function to handle keyboard-interactive prompts."
-    )
+    import getpass
+
+    if title:
+        print(title)
+    if instruction:
+        print(instruction)
+
+    responses = []
+    for prompt, echo in prompts:
+        if echo:
+            response = input(prompt)
+        else:
+            response = getpass.getpass(prompt)
+        responses.append(response)
+
+    return responses

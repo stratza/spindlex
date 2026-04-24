@@ -26,7 +26,7 @@ class PasswordAuth:
         """
         self._transport = transport
 
-    def authenticate(self, username: str, password: str) -> bool:
+    def authenticate(self, username: str, password: str) -> Any:
         """
         Perform password authentication.
 
@@ -35,24 +35,20 @@ class PasswordAuth:
             password: Password for authentication
 
         Returns:
-            True if authentication successful
+            Authentication response message
 
         Raises:
             AuthenticationException: If authentication fails
         """
         try:
-            from ..protocol.constants import SERVICE_CONNECTION
+            from ..protocol.constants import (
+                MSG_USERAUTH_FAILURE,
+                MSG_USERAUTH_SUCCESS,
+                SERVICE_CONNECTION,
+            )
             from ..protocol.messages import UserAuthRequestMessage
 
             # Build password authentication request
-            # RFC 4252:
-            # byte      SSH_MSG_USERAUTH_REQUEST
-            # string    user name
-            # string    service name
-            # string    "password"
-            # boolean   FALSE
-            # string    password
-
             auth_msg = UserAuthRequestMessage(
                 username=username,
                 service=SERVICE_CONNECTION,
@@ -63,8 +59,53 @@ class PasswordAuth:
             # Send authentication request
             self._transport._send_message(auth_msg)
 
-            # Handle response
-            return bool(self._transport._handle_auth_response())
+            # Wait for response
+            return self._transport._expect_message(
+                MSG_USERAUTH_SUCCESS, MSG_USERAUTH_FAILURE
+            )
+
+        except Exception as e:
+            if isinstance(e, AuthenticationException):
+                raise
+            raise AuthenticationException(f"Password authentication failed: {e}") from e
+
+    async def authenticate_async(self, username: str, password: str) -> Any:
+        """
+        Perform password authentication asynchronously.
+
+        Args:
+            username: Username for authentication
+            password: Password for authentication
+
+        Returns:
+            Authentication response message
+
+        Raises:
+            AuthenticationException: If authentication fails
+        """
+        try:
+            from ..protocol.constants import (
+                MSG_USERAUTH_FAILURE,
+                MSG_USERAUTH_SUCCESS,
+                SERVICE_CONNECTION,
+            )
+            from ..protocol.messages import UserAuthRequestMessage
+
+            # Build password authentication request
+            auth_msg = UserAuthRequestMessage(
+                username=username,
+                service=SERVICE_CONNECTION,
+                method="password",
+                method_data=b"\x00" + self._write_string(password),
+            )
+
+            # Send authentication request
+            await self._transport._send_message_async(auth_msg)
+
+            # Wait for response
+            return await self._transport._expect_message_async(
+                MSG_USERAUTH_SUCCESS, MSG_USERAUTH_FAILURE
+            )
 
         except Exception as e:
             if isinstance(e, AuthenticationException):

@@ -140,7 +140,11 @@ async def test_async_keyboard_interactive_auth_loop():
 
 
 def test_console_handler():
-    with pytest.raises(
-        NotImplementedError, match="Interactive console handler is disabled by default"
-    ):
-        console_handler("Title", "Instruction", [("Prompt 1:", True)])
+    from unittest.mock import patch
+    import io
+    from contextlib import redirect_stdout
+    with patch("builtins.input", return_value="1111"), \
+         patch("getpass.getpass", return_value="2222"), \
+         redirect_stdout(io.StringIO()):
+            responses = console_handler("Title", "Instruction", [("Prompt 1:", True)])
+            assert responses == ["1111"]
