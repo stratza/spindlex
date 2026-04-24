@@ -629,12 +629,39 @@ class SSHServerManager:
                 raise TransportException("Server is already running")
 
             try:
+                # Bug #2.3 Fixed: Use getaddrinfo to support IPv6 and dual-stack
+                addr_info = socket.getaddrinfo(
+                    self._bind_address,
+                    self._port,
+                    socket.AF_UNSPEC,
+                    socket.SOCK_STREAM,
+                    0,
+                    socket.AI_PASSIVE,
+                )
+                if not addr_info:
+                    raise TransportException(
+                        f"Could not resolve bind address: {self._bind_address}"
+                    )
+
+                # Use the first available address info
+                af, socktype, proto, canonname, sa = addr_info[0]
+
                 # Create and bind server socket
-                self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self._server_socket = socket.socket(af, socktype, proto)
                 self._server_socket.setsockopt(
                     socket.SOL_SOCKET, socket.SO_REUSEADDR, 1
                 )
-                self._server_socket.bind((self._bind_address, self._port))
+
+                # For IPv6, try to enable dual-stack if bind_address is empty or ::
+                if af == socket.AF_INET6:
+                    try:
+                        self._server_socket.setsockopt(
+                            socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0
+                        )
+                    except (AttributeError, OSError):
+                        pass
+
+                self._server_socket.bind(sa)
                 self._server_socket.listen(socket.SOMAXCONN)
 
                 self._running = True
@@ -688,7 +715,12 @@ class SSHServerManager:
                         continue
 
                     self._total_connections += 1
-                    connection_id = f"{client_address[0]}:{client_address[1]}:{self._total_connections}"
+                    # Handle IPv6 address tuples (host, port, flowinfo, scopeid)
+                    client_host = client_address[0]
+                    client_port = client_address[1]
+                    connection_id = (
+                        f"{client_host}:{client_port}:{self._total_connections}"
+                    )
 
                 # Handle connection in separate thread
                 connection_thread = threading.Thread(

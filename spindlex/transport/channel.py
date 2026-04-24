@@ -432,18 +432,38 @@ class Channel:
         """
         return self._exit_status if self._exit_status is not None else -1
 
-    def recv_exit_status(self) -> int:
+    def recv_exit_status(self, timeout: Optional[float] = None) -> int:
         """
         Wait for and return command exit status.
 
+        Args:
+            timeout: Optional timeout in seconds. If None, uses channel timeout.
+
         Returns:
             Exit status code
+
+        Raises:
+            ChannelException: If timeout reached
         """
+        start_time = time.time()
+        effective_timeout = timeout if timeout is not None else self._timeout
+
         while self._exit_status is None and not self._closed:
+            # Check timeout
+            if effective_timeout is not None:
+                elapsed = time.time() - start_time
+                if elapsed >= effective_timeout:
+                    raise ChannelException("Timeout waiting for exit status")
+
             try:
                 self._transport._pump()
             except Exception:
                 break
+
+            # Small sleep to prevent busy-waiting if _pump is non-blocking
+            if self._exit_status is None and not self._closed:
+                time.sleep(0.01)
+
         return self.get_exit_status()
 
     def send_exit_status(self, status: int) -> None:
@@ -886,9 +906,32 @@ class Channel:
             language_tag: Language tag for error message
         """
         with self._lock:
+            # Map signal names to numbers (standard SSH signals as per RFC 4254)
+            signals = {
+                "ABRT": 6,
+                "ALRM": 14,
+                "FPE": 8,
+                "HUP": 1,
+                "ILL": 4,
+                "INT": 2,
+                "KILL": 9,
+                "PIPE": 13,
+                "QUIT": 3,
+                "SEGV": 11,
+                "TERM": 15,
+                "USR1": 10,
+                "USR2": 12,
+            }
+            # Remove SIG prefix if present (some implementations add it)
+            clean_name = signal_name.upper()
+            if clean_name.startswith("SIG"):
+                clean_name = clean_name[3:]
+
+            signum = signals.get(clean_name, 0)
+
             # Set exit status to indicate signal termination
-            # Use convention: 128 + signal number (approximation)
-            self._exit_status = 128
+            # Convention: 128 + signal number
+            self._exit_status = 128 + signum
             # Store signal info for debugging
             self._exit_signal = {
                 "signal_name": signal_name,
@@ -896,6 +939,16 @@ class Channel:
                 "error_message": error_message,
                 "language_tag": language_tag,
             }
+
+    def get_exit_signal(self) -> Optional[dict[str, Any]]:
+        """
+        Get exit signal information if command was terminated by signal.
+
+        Returns:
+            Dictionary with signal info or None
+        """
+        with self._lock:
+            return getattr(self, "_exit_signal", None)
 
     @property
     def closed(self) -> bool:

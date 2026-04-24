@@ -96,7 +96,9 @@ def safe(label: str, sampler: Callable[[], list[float]]) -> dict[str, Any]:
     """
     try:
         return stats(sampler())
-    except BaseException as e:  # noqa: BLE001 — keep going past KeyboardInterrupt subclasses too
+    except (
+        BaseException
+    ) as e:  # noqa: BLE001 — keep going past KeyboardInterrupt subclasses too
         if isinstance(e, KeyboardInterrupt):
             raise
         tb = traceback.format_exception_only(type(e), e)[-1].strip()
@@ -105,12 +107,15 @@ def safe(label: str, sampler: Callable[[], list[float]]) -> dict[str, Any]:
 
 # ---------- spindlex (sync) ----------
 
+
 def spindlex_handshake(cfg: dict[str, Any]) -> None:
     c = SSHClient()
     c.set_missing_host_key_policy(AutoAddPolicy())
     c.connect(
-        hostname=cfg["host"], port=cfg["port"],
-        username=cfg["user"], password=cfg["password"],
+        hostname=cfg["host"],
+        port=cfg["port"],
+        username=cfg["user"],
+        password=cfg["password"],
     )
     c.close()
 
@@ -124,21 +129,27 @@ def spindlex_open(cfg: dict[str, Any]) -> SSHClient:
     c = SSHClient()
     c.set_missing_host_key_policy(AutoAddPolicy())
     c.connect(
-        hostname=cfg["host"], port=cfg["port"],
-        username=cfg["user"], password=cfg["password"],
+        hostname=cfg["host"],
+        port=cfg["port"],
+        username=cfg["user"],
+        password=cfg["password"],
     )
     return c
 
 
 # ---------- paramiko ----------
 
+
 def paramiko_handshake(cfg: dict[str, Any]) -> None:
     c = paramiko.SSHClient()
     c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     c.connect(
-        hostname=cfg["host"], port=cfg["port"],
-        username=cfg["user"], password=cfg["password"],
-        allow_agent=False, look_for_keys=False,
+        hostname=cfg["host"],
+        port=cfg["port"],
+        username=cfg["user"],
+        password=cfg["password"],
+        allow_agent=False,
+        look_for_keys=False,
     )
     c.close()
 
@@ -152,19 +163,25 @@ def paramiko_open(cfg: dict[str, Any]) -> paramiko.SSHClient:
     c = paramiko.SSHClient()
     c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     c.connect(
-        hostname=cfg["host"], port=cfg["port"],
-        username=cfg["user"], password=cfg["password"],
-        allow_agent=False, look_for_keys=False,
+        hostname=cfg["host"],
+        port=cfg["port"],
+        username=cfg["user"],
+        password=cfg["password"],
+        allow_agent=False,
+        look_for_keys=False,
     )
     return c
 
 
 # ---------- asyncssh ----------
 
+
 async def asyncssh_handshake(cfg: dict[str, Any]) -> None:
     async with asyncssh.connect(
-        host=cfg["host"], port=cfg["port"],
-        username=cfg["user"], password=cfg["password"],
+        host=cfg["host"],
+        port=cfg["port"],
+        username=cfg["user"],
+        password=cfg["password"],
         known_hosts=None,
     ):
         pass
@@ -178,20 +195,25 @@ async def asyncssh_exec(conn: asyncssh.SSHClientConnection, cmd: str) -> bytes:
 
 async def asyncssh_open(cfg: dict[str, Any]) -> asyncssh.SSHClientConnection:
     return await asyncssh.connect(
-        host=cfg["host"], port=cfg["port"],
-        username=cfg["user"], password=cfg["password"],
+        host=cfg["host"],
+        port=cfg["port"],
+        username=cfg["user"],
+        password=cfg["password"],
         known_hosts=None,
     )
 
 
 # ---------- spindlex (async) ----------
 
+
 async def spindlex_async_handshake(cfg: dict[str, Any]) -> None:
     async with AsyncSSHClient() as c:
         c.set_missing_host_key_policy(AutoAddPolicy())
         await c.connect(
-            hostname=cfg["host"], port=cfg["port"],
-            username=cfg["user"], password=cfg["password"],
+            hostname=cfg["host"],
+            port=cfg["port"],
+            username=cfg["user"],
+            password=cfg["password"],
         )
 
 
@@ -199,8 +221,10 @@ async def spindlex_async_open(cfg: dict[str, Any]) -> AsyncSSHClient:
     c = AsyncSSHClient()
     c.set_missing_host_key_policy(AutoAddPolicy())
     await c.connect(
-        hostname=cfg["host"], port=cfg["port"],
-        username=cfg["user"], password=cfg["password"],
+        hostname=cfg["host"],
+        port=cfg["port"],
+        username=cfg["user"],
+        password=cfg["password"],
     )
     return c
 
@@ -211,6 +235,7 @@ async def spindlex_async_exec(client: AsyncSSHClient, cmd: str) -> bytes:
 
 
 # ---------- benchmark drivers ----------
+
 
 def time_sync(fn: Callable[[], None], iters: int) -> list[float]:
     samples: list[float] = []
@@ -239,15 +264,26 @@ def time_async(coro_factory: Callable[[], Any], iters: int) -> list[float]:
                 await coro_factory()
             samples.append(t())
         return samples
+
     return asyncio.run(runner())
 
 
 def bench_handshake(cfg: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {
-        "spindlex (sync)": safe("spindlex (sync)", lambda: time_sync(lambda: spindlex_handshake(cfg), ITERATIONS)),
-        "paramiko": safe("paramiko", lambda: time_sync(lambda: paramiko_handshake(cfg), ITERATIONS)),
-        "asyncssh": safe("asyncssh", lambda: time_async(lambda: asyncssh_handshake(cfg), ITERATIONS)),
-        "spindlex (async)": safe("spindlex (async)", lambda: time_async(lambda: spindlex_async_handshake(cfg), ITERATIONS)),
+        "spindlex (sync)": safe(
+            "spindlex (sync)",
+            lambda: time_sync(lambda: spindlex_handshake(cfg), ITERATIONS),
+        ),
+        "paramiko": safe(
+            "paramiko", lambda: time_sync(lambda: paramiko_handshake(cfg), ITERATIONS)
+        ),
+        "asyncssh": safe(
+            "asyncssh", lambda: time_async(lambda: asyncssh_handshake(cfg), ITERATIONS)
+        ),
+        "spindlex (async)": safe(
+            "spindlex (async)",
+            lambda: time_async(lambda: spindlex_async_handshake(cfg), ITERATIONS),
+        ),
     }
 
 
@@ -261,6 +297,7 @@ def bench_exec_on_warm(cfg: dict[str, Any], cmd: str) -> dict[str, dict[str, Any
             return time_sync(lambda: spindlex_exec(c, cmd), ITERATIONS)
         finally:
             c.close()
+
     out["spindlex (sync)"] = safe("spindlex (sync)", _spx_sync)
 
     def _pmk() -> list[float]:
@@ -269,6 +306,7 @@ def bench_exec_on_warm(cfg: dict[str, Any], cmd: str) -> dict[str, dict[str, Any
             return time_sync(lambda: paramiko_exec(p, cmd), ITERATIONS)
         finally:
             p.close()
+
     out["paramiko"] = safe("paramiko", _pmk)
 
     async def _asyncssh() -> list[float]:
@@ -285,6 +323,7 @@ def bench_exec_on_warm(cfg: dict[str, Any], cmd: str) -> dict[str, dict[str, Any
         finally:
             conn.close()
             await conn.wait_closed()
+
     out["asyncssh"] = safe("asyncssh", lambda: asyncio.run(_asyncssh()))
 
     async def _spx_async() -> list[float]:
@@ -300,12 +339,17 @@ def bench_exec_on_warm(cfg: dict[str, Any], cmd: str) -> dict[str, dict[str, Any
             return samples
         finally:
             await conn.close()
-    out["spindlex (async)"] = safe("spindlex (async)", lambda: asyncio.run(_spx_async()))
+
+    out["spindlex (async)"] = safe(
+        "spindlex (async)", lambda: asyncio.run(_spx_async())
+    )
 
     return out
 
 
-def bench_sftp_upload(cfg: dict[str, Any], payload: bytes, remote_path: str) -> dict[str, dict[str, Any]]:
+def bench_sftp_upload(
+    cfg: dict[str, Any], payload: bytes, remote_path: str
+) -> dict[str, dict[str, Any]]:
     out: dict[str, dict[str, Any]] = {}
 
     # spindlex — needs explicit chunking; the protocol layer rejects strings
@@ -315,15 +359,18 @@ def bench_sftp_upload(cfg: dict[str, Any], payload: bytes, remote_path: str) -> 
         try:
             sftp = c.open_sftp()
             try:
+
                 def _do() -> None:
                     with sftp.open(remote_path, "wb") as fh:
                         for off in range(0, len(payload), SFTP_CHUNK):
-                            fh.write(payload[off:off + SFTP_CHUNK])
+                            fh.write(payload[off : off + SFTP_CHUNK])
+
                 return time_sync(_do, ITERATIONS)
             finally:
                 sftp.close()
         finally:
             c.close()
+
     out["spindlex (sync)"] = safe("spindlex (sync)", _spx)
 
     def _pmk() -> list[float]:
@@ -331,14 +378,17 @@ def bench_sftp_upload(cfg: dict[str, Any], payload: bytes, remote_path: str) -> 
         try:
             sftp_p = p.open_sftp()
             try:
+
                 def _do_p() -> None:
                     with sftp_p.open(remote_path, "wb") as fh:
                         fh.write(payload)
+
                 return time_sync(_do_p, ITERATIONS)
             finally:
                 sftp_p.close()
         finally:
             p.close()
+
     out["paramiko"] = safe("paramiko", _pmk)
 
     async def _asyncssh() -> list[float]:
@@ -347,9 +397,11 @@ def bench_sftp_upload(cfg: dict[str, Any], payload: bytes, remote_path: str) -> 
             sftp_a = await conn.start_sftp_client()
             try:
                 samples: list[float] = []
+
                 async def _wr() -> None:
                     async with sftp_a.open(remote_path, "wb") as fh:
                         await fh.write(payload)
+
                 for _ in range(WARMUP):
                     await _wr()
                 for _ in range(ITERATIONS):
@@ -362,12 +414,15 @@ def bench_sftp_upload(cfg: dict[str, Any], payload: bytes, remote_path: str) -> 
         finally:
             conn.close()
             await conn.wait_closed()
+
     out["asyncssh"] = safe("asyncssh", lambda: asyncio.run(_asyncssh()))
 
     return out
 
 
-def bench_sftp_download(cfg: dict[str, Any], remote_path: str) -> dict[str, dict[str, Any]]:
+def bench_sftp_download(
+    cfg: dict[str, Any], remote_path: str
+) -> dict[str, dict[str, Any]]:
     out: dict[str, dict[str, Any]] = {}
 
     def _spx() -> list[float]:
@@ -375,14 +430,17 @@ def bench_sftp_download(cfg: dict[str, Any], remote_path: str) -> dict[str, dict
         try:
             sftp = c.open_sftp()
             try:
+
                 def _do() -> None:
                     with sftp.open(remote_path, "rb") as fh:
                         fh.read()
+
                 return time_sync(_do, ITERATIONS)
             finally:
                 sftp.close()
         finally:
             c.close()
+
     out["spindlex (sync)"] = safe("spindlex (sync)", _spx)
 
     def _pmk() -> list[float]:
@@ -390,14 +448,17 @@ def bench_sftp_download(cfg: dict[str, Any], remote_path: str) -> dict[str, dict
         try:
             sftp_p = p.open_sftp()
             try:
+
                 def _do_p() -> None:
                     with sftp_p.open(remote_path, "rb") as fh:
                         fh.read()
+
                 return time_sync(_do_p, ITERATIONS)
             finally:
                 sftp_p.close()
         finally:
             p.close()
+
     out["paramiko"] = safe("paramiko", _pmk)
 
     async def _asyncssh() -> list[float]:
@@ -406,9 +467,11 @@ def bench_sftp_download(cfg: dict[str, Any], remote_path: str) -> dict[str, dict
             sftp_a = await conn.start_sftp_client()
             try:
                 samples: list[float] = []
+
                 async def _rd() -> None:
                     async with sftp_a.open(remote_path, "rb") as fh:
                         await fh.read()
+
                 for _ in range(WARMUP):
                     await _rd()
                 for _ in range(ITERATIONS):
@@ -421,6 +484,7 @@ def bench_sftp_download(cfg: dict[str, Any], remote_path: str) -> dict[str, dict
         finally:
             conn.close()
             await conn.wait_closed()
+
     out["asyncssh"] = safe("asyncssh", lambda: asyncio.run(_asyncssh()))
 
     return out
@@ -432,25 +496,39 @@ def bench_parallel_connect(cfg: dict[str, Any]) -> dict[str, dict[str, Any]]:
     def _spx() -> None:
         with ThreadPoolExecutor(max_workers=PARALLEL_N) as ex:
             list(ex.map(lambda _: spindlex_handshake(cfg), range(PARALLEL_N)))
-    out["spindlex (sync)"] = safe("spindlex (sync)", lambda: time_sync(_spx, ITERATIONS))
+
+    out["spindlex (sync)"] = safe(
+        "spindlex (sync)", lambda: time_sync(_spx, ITERATIONS)
+    )
 
     def _pmk() -> None:
         with ThreadPoolExecutor(max_workers=PARALLEL_N) as ex:
             list(ex.map(lambda _: paramiko_handshake(cfg), range(PARALLEL_N)))
+
     out["paramiko"] = safe("paramiko", lambda: time_sync(_pmk, ITERATIONS))
 
     async def _asyncssh() -> None:
         await asyncio.gather(*(asyncssh_handshake(cfg) for _ in range(PARALLEL_N)))
-    out["asyncssh"] = safe("asyncssh", lambda: time_async(lambda: _asyncssh(), ITERATIONS))
+
+    out["asyncssh"] = safe(
+        "asyncssh", lambda: time_async(lambda: _asyncssh(), ITERATIONS)
+    )
 
     async def _spx_async() -> None:
-        await asyncio.gather(*(spindlex_async_handshake(cfg) for _ in range(PARALLEL_N)))
-    out["spindlex (async)"] = safe("spindlex (async)", lambda: time_async(lambda: _spx_async(), ITERATIONS))
+        await asyncio.gather(
+            *(spindlex_async_handshake(cfg) for _ in range(PARALLEL_N))
+        )
+
+    out["spindlex (async)"] = safe(
+        "spindlex (async)", lambda: time_async(lambda: _spx_async(), ITERATIONS)
+    )
 
     return out
 
 
-def print_table(title: str, results: dict[str, dict[str, Any]], unit: str = "ms") -> None:
+def print_table(
+    title: str, results: dict[str, dict[str, Any]], unit: str = "ms"
+) -> None:
     print(f"\n=== {title} ===")
     ok = {k: v for k, v in results.items() if "error" not in v}
     failed = {k: v for k, v in results.items() if "error" in v}
@@ -478,33 +556,52 @@ def main() -> None:
         sys.exit(1)
 
     print(f"Target: {cfg['user']}@{cfg['host']}:{cfg['port']}")
-    print(f"spindlex={spindlex.__version__}  paramiko={paramiko.__version__}  asyncssh={asyncssh.__version__}")
+    print(
+        f"spindlex={spindlex.__version__}  paramiko={paramiko.__version__}  asyncssh={asyncssh.__version__}"
+    )
     print(f"Iterations per measurement: {ITERATIONS} (after {WARMUP} warmup)")
 
-    def stage(label: str, title: str, fn: Callable[[], dict[str, dict[str, Any]]]) -> None:
+    def stage(
+        label: str, title: str, fn: Callable[[], dict[str, dict[str, Any]]]
+    ) -> None:
         print(f"\n{label}")
         try:
             print_table(title, fn())
         except Exception as e:
             print(f"  STAGE FAILED --{type(e).__name__}: {e}")
 
-    stage("[1/6] handshake (connect+auth+close)", "Handshake",
-          lambda: bench_handshake(cfg))
+    stage(
+        "[1/6] handshake (connect+auth+close)",
+        "Handshake",
+        lambda: bench_handshake(cfg),
+    )
 
-    stage("[2/6] exec_command('echo hello') on warm connection", "Small exec",
-          lambda: bench_exec_on_warm(cfg, "echo hello"))
+    stage(
+        "[2/6] exec_command('echo hello') on warm connection",
+        "Small exec",
+        lambda: bench_exec_on_warm(cfg, "echo hello"),
+    )
 
     LARGE_CMD = "dd if=/dev/zero bs=1024 count=1024 2>/dev/null | base64"
-    stage(f"[3/6] exec_command large output (~1.4 MB): {LARGE_CMD}", "Large exec",
-          lambda: bench_exec_on_warm(cfg, LARGE_CMD))
+    stage(
+        f"[3/6] exec_command large output (~1.4 MB): {LARGE_CMD}",
+        "Large exec",
+        lambda: bench_exec_on_warm(cfg, LARGE_CMD),
+    )
 
     payload = os.urandom(PAYLOAD_SIZE)
     remote_path = f"/tmp/spindlex_bench_{os.getpid()}.bin"
-    stage(f"[4/6] SFTP upload {PAYLOAD_SIZE} bytes -> {remote_path}", "SFTP upload",
-          lambda: bench_sftp_upload(cfg, payload, remote_path))
+    stage(
+        f"[4/6] SFTP upload {PAYLOAD_SIZE} bytes -> {remote_path}",
+        "SFTP upload",
+        lambda: bench_sftp_upload(cfg, payload, remote_path),
+    )
 
-    stage(f"[5/6] SFTP download {PAYLOAD_SIZE} bytes <- {remote_path}", "SFTP download",
-          lambda: bench_sftp_download(cfg, remote_path))
+    stage(
+        f"[5/6] SFTP download {PAYLOAD_SIZE} bytes <- {remote_path}",
+        "SFTP download",
+        lambda: bench_sftp_download(cfg, remote_path),
+    )
 
     try:
         c = spindlex_open(cfg)
@@ -517,8 +614,11 @@ def main() -> None:
     except Exception as e:
         print(f"  (cleanup failed: {e})")
 
-    stage(f"[6/6] {PARALLEL_N} parallel handshakes", f"{PARALLEL_N} parallel handshakes",
-          lambda: bench_parallel_connect(cfg))
+    stage(
+        f"[6/6] {PARALLEL_N} parallel handshakes",
+        f"{PARALLEL_N} parallel handshakes",
+        lambda: bench_parallel_connect(cfg),
+    )
 
 
 if __name__ == "__main__":

@@ -177,6 +177,9 @@ AUTH_PARTIAL = 2
 CHANNEL_WINDOW_ADJUST_SIZE = 1048576  # 1MB
 MAX_CHANNELS = 100  # Maximum number of channels per connection
 
+# Maximum number of messages to keep in the queue
+MAX_QUEUE_SIZE = 1000
+
 # SFTP constants (will be used in later tasks)
 SFTP_VERSION = 3
 SFTP_MAX_PACKET_SIZE = 32768
@@ -364,6 +367,7 @@ __all__ = [
     "MAX_MESSAGE_SIZE",
     "MAX_PACKET_SIZE",
     "MAX_PADDING_SIZE",
+    "MAX_QUEUE_SIZE",
     "MIN_PACKET_SIZE",
     "MIN_PADDING_SIZE",
     "MSG_CHANNEL_CLOSE",

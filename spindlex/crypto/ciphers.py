@@ -22,7 +22,7 @@ class CipherSuite:
     # Supported key exchange algorithms (in preference order)
     KEX_ALGORITHMS = [
         "curve25519-sha256",
-        "diffie-hellman-group-exchange-sha256",
+        "ecdh-sha2-nistp256",
         "diffie-hellman-group14-sha256",
         "kex-strict-c-v01@openssh.com",
         "ext-info-c",

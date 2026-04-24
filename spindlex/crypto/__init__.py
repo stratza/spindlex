@@ -12,13 +12,6 @@ from .backend import (
     get_crypto_backend,
 )
 from .ciphers import CipherSuite
-from .kex import (
-    Curve25519KeyExchange,
-    DHGroup14KeyExchange,
-    ECDHKeyExchange,
-    KeyExchange,
-    KeyExchangeManager,
-)
 from .pkey import (
     ECDSAKey,
     Ed25519Key,
@@ -34,11 +27,6 @@ __all__ = [
     "default_crypto_backend",
     "get_crypto_backend",
     "CipherSuite",
-    "KeyExchange",
-    "KeyExchangeManager",
-    "Curve25519KeyExchange",
-    "ECDHKeyExchange",
-    "DHGroup14KeyExchange",
     "PKey",
     "Ed25519Key",
     "ECDSAKey",
