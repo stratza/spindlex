@@ -9,7 +9,7 @@ import logging
 import socket
 import threading
 import time
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Any, Union
 
 if TYPE_CHECKING:
     from .channel import Channel
