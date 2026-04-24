@@ -582,12 +582,15 @@ class Transport:
             return True
         elif msg.msg_type == MSG_USERAUTH_FAILURE:
             # Re-unpack as UserAuthFailureMessage to check partial_success
+            auth_msg: UserAuthFailureMessage
             if not isinstance(msg, UserAuthFailureMessage):
-                msg = UserAuthFailureMessage.unpack(msg.pack())
+                auth_msg = UserAuthFailureMessage.unpack(msg.pack())  # type: ignore[assignment]
+            else:
+                auth_msg = msg
 
-            if msg.partial_success:
+            if auth_msg.partial_success:
                 raise AuthenticationException(
-                    f"Partial success - additional methods required: {', '.join(msg.authentications)}"
+                    f"Partial success - additional methods required: {', '.join(auth_msg.authentications)}"
                 )
             return False
         else:
@@ -766,9 +769,12 @@ class Transport:
             if channel:
                 try:
                     if msg.msg_type == MSG_CHANNEL_DATA:
+                        data_msg: ChannelDataMessage
                         if not isinstance(msg, ChannelDataMessage):
-                            msg = ChannelDataMessage.unpack(msg.pack())
-                        channel._handle_data(msg.data)
+                            data_msg = ChannelDataMessage.unpack(msg.pack())  # type: ignore[assignment]
+                        else:
+                            data_msg = msg
+                        channel._handle_data(data_msg.data)
                     elif msg.msg_type == MSG_CHANNEL_EXTENDED_DATA:
                         data = msg._data
                         _, offset = read_uint32(data, 0)
@@ -1936,7 +1942,7 @@ class Transport:
                 return msg
 
     def _expect_message(
-        self, *allowed_types: int, channel_id: int | None = None
+        self, *allowed_types: int, channel_id: Optional[int] = None
     ) -> Message:
         """
         Receive next message and ensure it's one of the allowed types.

@@ -10,7 +10,7 @@ import asyncio
 import socket
 import struct
 import threading
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
     from .async_forwarding import AsyncPortForwardingManager
@@ -198,7 +198,9 @@ class AsyncTransport(Transport):
             )
             return fut.result()
 
-    def _expect_message(self, *allowed_types: int, channel_id: int | None = None) -> Message:
+    def _expect_message(
+        self, *allowed_types: int, channel_id: Optional[int] = None
+    ) -> Message:
         """Bridge sync expect_message."""
         if not self._loop:
             return super()._expect_message(*allowed_types, channel_id=channel_id)
@@ -212,7 +214,8 @@ class AsyncTransport(Transport):
             if not self._loop:
                 raise TransportException("Event loop not available")
             fut = asyncio.run_coroutine_threadsafe(
-                self._expect_message_async(*allowed_types, channel_id=channel_id), self._loop
+                self._expect_message_async(*allowed_types, channel_id=channel_id),
+                self._loop,
             )
             return fut.result()
 

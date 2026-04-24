@@ -143,8 +143,11 @@ def test_console_handler():
     import io
     from contextlib import redirect_stdout
     from unittest.mock import patch
-    with patch("builtins.input", return_value="1111"), \
-         patch("getpass.getpass", return_value="2222"), \
-         redirect_stdout(io.StringIO()):
-            responses = console_handler("Title", "Instruction", [("Prompt 1:", True)])
-            assert responses == ["1111"]
+
+    with (
+        patch("builtins.input", return_value="1111"),
+        patch("getpass.getpass", return_value="2222"),
+        redirect_stdout(io.StringIO()),
+    ):
+        responses = console_handler("Title", "Instruction", [("Prompt 1:", True)])
+        assert responses == ["1111"]

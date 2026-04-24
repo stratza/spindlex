@@ -175,7 +175,12 @@ class TestAsyncKeyboardInteractiveAuth:
 
 def test_console_handler():
     from unittest.mock import patch
+
     with patch("builtins.input", return_value="dave"):
         with patch("getpass.getpass", return_value="secret"):
-            responses = console_handler("My Title", "My Instruction", [("Username: ", True), ("Password: ", False)])
+            responses = console_handler(
+                "My Title",
+                "My Instruction",
+                [("Username: ", True), ("Password: ", False)],
+            )
             assert responses == ["dave", "secret"]

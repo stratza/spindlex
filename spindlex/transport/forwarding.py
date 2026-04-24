@@ -50,7 +50,7 @@ class ForwardingTunnel:
         self.tunnel_type = tunnel_type
         self.active = False
         self.connections: dict[
-            str, dict[str, Union[socket.socket, Channel, tuple[str, int, Any]]]
+            str, dict[str, Union[socket.socket, Channel, tuple[Any, ...]]]
         ] = {}
         self._lock = threading.RLock()
         self._logger = logging.getLogger(__name__)
@@ -520,8 +520,8 @@ class RemotePortForwarder:
     def handle_forwarded_connection(
         self,
         channel: "Channel",
-        origin_addr: tuple[str, int, ...],
-        dest_addr: tuple[str, int, ...],
+        origin_addr: tuple[Any, ...],
+        dest_addr: tuple[Any, ...],
     ) -> None:
         """
         Handle incoming forwarded connection from remote server.
@@ -819,8 +819,8 @@ class PortForwardingManager:
     def handle_forwarded_connection(
         self,
         channel: "Channel",
-        origin_addr: tuple[str, int],
-        dest_addr: tuple[str, int],
+        origin_addr: tuple[Any, ...],
+        dest_addr: tuple[Any, ...],
     ) -> None:
         """
         Handle incoming forwarded connection from remote server.
