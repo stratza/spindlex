@@ -9,7 +9,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any
 
-from ..exceptions import BadHostKeyException, SSHException
+from ..exceptions import BadHostKeyException
 
 
 class MissingHostKeyPolicy(ABC):
@@ -41,12 +41,28 @@ class AutoAddPolicy(MissingHostKeyPolicy):
     Automatically add unknown host keys.
 
     WARNING: This policy is insecure and should only be used
-    in trusted environments or for testing purposes.
+    in trusted environments or for testing purposes. It trusts
+    every first-seen host key and disables MITM protection.
     """
 
-    def __init__(self) -> None:
-        """Initialize auto-add policy with logger."""
+    def __init__(self, accept_risk: bool = False) -> None:
+        """
+        Initialize auto-add policy.
+
+        Args:
+            accept_risk: Must be True to acknowledge security risks
+        """
         self._logger = logging.getLogger(__name__)
+        if not accept_risk:
+            import warnings
+
+            warnings.warn(
+                "AutoAddPolicy is insecure and disables MITM protection. "
+                "In future versions, accept_risk=True will be mandatory.",
+                UserWarning,
+                stacklevel=2,
+            )
+        self._accept_risk = accept_risk
 
     def missing_host_key(self, client: Any, hostname: str, key: Any) -> None:
         """
@@ -71,7 +87,10 @@ class AutoAddPolicy(MissingHostKeyPolicy):
                 f"{key.get_fingerprint()}"
             )
         except Exception as e:
+            # Bug #2.4 Fixed: Ensure persistence failure is raised as SSHException
             self._logger.error(f"Failed to add/save host key for {hostname}: {e}")
+            from ..exceptions import SSHException
+
             raise SSHException(
                 f"Failed to persist new host key for {hostname}: {e}"
             ) from e
