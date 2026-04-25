@@ -91,36 +91,6 @@ asyncio.run(run())
 
 ---
 
-## 📺 Demos
-
-> [!TIP]
-> **View Live Execution Results**: See the [Verified Demo Outputs](docs/demo_results.md) from the latest run.
-
-
-See SpindleX in action across various high-performance scenarios:
-
-### 🏗️ Full Cycle Automation
-**[complex_setup_demo.py](demo/complex_setup_demo.py)**: Watch SpindleX generate Ed25519 keys, deploy them via SFTP, and execute privileged `sudo` commands—all in under 6 seconds.
-
-![Full Cycle Demo](demo/gifs/complex-demo.gif)
-
----
-
-### 🚀 Performance & Multi-Tasking
-
-| **Command Execution** | **SFTP Operations** |
-|:---:|:---:|
-| ![SSH Demo](demo/gifs/basic-ssh-commands.gif) | ![SFTP Demo](demo/gifs/sftp-demo.gif) |
-| *Blazing fast command processing* | *High-throughput recursive transfers* |
-
-| **Async Concurrency** | **Benchmark vs Paramiko** |
-|:---:|:---:|
-| ![Async Demo](demo/gifs/async-demo.gif) | ![Benchmark](demo/gifs/benchmark.gif) |
-| *Native asyncio integration* | *Up to ~2.6x faster (results vary by environment)* |
-
-
----
-
 ## ⚡ Performance
 
 SpindleX is designed for high-throughput, low-latency environments. It utilizes internal read buffering (32KB chunks) and optimized packet handling to reduce system call overhead and improve protocol efficiency. Actual performance gains are environment-dependent.
@@ -138,7 +108,7 @@ In testing, SpindleX has been observed to outperform legacy libraries in connect
 > [!TIP]
 > Run the included benchmark script to compare performance in your environment:
 > ```bash
-> python demo/benchmark.py
+> python scripts/benchmark_compare.py
 > ```
 
 ---
