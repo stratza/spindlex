@@ -11,8 +11,7 @@ This cookbook provides practical solutions for real-world tasks using SpindleX. 
 ## SFTP Operations
 
 *   [**Recursive Uploads**](sftp_recipes.md#recursive-uploads)
-*   [**Large File Progress Tracking**](sftp_recipes.md#large-file-progress-tracking)
-*   [**Pattern-Based File Deletion**](sftp_recipes.md#pattern-based-file-deletion)
+*   [**Pattern-Based File Deletion**](sftp_recipes.md#pattern-based-deletion)
 
 ## Automation Tasks
 

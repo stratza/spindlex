@@ -680,6 +680,15 @@ class Channel:
                 # Notify transport to close channel
                 self._transport._close_channel(self._channel_id)
 
+    def shutdown(self, how: int) -> None:
+        """
+        Shutdown channel (for socket compatibility).
+
+        Args:
+            how: Shutdown type (ignored)
+        """
+        self.close()
+
     def __enter__(self) -> "Channel":
         return self
 

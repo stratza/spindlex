@@ -49,8 +49,8 @@ with SSHClient() as client:
         
         # List directory
         print("Files in home:")
-        for attr in sftp.listdir_attr('/home/admin'):
-            print(f"{attr.filename} - {attr.st_size} bytes")
+        for filename in sftp.listdir('/home/admin'):
+            print(filename)
 ```
 
 ## Sudo Command Execution {#sudo-execution}
@@ -68,7 +68,6 @@ def run_sudo(client, command, password):
     
     # Provide password when sudo asks
     stdin.write(f"{password}\n")
-    stdin.flush()
     
     # Read the response
     return stdout.read().decode()
@@ -124,14 +123,9 @@ with SSHClient() as bastion:
     # Open a direct channel to the internal target through the bastion
     transport = bastion.get_transport()
     dest_addr = ('internal-target.lan', 22)
-    local_addr = ('localhost', 0)
     
     # Create a direct-tcpip channel (tunnels TCP to target)
-    channel = transport.open_channel(
-        "direct-tcpip", 
-        dest_addr, 
-        local_addr
-    )
+    channel = transport.open_channel("direct-tcpip", dest_addr)
 
     # Connect to target using the channel as a socket
     with SSHClient() as target:
