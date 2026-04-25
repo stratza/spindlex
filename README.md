@@ -23,6 +23,9 @@
 
 **SpindleX** is a modern SSH protocol implementation for Python 3.8+. It is designed for high-performance automation and secure file transfers, providing a clean alternative to legacy SSH libraries.
 
+> [!WARNING]
+> **Beta software.** The 0.6.x line is stabilising the core protocol, transport, and SFTP layers. Review [meta/SECURITY.md](meta/SECURITY.md) before deploying in production-facing workflows, pin exact versions, and audit your host key policy.
+
 ### 🔥 Key Features
 
 - 🚀 **High Performance**: Optimized internal buffering (32KB chunks) for high-throughput SFTP and command execution.
