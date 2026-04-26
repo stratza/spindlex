@@ -1944,9 +1944,10 @@ class Transport:
                     ):
                         break
 
-                    # Wait for rekeying thread to process packets or finish KEX
-                    if self._stop_event.wait(0.1):
-                        return None  # type: ignore[return-value]
+                # Release _lock before waiting so the kex thread can acquire it
+                # (Event.wait does NOT release locks, causing starvation otherwise)
+                if self._stop_event.wait(0.1):
+                    return None  # type: ignore[return-value]
 
             # Inner loop exited via break — safe to read from socket now
             msg = self._read_message()
@@ -1989,9 +1990,10 @@ class Transport:
                     ):
                         break
 
-                    # Wait for rekeying thread to process packets or finish KEX
-                    if self._stop_event.wait(0.1):
-                        return None  # type: ignore[return-value]
+                # Release _lock before waiting so the kex thread can acquire it
+                # (Event.wait does NOT release locks, causing starvation otherwise)
+                if self._stop_event.wait(0.1):
+                    return None  # type: ignore[return-value]
 
             # 2. Not in queue, read from socket
             try:
