@@ -52,12 +52,12 @@ jobs:
           python-version: '3.11'
       - run: uv pip install --system bandit safety
       - run: bandit -r spindlex/ -ll
-      - run: safety check
+      - run: safety scan
 
-  # --- 2. Advanced Testing Tiers ---
+  # --- 2. Unit Tests (no Docker) ---
   unit-tests:
     name: Unit Tests (Py ${{ matrix.python-version }})
-    needs: [ruff] # Don't waste compute if code isn't even formatted
+    needs: [ruff]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -78,8 +78,9 @@ jobs:
           files: ./coverage.xml
           token: ${{ secrets.CODECOV_TOKEN }}
 
-  integration-tests:
-    name: Integration (OpenSSH Docker)
+  # --- 3. Docker-based Tests (integration + real_server share one container) ---
+  docker-tests:
+    name: Docker Tests (OpenSSH + Dropbear)
     needs: [ruff]
     runs-on: ubuntu-latest
     steps:
@@ -88,27 +89,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Run Integration Suite
+      - run: uv pip install --system -e ".[test]" pytest-docker
+      - name: Run integration + real_server suites
         run: |
-          uv pip install --system -e ".[test]" pytest-docker
-          pytest tests/integration/ -v
+          pytest tests/integration/ tests/real_server/ tests/misc/test_functional_integration.py \
+            -v -m "integration or real_server" \
+            --tb=short
 
-  real-server-tests:
-    name: Real Server Tests (OpenSSH Docker)
-    needs: [ruff]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - name: Run Real Server Test Suite
-        run: |
-          uv pip install --system -e ".[test]" pytest-docker
-          pytest tests/real_server/ -v -m "real_server"
-
-  # --- 3. Documentation & Quality ---
+  # --- 4. Documentation ---
   docs-build:
     name: Verify Docs Build
     runs-on: ubuntu-latest
@@ -123,11 +111,11 @@ jobs:
       - run: uv pip install --system ".[docs]"
       - run: mkdocs build --strict
 
-  # --- 4. Final Verification ---
+  # --- 5. Final Verification ---
   check:
     name: Quality Gate
     if: always()
-    needs: [ruff, mypy, security, unit-tests, integration-tests, real-server-tests, docs-build]
+    needs: [ruff, mypy, security, unit-tests, docker-tests, docs-build]
     runs-on: ubuntu-latest
     steps:
       - name: Result
@@ -136,7 +124,6 @@ jobs:
           if [ "${{ needs.mypy.result }}" != "success" ]; then exit 1; fi
           if [ "${{ needs.security.result }}" != "success" ]; then exit 1; fi
           if [ "${{ needs.unit-tests.result }}" != "success" ]; then exit 1; fi
-          if [ "${{ needs.integration-tests.result }}" != "success" ]; then exit 1; fi
-          if [ "${{ needs.real-server-tests.result }}" != "success" ]; then exit 1; fi
+          if [ "${{ needs.docker-tests.result }}" != "success" ]; then exit 1; fi
           if [ "${{ needs.docs-build.result }}" != "success" ]; then exit 1; fi
           echo "All checks passed!"

@@ -11,7 +11,7 @@ from spindlex.hostkeys.policy import AutoAddPolicy
 try:
     from dotenv import load_dotenv
 
-    load_dotenv()
+    load_dotenv(override=True)
 except ImportError:
     pass
 
@@ -65,7 +65,7 @@ def test_ssh_connect_password(ssh_server):
     pwd = EXTERNAL_PASS or "password123"
 
     with SSHClient() as client:
-        client.set_missing_host_key_policy(AutoAddPolicy())
+        client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
         client.connect(hostname=host, port=port, username=user, password=pwd)
         assert client.get_transport().active
         assert client.get_transport().authenticated
@@ -77,7 +77,7 @@ def test_ssh_execute_command(ssh_server):
     pwd = EXTERNAL_PASS or "password123"
 
     with SSHClient() as client:
-        client.set_missing_host_key_policy(AutoAddPolicy())
+        client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
         client.connect(host, port=port, username=user, password=pwd)
 
         stdin, stdout, stderr = client.exec_command("echo 'Hello SpindleX'")
@@ -91,7 +91,7 @@ def test_sftp_upload_download(ssh_server, tmp_path):
     pwd = EXTERNAL_PASS or "password123"
 
     with SSHClient() as client:
-        client.set_missing_host_key_policy(AutoAddPolicy())
+        client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
         client.connect(host, port=port, username=user, password=pwd)
 
         with client.open_sftp() as sftp:
@@ -124,7 +124,7 @@ def test_rekeying_end_to_end(ssh_server):
     pwd = EXTERNAL_PASS or "password123"
 
     with SSHClient() as client:
-        client.set_missing_host_key_policy(AutoAddPolicy())
+        client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
         client.connect(host, port=port, username=user, password=pwd)
 
         transport = client.get_transport()

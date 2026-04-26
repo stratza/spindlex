@@ -31,7 +31,7 @@ def test_host_key_storage_basic(temp_hosts):
 
 
 def test_auto_add_policy(temp_hosts):
-    policy = AutoAddPolicy()
+    policy = AutoAddPolicy(accept_risk=True)
     client = MagicMock()
     client._host_key_storage = HostKeyStorage(temp_hosts)
     key = RSAKey.generate(1024)
@@ -62,7 +62,7 @@ def test_warning_policy(temp_hosts):
 
 
 def test_auto_add_policy_storage_failure():
-    policy = AutoAddPolicy()
+    policy = AutoAddPolicy(accept_risk=True)
     client = MagicMock()
     storage = MagicMock()
     # Mock storage.save to raise an exception

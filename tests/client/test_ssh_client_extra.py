@@ -11,7 +11,7 @@ def test_ssh_client_default_policy():
 
 def test_ssh_client_set_policy():
     client = SSHClient()
-    client.set_missing_host_key_policy(AutoAddPolicy())
+    client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
     assert isinstance(client._host_key_policy, AutoAddPolicy)
 
 

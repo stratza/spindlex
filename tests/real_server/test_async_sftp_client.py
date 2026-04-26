@@ -10,7 +10,7 @@ pytestmark = pytest.mark.real_server
 async def test_async_sftp_ops(ssh_server, tmp_path):
     host, port, user, password = ssh_server
     async with AsyncSSHClient() as client:
-        client.set_missing_host_key_policy(AutoAddPolicy())
+        client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
         await client.connect(host, port=port, username=user, password=password)
 
         async with await client.open_sftp() as sftp:
@@ -35,7 +35,7 @@ async def test_async_sftp_ops(ssh_server, tmp_path):
 async def test_async_sftp_mkdir_rmdir(ssh_server):
     host, port, user, password = ssh_server
     async with AsyncSSHClient() as client:
-        client.set_missing_host_key_policy(AutoAddPolicy())
+        client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
         await client.connect(host, port=port, username=user, password=password)
 
         async with await client.open_sftp() as sftp:
@@ -50,7 +50,7 @@ async def test_async_sftp_mkdir_rmdir(ssh_server):
 async def test_async_sftp_file_open(ssh_server):
     host, port, user, password = ssh_server
     async with AsyncSSHClient() as client:
-        client.set_missing_host_key_policy(AutoAddPolicy())
+        client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
         await client.connect(host, port=port, username=user, password=password)
 
         async with await client.open_sftp() as sftp:

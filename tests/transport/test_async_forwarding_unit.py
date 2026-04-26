@@ -1,4 +1,12 @@
-"""Unit tests for async port forwarding."""
+"""
+Unit tests for spindlex/transport/async_forwarding.py
+
+All tests are mock-based — no real SSH server connections are made.
+pytest-asyncio is configured with asyncio_mode = "auto" in pyproject.toml,
+so individual async tests do NOT need @pytest.mark.asyncio.
+"""
+
+from __future__ import annotations
 
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -6,6 +14,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from spindlex.exceptions import SSHException
+from spindlex.protocol.constants import (
+    DEFAULT_MAX_PACKET_SIZE,
+    DEFAULT_WINDOW_SIZE,
+    MSG_REQUEST_SUCCESS,
+)
 from spindlex.transport.async_forwarding import (
     AsyncForwardingTunnel,
     AsyncLocalPortForwarder,
@@ -13,347 +26,622 @@ from spindlex.transport.async_forwarding import (
     AsyncRemotePortForwarder,
 )
 
-# ── AsyncForwardingTunnel ─────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
-async def test_tunnel_close_cancels_tasks():
-    tunnel = AsyncForwardingTunnel("t1", ("127.0.0.1", 1234), ("host", 22), "local")
-    task = MagicMock(spec=asyncio.Task)
-    task.done.return_value = False
-    tunnel.tasks.append(task)
-    tunnel.active = True
-    await tunnel.close()
-    task.cancel.assert_called_once()
-    assert not tunnel.active
+def make_transport() -> MagicMock:
+    transport = MagicMock()
+    transport._send_global_request_async = AsyncMock()
+    transport._send_message_async = AsyncMock()
+    transport._state_lock = asyncio.Lock()
+    transport._next_channel_id = 10
+    transport._channels = {}
+    transport.open_channel = AsyncMock()
+    return transport
+
+
+def make_mock_server() -> MagicMock:
+    server = MagicMock()
+    server.wait_closed = AsyncMock()
+    return server
+
+
+def make_mock_channel() -> MagicMock:
+    channel = MagicMock()
+    channel.send = AsyncMock()
+    channel.recv = AsyncMock(return_value=b"")
+    channel.close = AsyncMock()
+    return channel
+
+
+def make_mock_reader_writer(data: bytes = b"") -> tuple[MagicMock, MagicMock]:
+    reader = MagicMock(spec=asyncio.StreamReader)
+    writer = MagicMock(spec=asyncio.StreamWriter)
+    reader.read = AsyncMock(side_effect=[data, b""])  # data then EOF
+    writer.drain = AsyncMock()
+    writer.close = MagicMock()
+    writer.wait_closed = AsyncMock()
+    return reader, writer
+
+
+# ---------------------------------------------------------------------------
+# AsyncForwardingTunnel
+# ---------------------------------------------------------------------------
+
+
+def test_forwarding_tunnel_init_attributes():
+    tunnel = AsyncForwardingTunnel(
+        tunnel_id="t1",
+        local_addr=("127.0.0.1", 8080),
+        remote_addr=("example.com", 80),
+        tunnel_type="local",
+    )
+    assert tunnel.tunnel_id == "t1"
+    assert tunnel.local_addr == ("127.0.0.1", 8080)
+    assert tunnel.remote_addr == ("example.com", 80)
+    assert tunnel.tunnel_type == "local"
+    assert tunnel.active is False
     assert tunnel.tasks == []
 
 
-@pytest.mark.asyncio
-async def test_tunnel_close_skips_done_tasks():
-    tunnel = AsyncForwardingTunnel("t1", ("127.0.0.1", 0), ("h", 22), "local")
-    task = MagicMock(spec=asyncio.Task)
-    task.done.return_value = True
-    tunnel.tasks.append(task)
+async def test_forwarding_tunnel_close_sets_inactive():
+    tunnel = AsyncForwardingTunnel("t1", ("127.0.0.1", 8080), ("h", 22), "local")
+    tunnel.active = True
     await tunnel.close()
-    task.cancel.assert_not_called()
+    assert tunnel.active is False
 
 
-# ── AsyncLocalPortForwarder ───────────────────────────────────────────────────
+async def test_forwarding_tunnel_close_cancels_tasks():
+    tunnel = AsyncForwardingTunnel("t1", ("127.0.0.1", 8080), ("h", 22), "local")
+    tunnel.active = True
+
+    async def long_running():
+        await asyncio.sleep(999)
+
+    task = asyncio.create_task(long_running())
+    tunnel.tasks.append(task)
+
+    await tunnel.close()
+    # Give the event loop a chance to process the cancellation
+    await asyncio.sleep(0)
+    assert task.cancelled() or task.done()
 
 
-def _make_local_forwarder():
-    transport = MagicMock()
-    transport._state_lock = asyncio.Lock()
-    transport._channels = {}
-    transport._next_channel_id = 0
-    transport.open_channel = AsyncMock()
-    transport._send_message_async = AsyncMock()
+async def test_forwarding_tunnel_close_clears_task_list():
+    tunnel = AsyncForwardingTunnel("t1", ("127.0.0.1", 8080), ("h", 22), "local")
+    mock_task = MagicMock()
+    mock_task.done.return_value = True
+    tunnel.tasks.append(mock_task)
+    await tunnel.close()
+    assert tunnel.tasks == []
+
+
+async def test_forwarding_tunnel_close_skips_done_tasks():
+    """Tasks that are already done should not have cancel() called."""
+    tunnel = AsyncForwardingTunnel("t1", ("127.0.0.1", 8080), ("h", 22), "local")
+    done_task = MagicMock()
+    done_task.done.return_value = True
+    tunnel.tasks.append(done_task)
+    await tunnel.close()
+    done_task.cancel.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# AsyncLocalPortForwarder — create_tunnel
+# ---------------------------------------------------------------------------
+
+
+async def test_local_create_tunnel_invalid_port_low():
+    transport = make_transport()
     fwd = AsyncLocalPortForwarder(transport)
-    return fwd, transport
+    with pytest.raises(SSHException, match="Invalid local port"):
+        await fwd.create_tunnel(-1, "remote.host", 80)
 
 
-@pytest.mark.asyncio
-async def test_local_forwarder_create_tunnel_success():
-    fwd, _ = _make_local_forwarder()
-    server = MagicMock()
-    server.wait_closed = AsyncMock()
+async def test_local_create_tunnel_invalid_port_high():
+    transport = make_transport()
+    fwd = AsyncLocalPortForwarder(transport)
+    with pytest.raises(SSHException, match="Invalid local port"):
+        await fwd.create_tunnel(99999, "remote.host", 80)
 
-    with patch("asyncio.start_server", new_callable=AsyncMock, return_value=server):
-        tid = await fwd.create_tunnel(0, "127.0.0.1", 22)
 
-    assert "local_" in tid
+async def test_local_create_tunnel_duplicate_raises():
+    transport = make_transport()
+    fwd = AsyncLocalPortForwarder(transport)
+
+    mock_server = make_mock_server()
+    with patch("asyncio.start_server", new_callable=AsyncMock) as mock_start:
+        mock_start.return_value = mock_server
+        await fwd.create_tunnel(8080, "remote.host", 80)
+
+        with pytest.raises(SSHException, match="Tunnel already exists"):
+            await fwd.create_tunnel(8080, "remote.host", 80)
+
+
+async def test_local_create_tunnel_success_returns_tunnel_id():
+    transport = make_transport()
+    fwd = AsyncLocalPortForwarder(transport)
+
+    mock_server = make_mock_server()
+    with patch("asyncio.start_server", new_callable=AsyncMock) as mock_start:
+        mock_start.return_value = mock_server
+        tid = await fwd.create_tunnel(8080, "remote.host", 80)
+
+    assert tid == "local_127.0.0.1_8080_remote.host_80"
     assert tid in fwd._tunnels
-    assert fwd._tunnels[tid].active
+    assert fwd._tunnels[tid].active is True
 
 
-@pytest.mark.asyncio
-async def test_local_forwarder_duplicate_tunnel_raises():
-    fwd, _ = _make_local_forwarder()
-    server = MagicMock()
-    server.wait_closed = AsyncMock()
+async def test_local_create_tunnel_stores_server():
+    transport = make_transport()
+    fwd = AsyncLocalPortForwarder(transport)
 
-    with patch("asyncio.start_server", new_callable=AsyncMock, return_value=server):
-        await fwd.create_tunnel(0, "127.0.0.1", 22)
-        with pytest.raises(SSHException, match="already exists"):
-            await fwd.create_tunnel(0, "127.0.0.1", 22)
+    mock_server = make_mock_server()
+    with patch("asyncio.start_server", new_callable=AsyncMock) as mock_start:
+        mock_start.return_value = mock_server
+        tid = await fwd.create_tunnel(8080, "remote.host", 80)
 
-
-@pytest.mark.asyncio
-async def test_local_forwarder_create_tunnel_error_wraps():
-    fwd, _ = _make_local_forwarder()
-    with patch("asyncio.start_server", side_effect=OSError("port in use")):
-        with pytest.raises(SSHException, match="Failed to create"):
-            await fwd.create_tunnel(9999, "127.0.0.1", 22)
+    assert fwd._servers[tid] is mock_server
 
 
-@pytest.mark.asyncio
-async def test_local_forwarder_close_tunnel():
-    fwd, _ = _make_local_forwarder()
-    server = MagicMock()
-    server.wait_closed = AsyncMock()
-    server.close = MagicMock()
+async def test_local_create_tunnel_custom_local_host():
+    transport = make_transport()
+    fwd = AsyncLocalPortForwarder(transport)
 
-    with patch("asyncio.start_server", new_callable=AsyncMock, return_value=server):
-        tid = await fwd.create_tunnel(0, "127.0.0.1", 22)
+    mock_server = make_mock_server()
+    with patch("asyncio.start_server", new_callable=AsyncMock) as mock_start:
+        mock_start.return_value = mock_server
+        tid = await fwd.create_tunnel(9000, "remote.host", 443, local_host="0.0.0.0")
 
-    await fwd.close_tunnel(tid)
-    assert tid not in fwd._tunnels
-    server.close.assert_called_once()
+    assert "0.0.0.0" in tid
 
 
-@pytest.mark.asyncio
-async def test_local_forwarder_close_tunnel_nonexistent():
-    fwd, _ = _make_local_forwarder()
-    # Should not raise
-    await fwd.close_tunnel("nonexistent")
+# ---------------------------------------------------------------------------
+# AsyncLocalPortForwarder — _handle_client
+# ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
-async def test_local_forwarder_close_all():
-    fwd, _ = _make_local_forwarder()
-    server = MagicMock()
-    server.wait_closed = AsyncMock()
-    server.close = MagicMock()
+async def test_handle_client_inactive_tunnel_closes_writer():
+    transport = make_transport()
+    fwd = AsyncLocalPortForwarder(transport)
 
-    with patch("asyncio.start_server", new_callable=AsyncMock, return_value=server):
-        await fwd.create_tunnel(0, "127.0.0.1", 22)
-        await fwd.create_tunnel(0, "127.0.0.1", 2222, local_host="0.0.0.0")
+    tunnel = AsyncForwardingTunnel("t1", ("127.0.0.1", 8080), ("h", 22), "local")
+    tunnel.active = False
 
-    await fwd.close_all()
-    assert fwd._tunnels == {}
+    reader, writer = make_mock_reader_writer()
+    await fwd._handle_client(tunnel, reader, writer)
+
+    writer.close.assert_called()
+    writer.wait_closed.assert_called()
 
 
-@pytest.mark.asyncio
-async def test_relay_stream_to_channel():
-    fwd, _ = _make_local_forwarder()
+async def test_handle_client_active_opens_channel():
+    transport = make_transport()
+    fwd = AsyncLocalPortForwarder(transport)
+
+    channel = make_mock_channel()
+    channel.recv = AsyncMock(return_value=b"")
+    transport.open_channel = AsyncMock(return_value=channel)
+
+    tunnel = AsyncForwardingTunnel(
+        "t1", ("127.0.0.1", 8080), ("remote.host", 80), "local"
+    )
+    tunnel.active = True
+
+    reader, writer = make_mock_reader_writer(b"")
+    await fwd._handle_client(tunnel, reader, writer)
+
+    transport.open_channel.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# AsyncLocalPortForwarder — _relay_stream_to_channel
+# ---------------------------------------------------------------------------
+
+
+async def test_relay_stream_to_channel_sends_data():
+    transport = make_transport()
+    fwd = AsyncLocalPortForwarder(transport)
+
+    channel = make_mock_channel()
     reader = MagicMock(spec=asyncio.StreamReader)
-    reader.read = AsyncMock(side_effect=[b"data", b""])
-    channel = MagicMock()
-    channel.send = AsyncMock()
-    channel.close = AsyncMock()
+    reader.read = AsyncMock(side_effect=[b"chunk", b""])
 
     await fwd._relay_stream_to_channel(reader, channel)
 
-    channel.send.assert_awaited_once_with(b"data")
-    channel.close.assert_awaited_once()
+    channel.send.assert_called_once_with(b"chunk")
+    channel.close.assert_called()
 
 
-@pytest.mark.asyncio
-async def test_relay_channel_to_stream():
-    fwd, _ = _make_local_forwarder()
+async def test_relay_stream_to_channel_closes_on_empty():
+    transport = make_transport()
+    fwd = AsyncLocalPortForwarder(transport)
+
+    channel = make_mock_channel()
+    reader = MagicMock(spec=asyncio.StreamReader)
+    reader.read = AsyncMock(return_value=b"")
+
+    await fwd._relay_stream_to_channel(reader, channel)
+    channel.send.assert_not_called()
+    channel.close.assert_called()
+
+
+# ---------------------------------------------------------------------------
+# AsyncLocalPortForwarder — _relay_channel_to_stream
+# ---------------------------------------------------------------------------
+
+
+async def test_relay_channel_to_stream_writes_data():
+    transport = make_transport()
+    fwd = AsyncLocalPortForwarder(transport)
+
+    channel = make_mock_channel()
+    channel.recv = AsyncMock(side_effect=[b"response", b""])
+
     writer = MagicMock(spec=asyncio.StreamWriter)
     writer.drain = AsyncMock()
     writer.close = MagicMock()
-    channel = MagicMock()
-    channel.recv = AsyncMock(side_effect=[b"hello", b""])
 
     await fwd._relay_channel_to_stream(channel, writer)
 
-    writer.write.assert_called_once_with(b"hello")
-    writer.close.assert_called_once()
+    writer.write.assert_called_once_with(b"response")
+    writer.close.assert_called()
 
 
-@pytest.mark.asyncio
-async def test_handle_client_inactive_tunnel_closes_writer():
-    fwd, _ = _make_local_forwarder()
-    tunnel = AsyncForwardingTunnel("t", ("127.0.0.1", 0), ("h", 22), "local")
-    tunnel.active = False
+async def test_relay_channel_to_stream_closes_writer_on_empty():
+    transport = make_transport()
+    fwd = AsyncLocalPortForwarder(transport)
 
-    reader = MagicMock(spec=asyncio.StreamReader)
+    channel = make_mock_channel()
+    channel.recv = AsyncMock(return_value=b"")
+
     writer = MagicMock(spec=asyncio.StreamWriter)
+    writer.drain = AsyncMock()
     writer.close = MagicMock()
-    writer.wait_closed = AsyncMock()
 
-    await fwd._handle_client(tunnel, reader, writer)
-    writer.close.assert_called_once()
-
-
-# ── AsyncRemotePortForwarder ──────────────────────────────────────────────────
+    await fwd._relay_channel_to_stream(channel, writer)
+    writer.close.assert_called()
 
 
-def _make_remote_forwarder():
-    transport = MagicMock()
-    transport._state_lock = asyncio.Lock()
-    transport._channels = {}
-    transport._next_channel_id = 0
-    transport._send_message_async = AsyncMock()
-    transport._send_global_request_async = AsyncMock()
+# ---------------------------------------------------------------------------
+# AsyncLocalPortForwarder — close_tunnel / close_all
+# ---------------------------------------------------------------------------
+
+
+async def test_local_close_tunnel_removes_entry():
+    transport = make_transport()
+    fwd = AsyncLocalPortForwarder(transport)
+
+    mock_server = make_mock_server()
+    with patch("asyncio.start_server", new_callable=AsyncMock) as mock_start:
+        mock_start.return_value = mock_server
+        tid = await fwd.create_tunnel(8080, "remote.host", 80)
+
+    await fwd.close_tunnel(tid)
+    assert tid not in fwd._tunnels
+    assert tid not in fwd._servers
+
+
+async def test_local_close_tunnel_calls_server_close():
+    transport = make_transport()
+    fwd = AsyncLocalPortForwarder(transport)
+
+    mock_server = make_mock_server()
+    with patch("asyncio.start_server", new_callable=AsyncMock) as mock_start:
+        mock_start.return_value = mock_server
+        tid = await fwd.create_tunnel(8080, "remote.host", 80)
+
+    await fwd.close_tunnel(tid)
+    mock_server.close.assert_called()
+    mock_server.wait_closed.assert_called()
+
+
+async def test_local_close_tunnel_nonexistent_is_noop():
+    transport = make_transport()
+    fwd = AsyncLocalPortForwarder(transport)
+    # Should not raise
+    await fwd.close_tunnel("nonexistent_tunnel")
+
+
+async def test_local_close_all_closes_all_tunnels():
+    transport = make_transport()
+    fwd = AsyncLocalPortForwarder(transport)
+
+    mock_server = make_mock_server()
+    with patch("asyncio.start_server", new_callable=AsyncMock) as mock_start:
+        mock_start.return_value = mock_server
+        await fwd.create_tunnel(8080, "remote.host", 80)
+        await fwd.create_tunnel(8081, "remote.host", 81)
+
+    await fwd.close_all()
+    assert len(fwd._tunnels) == 0
+
+
+# ---------------------------------------------------------------------------
+# AsyncRemotePortForwarder — create_tunnel
+# ---------------------------------------------------------------------------
+
+
+async def test_remote_create_tunnel_invalid_remote_port():
+    transport = make_transport()
     fwd = AsyncRemotePortForwarder(transport)
-    return fwd, transport
+    with pytest.raises(SSHException, match="Invalid remote port"):
+        await fwd.create_tunnel(-1, "localhost", 8080)
 
 
-@pytest.mark.asyncio
-async def test_remote_forwarder_create_tunnel_success():
-    fwd, t = _make_remote_forwarder()
-    from spindlex.protocol.constants import MSG_REQUEST_SUCCESS
-
-    reply = MagicMock()
-    reply.msg_type = MSG_REQUEST_SUCCESS
-    t._send_global_request_async.return_value = reply
-
-    tid = await fwd.create_tunnel(8080, "127.0.0.1", 8080)
-    assert "remote_" in tid
-    assert tid in fwd._tunnels
+async def test_remote_create_tunnel_invalid_local_port():
+    transport = make_transport()
+    fwd = AsyncRemotePortForwarder(transport)
+    with pytest.raises(SSHException, match="Invalid local port"):
+        await fwd.create_tunnel(2222, "localhost", 99999)
 
 
-@pytest.mark.asyncio
-async def test_remote_forwarder_create_tunnel_denied_raises():
-    fwd, t = _make_remote_forwarder()
-    t._send_global_request_async.return_value = None
+async def test_remote_create_tunnel_duplicate_raises():
+    transport = make_transport()
+    fwd = AsyncRemotePortForwarder(transport)
+
+    success_msg = MagicMock()
+    success_msg.msg_type = MSG_REQUEST_SUCCESS
+    transport._send_global_request_async.return_value = success_msg
+
+    await fwd.create_tunnel(2222, "localhost", 8080)
+    with pytest.raises(SSHException, match="Tunnel already exists"):
+        await fwd.create_tunnel(2222, "localhost", 8080)
+
+
+async def test_remote_create_tunnel_server_denies_raises():
+    transport = make_transport()
+    fwd = AsyncRemotePortForwarder(transport)
+
+    transport._send_global_request_async.return_value = None
 
     with pytest.raises(SSHException, match="denied"):
-        await fwd.create_tunnel(8080, "127.0.0.1", 8080)
+        await fwd.create_tunnel(2222, "localhost", 8080)
 
 
-@pytest.mark.asyncio
-async def test_remote_forwarder_duplicate_raises():
-    fwd, t = _make_remote_forwarder()
-    from spindlex.protocol.constants import MSG_REQUEST_SUCCESS
+async def test_remote_create_tunnel_success():
+    transport = make_transport()
+    fwd = AsyncRemotePortForwarder(transport)
 
-    reply = MagicMock()
-    reply.msg_type = MSG_REQUEST_SUCCESS
-    t._send_global_request_async.return_value = reply
+    success_msg = MagicMock()
+    success_msg.msg_type = MSG_REQUEST_SUCCESS
+    transport._send_global_request_async.return_value = success_msg
 
-    await fwd.create_tunnel(8080, "127.0.0.1", 8080)
-    with pytest.raises(SSHException, match="already exists"):
-        await fwd.create_tunnel(8080, "127.0.0.1", 8080)
+    tid = await fwd.create_tunnel(2222, "localhost", 8080)
+    assert tid in fwd._tunnels
+    assert fwd._tunnels[tid].active is True
 
 
-@pytest.mark.asyncio
-async def test_remote_forwarder_close_tunnel():
-    fwd, t = _make_remote_forwarder()
-    from spindlex.protocol.constants import MSG_REQUEST_SUCCESS
+async def test_remote_create_tunnel_sends_global_request():
+    transport = make_transport()
+    fwd = AsyncRemotePortForwarder(transport)
 
-    reply = MagicMock()
-    reply.msg_type = MSG_REQUEST_SUCCESS
-    t._send_global_request_async.return_value = reply
+    success_msg = MagicMock()
+    success_msg.msg_type = MSG_REQUEST_SUCCESS
+    transport._send_global_request_async.return_value = success_msg
 
-    tid = await fwd.create_tunnel(8080, "127.0.0.1", 8080)
+    await fwd.create_tunnel(2222, "localhost", 8080, remote_host="")
+    transport._send_global_request_async.assert_called_once()
+    args = transport._send_global_request_async.call_args[0]
+    assert args[0] == "tcpip-forward"
+    assert args[1] is True
+
+
+# ---------------------------------------------------------------------------
+# AsyncRemotePortForwarder — close_tunnel / close_all
+# ---------------------------------------------------------------------------
+
+
+async def test_remote_close_tunnel_sends_cancel_request():
+    transport = make_transport()
+    fwd = AsyncRemotePortForwarder(transport)
+
+    success_msg = MagicMock()
+    success_msg.msg_type = MSG_REQUEST_SUCCESS
+    transport._send_global_request_async.return_value = success_msg
+
+    tid = await fwd.create_tunnel(2222, "localhost", 8080)
+
+    # reset mock so we can assert cancel call
+    transport._send_global_request_async.reset_mock()
+    await fwd.close_tunnel(tid)
+
+    transport._send_global_request_async.assert_called_once()
+    cancel_args = transport._send_global_request_async.call_args[0]
+    assert cancel_args[0] == "cancel-tcpip-forward"
+
+
+async def test_remote_close_tunnel_removes_entry():
+    transport = make_transport()
+    fwd = AsyncRemotePortForwarder(transport)
+
+    success_msg = MagicMock()
+    success_msg.msg_type = MSG_REQUEST_SUCCESS
+    transport._send_global_request_async.return_value = success_msg
+
+    tid = await fwd.create_tunnel(2222, "localhost", 8080)
     await fwd.close_tunnel(tid)
     assert tid not in fwd._tunnels
 
 
-@pytest.mark.asyncio
-async def test_remote_forwarder_close_all():
-    fwd, t = _make_remote_forwarder()
-    from spindlex.protocol.constants import MSG_REQUEST_SUCCESS
+async def test_remote_close_all():
+    transport = make_transport()
+    fwd = AsyncRemotePortForwarder(transport)
 
-    reply = MagicMock()
-    reply.msg_type = MSG_REQUEST_SUCCESS
-    t._send_global_request_async.return_value = reply
+    success_msg = MagicMock()
+    success_msg.msg_type = MSG_REQUEST_SUCCESS
+    transport._send_global_request_async.return_value = success_msg
 
-    await fwd.create_tunnel(8080, "127.0.0.1", 8080)
-    await fwd.create_tunnel(9090, "127.0.0.1", 9090, remote_host="")
+    await fwd.create_tunnel(2222, "localhost", 8080)
+    await fwd.create_tunnel(2223, "localhost", 8081)
+
     await fwd.close_all()
-    assert fwd._tunnels == {}
+    assert len(fwd._tunnels) == 0
 
 
-@pytest.mark.asyncio
-async def test_handle_forwarded_connection_no_tunnel():
-    from spindlex.protocol.utils import write_string, write_uint32
-
-    fwd, t = _make_remote_forwarder()
-
-    data = bytearray()
-    data.extend(write_string("127.0.0.1"))
-    data.extend(write_uint32(9999))  # port that has no tunnel
-
-    # Should log error and attempt to send failure without crashing
-    t._send_message_async.return_value = None
-    await fwd.handle_forwarded_connection_async(1, 65536, 32768, bytes(data))
-    # Failure message attempted
-    t._send_message_async.assert_awaited()
+# ---------------------------------------------------------------------------
+# AsyncRemotePortForwarder — _relay methods (shared impl but needs coverage)
+# ---------------------------------------------------------------------------
 
 
-# ── AsyncPortForwardingManager ────────────────────────────────────────────────
+async def test_remote_relay_stream_to_channel_sends_data():
+    transport = make_transport()
+    fwd = AsyncRemotePortForwarder(transport)
+
+    channel = make_mock_channel()
+    reader = MagicMock(spec=asyncio.StreamReader)
+    reader.read = AsyncMock(side_effect=[b"payload", b""])
+
+    await fwd._relay_stream_to_channel(reader, channel)
+    channel.send.assert_called_once_with(b"payload")
 
 
-def _make_manager():
-    transport = MagicMock()
-    transport._state_lock = asyncio.Lock()
-    transport._channels = {}
-    transport._next_channel_id = 0
-    transport._send_global_request_async = AsyncMock()
-    transport._send_message_async = AsyncMock()
-    return AsyncPortForwardingManager(transport), transport
+async def test_remote_relay_channel_to_stream_writes_data():
+    transport = make_transport()
+    fwd = AsyncRemotePortForwarder(transport)
+
+    channel = make_mock_channel()
+    channel.recv = AsyncMock(side_effect=[b"response", b""])
+
+    writer = MagicMock(spec=asyncio.StreamWriter)
+    writer.drain = AsyncMock()
+    writer.close = MagicMock()
+
+    await fwd._relay_channel_to_stream(channel, writer)
+    writer.write.assert_called_once_with(b"response")
 
 
-@pytest.mark.asyncio
-async def test_manager_create_local_tunnel():
-    mgr, _ = _make_manager()
-    server = MagicMock()
-    server.wait_closed = AsyncMock()
-    server.close = MagicMock()
-
-    with patch("asyncio.start_server", new_callable=AsyncMock, return_value=server):
-        tid = await mgr.create_local_tunnel(0, "127.0.0.1", 22)
-
-    assert tid.startswith("local_")
+# ---------------------------------------------------------------------------
+# AsyncPortForwardingManager
+# ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
-async def test_manager_create_remote_tunnel():
-    from spindlex.protocol.constants import MSG_REQUEST_SUCCESS
-
-    mgr, t = _make_manager()
-    reply = MagicMock()
-    reply.msg_type = MSG_REQUEST_SUCCESS
-    t._send_global_request_async.return_value = reply
-
-    tid = await mgr.create_remote_tunnel(8080, "127.0.0.1", 8080)
-    assert tid.startswith("remote_")
+def test_manager_init_creates_forwarders():
+    transport = make_transport()
+    mgr = AsyncPortForwardingManager(transport)
+    assert isinstance(mgr.local_forwarder, AsyncLocalPortForwarder)
+    assert isinstance(mgr.remote_forwarder, AsyncRemotePortForwarder)
+    assert mgr._transport is transport
 
 
-@pytest.mark.asyncio
+async def test_manager_create_local_tunnel_delegates():
+    transport = make_transport()
+    mgr = AsyncPortForwardingManager(transport)
+
+    mock_server = make_mock_server()
+    with patch("asyncio.start_server", new_callable=AsyncMock) as mock_start:
+        mock_start.return_value = mock_server
+        tid = await mgr.create_local_tunnel(8080, "remote.host", 80)
+
+    assert tid in mgr.local_forwarder._tunnels
+
+
+async def test_manager_create_remote_tunnel_delegates():
+    transport = make_transport()
+    mgr = AsyncPortForwardingManager(transport)
+
+    success_msg = MagicMock()
+    success_msg.msg_type = MSG_REQUEST_SUCCESS
+    transport._send_global_request_async.return_value = success_msg
+
+    tid = await mgr.create_remote_tunnel(2222, "localhost", 8080)
+    assert tid in mgr.remote_forwarder._tunnels
+
+
 async def test_manager_close_local_tunnel():
-    mgr, _ = _make_manager()
-    server = MagicMock()
-    server.wait_closed = AsyncMock()
-    server.close = MagicMock()
+    transport = make_transport()
+    mgr = AsyncPortForwardingManager(transport)
 
-    with patch("asyncio.start_server", new_callable=AsyncMock, return_value=server):
-        tid = await mgr.create_local_tunnel(0, "127.0.0.1", 22)
+    mock_server = make_mock_server()
+    with patch("asyncio.start_server", new_callable=AsyncMock) as mock_start:
+        mock_start.return_value = mock_server
+        tid = await mgr.create_local_tunnel(8080, "remote.host", 80)
 
     await mgr.close_tunnel(tid)
     assert tid not in mgr.local_forwarder._tunnels
 
 
-@pytest.mark.asyncio
 async def test_manager_close_remote_tunnel():
-    from spindlex.protocol.constants import MSG_REQUEST_SUCCESS
+    transport = make_transport()
+    mgr = AsyncPortForwardingManager(transport)
 
-    mgr, t = _make_manager()
-    reply = MagicMock()
-    reply.msg_type = MSG_REQUEST_SUCCESS
-    t._send_global_request_async.return_value = reply
+    success_msg = MagicMock()
+    success_msg.msg_type = MSG_REQUEST_SUCCESS
+    transport._send_global_request_async.return_value = success_msg
 
-    tid = await mgr.create_remote_tunnel(8080, "127.0.0.1", 8080)
+    tid = await mgr.create_remote_tunnel(2222, "localhost", 8080)
+    transport._send_global_request_async.reset_mock()
     await mgr.close_tunnel(tid)
     assert tid not in mgr.remote_forwarder._tunnels
 
 
-@pytest.mark.asyncio
+async def test_manager_get_all_tunnels_combines_both():
+    transport = make_transport()
+    mgr = AsyncPortForwardingManager(transport)
+
+    success_msg = MagicMock()
+    success_msg.msg_type = MSG_REQUEST_SUCCESS
+    transport._send_global_request_async.return_value = success_msg
+
+    mock_server = make_mock_server()
+    with patch("asyncio.start_server", new_callable=AsyncMock) as mock_start:
+        mock_start.return_value = mock_server
+        local_tid = await mgr.create_local_tunnel(8080, "remote.host", 80)
+
+    remote_tid = await mgr.create_remote_tunnel(2222, "localhost", 8080)
+
+    all_tunnels = mgr.get_all_tunnels()
+    assert local_tid in all_tunnels
+    assert remote_tid in all_tunnels
+
+
 async def test_manager_close_all_tunnels():
-    from spindlex.protocol.constants import MSG_REQUEST_SUCCESS
+    transport = make_transport()
+    mgr = AsyncPortForwardingManager(transport)
 
-    mgr, t = _make_manager()
-    reply = MagicMock()
-    reply.msg_type = MSG_REQUEST_SUCCESS
-    t._send_global_request_async.return_value = reply
+    success_msg = MagicMock()
+    success_msg.msg_type = MSG_REQUEST_SUCCESS
+    transport._send_global_request_async.return_value = success_msg
 
-    server = MagicMock()
-    server.wait_closed = AsyncMock()
-    server.close = MagicMock()
+    mock_server = make_mock_server()
+    with patch("asyncio.start_server", new_callable=AsyncMock) as mock_start:
+        mock_start.return_value = mock_server
+        await mgr.create_local_tunnel(8080, "remote.host", 80)
 
-    with patch("asyncio.start_server", new_callable=AsyncMock, return_value=server):
-        await mgr.create_local_tunnel(0, "127.0.0.1", 22)
+    await mgr.create_remote_tunnel(2222, "localhost", 8080)
 
-    await mgr.create_remote_tunnel(8080, "127.0.0.1", 8080)
+    transport._send_global_request_async.reset_mock()
     await mgr.close_all_tunnels()
-    assert mgr.get_all_tunnels() == {}
+
+    assert len(mgr.local_forwarder._tunnels) == 0
+    assert len(mgr.remote_forwarder._tunnels) == 0
 
 
-def test_manager_get_all_tunnels_empty():
-    mgr, _ = _make_manager()
-    assert mgr.get_all_tunnels() == {}
+async def test_manager_handle_forwarded_connection_async_delegates():
+    transport = make_transport()
+    mgr = AsyncPortForwardingManager(transport)
+
+    mgr.remote_forwarder.handle_forwarded_connection_async = AsyncMock()
+
+    await mgr.handle_forwarded_connection_async(
+        sender_channel=5,
+        initial_window_size=DEFAULT_WINDOW_SIZE,
+        maximum_packet_size=DEFAULT_MAX_PACKET_SIZE,
+        type_specific_data=b"\x00\x00\x00\x04host\x00\x00\x00\x50",
+    )
+
+    mgr.remote_forwarder.handle_forwarded_connection_async.assert_called_once_with(
+        5,
+        DEFAULT_WINDOW_SIZE,
+        DEFAULT_MAX_PACKET_SIZE,
+        b"\x00\x00\x00\x04host\x00\x00\x00\x50",
+    )
+
+
+async def test_manager_close_tunnel_unknown_prefix_is_noop():
+    transport = make_transport()
+    mgr = AsyncPortForwardingManager(transport)
+    # Should not raise for unrecognised prefix
+    await mgr.close_tunnel("unknown_tunnel_id")

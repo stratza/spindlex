@@ -225,6 +225,7 @@ class Transport:
 
         self._logger = logging.getLogger(__name__)
         self._strict_kex = False
+        self._stop_event = threading.Event()
 
     def get_timeout(self) -> Optional[float]:
         """
@@ -1460,6 +1461,7 @@ class Transport:
         # Channel.close() and deadlock the two threads.
         with self._lock:
             self._active = False
+            self._stop_event.set()
             kex_thread = getattr(self, "_kex_thread", None)
             channels_snapshot = list(self._channels.values())
             sock = self._socket
@@ -1485,7 +1487,11 @@ class Transport:
 
         # Join kex thread outside lock to avoid deadlock.
         # Socket closure above ensures the thread unblocks promptly.
-        if kex_thread is not None and kex_thread.is_alive():
+        if (
+            kex_thread is not None
+            and kex_thread.is_alive()
+            and kex_thread != threading.current_thread()
+        ):
             kex_thread.join(timeout=5.0)
 
     def _do_handshake(self) -> None:
@@ -1807,6 +1813,11 @@ class Transport:
                 # only one thread reads a complete packet at a time.
                 with self._read_lock:
                     packet = self._recv_packet()
+                    if not packet:
+                        if not self._active:
+                            return None
+                        raise TransportException("Empty packet received")
+
                     payload = extract_message_from_packet(packet)
 
                     with self._lock:
@@ -1934,7 +1945,8 @@ class Transport:
                         break
 
                     # Wait for rekeying thread to process packets or finish KEX
-                    self._kex_condition.wait(0.1)
+                    if self._stop_event.wait(0.1):
+                        return None  # type: ignore[return-value]
 
             # Inner loop exited via break — safe to read from socket now
             msg = self._read_message()
@@ -1978,10 +1990,17 @@ class Transport:
                         break
 
                     # Wait for rekeying thread to process packets or finish KEX
-                    self._kex_condition.wait(0.1)
+                    if self._stop_event.wait(0.1):
+                        return None  # type: ignore[return-value]
 
             # 2. Not in queue, read from socket
-            read_msg = self._read_message()
+            try:
+                read_msg = self._read_message()
+            except TransportException:
+                if not self._active:
+                    return None  # type: ignore[return-value]
+                raise
+
             if read_msg is None:
                 continue
 
@@ -2214,6 +2233,11 @@ class Transport:
         if self._decryptor_instance:
             # AES-CTR: length is encrypted
             encrypted_length = self._recv_bytes(PACKET_LENGTH_SIZE)
+            if len(encrypted_length) < PACKET_LENGTH_SIZE:
+                if not self._active:
+                    return b""
+                raise TransportException("Short read while receiving packet length")
+
             length_data = self._decryptor_instance.update(encrypted_length)
             packet_length = struct.unpack(">I", length_data)[0]
 
@@ -2389,9 +2413,13 @@ class Transport:
                 except socket.timeout:
                     raise TransportException("Timeout receiving data")
                 except OSError as e:
+                    if not self._active:
+                        return b""
                     raise TransportException(f"Socket error: {e}") from e
 
                 if not chunk:
+                    if not self._active or self._stop_event.is_set():
+                        return b""
                     self._logger.debug("Socket closed while receiving")
                     raise TransportException("Connection closed unexpectedly")
 

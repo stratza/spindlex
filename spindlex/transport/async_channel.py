@@ -140,15 +140,9 @@ class AsyncChannel(Channel):
         Raises:
             ChannelException: If receive fails
         """
-        if self.closed and not self._recv_buffer:
-            raise ChannelException("Channel is closed")
-
         try:
             # Wait for data or channel close
             while True:
-                if not self._recv_buffer and self.eof_received:
-                    return b""
-
                 if self._recv_buffer:
                     # Return available data
                     if nbytes <= 0:
@@ -163,6 +157,12 @@ class AsyncChannel(Channel):
                         await self._adjust_window_async(len(data))
 
                     return bytes(data)
+
+                if self.eof_received:
+                    return b""
+
+                if self.closed:
+                    raise ChannelException("Channel is closed")
 
                 # Wait for more data by pumping the transport
                 await self._transport._pump_async()
@@ -475,9 +475,30 @@ class AsyncChannelFile:
         if self._closed:
             raise ValueError("I/O operation on closed file")
 
-        if self._is_stderr:
-            return await self._channel.recv_stderr(size)
-        return await self._channel.recv(size)
+        if size == 0:
+            return b""
+
+        res = b""
+        while True:
+            # How many bytes to request in this iteration
+            if size < 0:
+                chunk_size = -1
+            else:
+                chunk_size = size - len(res)
+                if chunk_size == 0:
+                    break
+
+            if self._is_stderr:
+                chunk = await self._channel.recv_stderr(chunk_size)
+            else:
+                chunk = await self._channel.recv(chunk_size)
+
+            if not chunk:
+                break
+
+            res += chunk
+
+        return res
 
     def get_exit_status(self) -> int:
         """

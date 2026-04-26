@@ -11,7 +11,7 @@ async def test_async_remote_port_forward(ssh_server):
     # This might require GatewayPorts yes on the server, but let's try
     host, port, user, password = ssh_server
     async with AsyncSSHClient() as client:
-        client.set_missing_host_key_policy(AutoAddPolicy())
+        client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
         await client.connect(host, port=port, username=user, password=password)
 
         # Forward server's port 33333 back to local port 22222 (which isn't listening but that's fine for testing the request)

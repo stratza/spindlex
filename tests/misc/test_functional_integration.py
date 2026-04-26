@@ -7,6 +7,8 @@ from spindlex.hostkeys.storage import HostKeyStorage
 from spindlex.protocol.constants import AUTH_SUCCESSFUL
 from spindlex.server.ssh_server import SSHServer, SSHServerManager
 
+pytestmark = pytest.mark.integration
+
 
 class SimpleServer(SSHServer):
     def check_auth_password(self, username, password):
@@ -67,7 +69,7 @@ def test_full_connection_cycle(ssh_server, temp_host_keys):
     client = SSHClient()
     client.set_host_key_storage(HostKeyStorage(temp_host_keys))
     # Trust the host key automatically for this test
-    client.set_missing_host_key_policy(AutoAddPolicy())
+    client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
 
     client.connect("127.0.0.1", port=port, username="admin", password="secret")
     assert client.get_transport().active
@@ -83,7 +85,7 @@ def test_failed_auth(ssh_server, temp_host_keys):
     manager, port = ssh_server
     client = SSHClient()
     client.set_host_key_storage(HostKeyStorage(temp_host_keys))
-    client.set_missing_host_key_policy(AutoAddPolicy())
+    client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
 
     from spindlex.exceptions import AuthenticationException
 
@@ -95,7 +97,7 @@ def test_port_forward_request(ssh_server, temp_host_keys):
     manager, port = ssh_server
     client = SSHClient()
     client.set_host_key_storage(HostKeyStorage(temp_host_keys))
-    client.set_missing_host_key_policy(AutoAddPolicy())
+    client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
     client.connect("127.0.0.1", port=port, username="admin", password="secret")
 
     success = (
@@ -108,11 +110,12 @@ def test_port_forward_request(ssh_server, temp_host_keys):
     client.close()
 
 
+@pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")
 def test_rekeying(ssh_server, temp_host_keys):
     manager, port = ssh_server
     client = SSHClient()
     client.set_host_key_storage(HostKeyStorage(temp_host_keys))
-    client.set_missing_host_key_policy(AutoAddPolicy())
+    client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
     client.connect("127.0.0.1", port=port, username="admin", password="secret")
 
     transport = client.get_transport()

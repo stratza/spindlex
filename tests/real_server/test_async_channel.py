@@ -11,7 +11,7 @@ pytestmark = pytest.mark.real_server
 async def real_async_channel(ssh_server):
     host, port, user, password = ssh_server
     async with AsyncSSHClient() as client:
-        client.set_missing_host_key_policy(AutoAddPolicy())
+        client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
         await client.connect(host, port=port, username=user, password=password)
         chan = await client._transport.open_channel("session")
         yield chan
@@ -52,7 +52,7 @@ async def test_async_channel_exec_command(real_async_channel):
 async def test_async_channel_stderr(ssh_server):
     host, port, user, password = ssh_server
     async with AsyncSSHClient() as client:
-        client.set_missing_host_key_policy(AutoAddPolicy())
+        client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
         await client.connect(host, port=port, username=user, password=password)
         chan = await client._transport.open_channel("session")
         await chan.exec_command("echo 'err' >&2")

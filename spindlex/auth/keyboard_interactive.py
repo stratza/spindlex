@@ -4,6 +4,7 @@ Keyboard-Interactive Authentication Implementation
 Implements SSH keyboard-interactive authentication method according to RFC 4256.
 """
 
+import asyncio
 from typing import Any, Callable
 
 from ..exceptions import AuthenticationException
@@ -156,9 +157,9 @@ class AsyncKeyboardInteractiveAuth(KeyboardInteractiveAuth):
                 info_req = UserAuthInfoRequestMessage._unpack_data(msg._data)
 
                 # Call user handler (might be async or sync)
-                import asyncio
+                import inspect
 
-                if asyncio.iscoroutinefunction(handler):
+                if inspect.iscoroutinefunction(handler):
                     responses = await handler(
                         info_req.name, info_req.instruction, info_req.prompts
                     )

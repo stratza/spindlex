@@ -1,12 +1,13 @@
 import os
 import socket
+import time
 
 import pytest
 
 try:
     from dotenv import load_dotenv
 
-    load_dotenv()
+    load_dotenv(override=True)
 except ImportError:
     pass
 
@@ -38,6 +39,12 @@ def pytest_configure(config):
 # ---------------------------------------------------------------------------
 
 
+def _get_ssh_server_params():
+    if _EXTERNAL_SERVER_AVAILABLE:
+        return ["openssh"]
+    return ["openssh", "dropbear"]
+
+
 @pytest.fixture(scope="session")
 def docker_compose_file(pytestconfig):
     """Path to the docker-compose.yml for integration tests."""
@@ -50,7 +57,7 @@ def docker_compose_file(pytestconfig):
     return None
 
 
-@pytest.fixture(scope="session", params=["openssh", "dropbear"])
+@pytest.fixture(scope="session", params=_get_ssh_server_params())
 def ssh_server(request, docker_ip=None, docker_services=None, pytestconfig=None):
     """
     Ensure an SSH server is available.
@@ -60,9 +67,7 @@ def ssh_server(request, docker_ip=None, docker_services=None, pytestconfig=None)
 
     if _EXTERNAL_SERVER_AVAILABLE:
         # If external server is provided, we only test against it once
-        # (or we could assume it's OpenSSH)
-        if server_type != "openssh":
-            pytest.skip("External server only supports OpenSSH tests")
+        # (and assume it's compatible with OpenSSH tests)
         return SSH_HOST, SSH_PORT, SSH_USER, SSH_PASSWORD
 
     if not docker_services:
@@ -80,8 +85,9 @@ def ssh_server(request, docker_ip=None, docker_services=None, pytestconfig=None)
         except Exception:
             return False
 
-    # Wait for SSH server responsive
-    docker_services.wait_until_responsive(timeout=30.0, pause=2.0, check=check)
+    # Wait for port to open, then give the daemon extra time to finish key generation
+    docker_services.wait_until_responsive(timeout=120.0, pause=2.0, check=check)
+    time.sleep(15)
 
     return docker_ip, port, "testuser", "password123"
 
@@ -94,7 +100,7 @@ def ssh_client(ssh_server):
 
     host, port, user, password = ssh_server
     client = SSHClient()
-    client.set_missing_host_key_policy(AutoAddPolicy())
+    client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
     client.connect(host, port=port, username=user, password=password)
     yield client
     client.close()

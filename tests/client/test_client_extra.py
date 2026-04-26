@@ -101,7 +101,7 @@ def test_ssh_client_verify_host_key_auto_add():
     client._host_key_storage = MagicMock()
     client._host_key_storage.get_all.return_value = []
 
-    client.set_missing_host_key_policy(AutoAddPolicy())
+    client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
     # Should not raise
     client._verify_host_key()
     assert client._host_key_storage.add.called

@@ -10,7 +10,7 @@ def test_ssh_client_connect(ssh_server):
     host, port, user, password = ssh_server
     client = SSHClient()
     try:
-        client.set_missing_host_key_policy(AutoAddPolicy())
+        client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
         client.connect(host, port=port, username=user, password=password)
         assert client.get_transport() is not None
         assert client.get_transport().active
@@ -36,7 +36,7 @@ def test_ssh_client_open_sftp(ssh_client):
 def test_ssh_client_close(ssh_server):
     host, port, user, password = ssh_server
     client = SSHClient()
-    client.set_missing_host_key_policy(AutoAddPolicy())
+    client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
     client.connect(host, port=port, username=user, password=password)
     client.close()
     assert client.get_transport() is None

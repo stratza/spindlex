@@ -14,7 +14,7 @@ import os
 import pytest
 
 from spindlex import AsyncSSHClient, SSHClient
-from spindlex.hostkeys.policy import AutoAddPolicy, WarningPolicy
+from spindlex.hostkeys.policy import AutoAddPolicy
 
 pytestmark = pytest.mark.real_server
 
@@ -26,7 +26,7 @@ pytestmark = pytest.mark.real_server
 
 def make_client(host, port, user, password):
     client = SSHClient()
-    client.set_missing_host_key_policy(AutoAddPolicy())
+    client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
     client.connect(host, port=port, username=user, password=password)
     return client
 
@@ -51,14 +51,14 @@ class TestSyncConnect:
     def test_context_manager(self, ssh_server):
         host, port, user, password = ssh_server
         with SSHClient() as client:
-            client.set_missing_host_key_policy(AutoAddPolicy())
+            client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
             client.connect(host, port=port, username=user, password=password)
             assert client.get_transport().active
 
     def test_is_active(self, ssh_server):
         host, port, user, password = ssh_server
         with SSHClient() as client:
-            client.set_missing_host_key_policy(AutoAddPolicy())
+            client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
             client.connect(host, port=port, username=user, password=password)
             assert client.is_active  # property
         assert not client.is_active
@@ -280,7 +280,7 @@ class TestAsyncConnect:
 
         async def run():
             client = AsyncSSHClient()
-            client.set_missing_host_key_policy(AutoAddPolicy())
+            client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
             await client.connect(host, port=port, username=user, password=password)
             assert client.connected
             assert client._transport is not None
@@ -294,7 +294,7 @@ class TestAsyncConnect:
 
         async def run():
             async with AsyncSSHClient() as client:
-                client.set_missing_host_key_policy(WarningPolicy())
+                client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
                 await client.connect(host, port=port, username=user, password=password)
                 assert client.connected
 
@@ -305,7 +305,7 @@ class TestAsyncConnect:
 
         async def run():
             client = AsyncSSHClient()
-            client.set_missing_host_key_policy(WarningPolicy())
+            client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
             await client.connect(host, port=port, username=user, password=password)
             assert client.connected  # property
             await client.close()
@@ -319,7 +319,7 @@ class TestAsyncExecCommand:
 
         async def run():
             async with AsyncSSHClient() as client:
-                client.set_missing_host_key_policy(WarningPolicy())
+                client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
                 await client.connect(host, port=port, username=user, password=password)
                 stdin, stdout, stderr = await client.exec_command("uname -s")
                 out = (await stdout.read()).decode().strip()
@@ -332,7 +332,7 @@ class TestAsyncExecCommand:
 
         async def run():
             async with AsyncSSHClient() as client:
-                client.set_missing_host_key_policy(WarningPolicy())
+                client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
                 await client.connect(host, port=port, username=user, password=password)
 
                 stdin, stdout, stderr = await client.exec_command("true")
@@ -352,7 +352,7 @@ class TestAsyncExecCommand:
 
         async def run():
             async with AsyncSSHClient() as client:
-                client.set_missing_host_key_policy(WarningPolicy())
+                client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
                 await client.connect(host, port=port, username=user, password=password)
                 for i in range(3):
                     stdin, stdout, stderr = await client.exec_command(f"echo {i}")
@@ -367,7 +367,7 @@ class TestAsyncExecCommand:
 
         async def run():
             async with AsyncSSHClient() as client:
-                client.set_missing_host_key_policy(WarningPolicy())
+                client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
                 await client.connect(host, port=port, username=user, password=password)
                 stdin, stdout, stderr = await client.exec_command(
                     "dd if=/dev/urandom bs=1024 count=32 2>/dev/null | base64"
@@ -382,7 +382,7 @@ class TestAsyncExecCommand:
 
         async def run():
             async with AsyncSSHClient() as client:
-                client.set_missing_host_key_policy(WarningPolicy())
+                client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
                 await client.connect(host, port=port, username=user, password=password)
                 stdin, stdout, stderr = await client.exec_command(
                     "echo err >&2; echo out"
@@ -399,7 +399,7 @@ class TestAsyncExecCommand:
 
         async def run():
             async with AsyncSSHClient() as client:
-                client.set_missing_host_key_policy(WarningPolicy())
+                client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
                 await client.connect(host, port=port, username=user, password=password)
 
                 async def exec_and_read(cmd, expected):
@@ -426,7 +426,7 @@ class TestAsyncSFTP:
             local_src.write_bytes(b"async sftp upload")
 
             async with AsyncSSHClient() as client:
-                client.set_missing_host_key_policy(WarningPolicy())
+                client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
                 await client.connect(host, port=port, username=user, password=password)
 
                 async with await client.open_sftp() as sftp:
@@ -443,7 +443,7 @@ class TestAsyncSFTP:
 
         async def run():
             async with AsyncSSHClient() as client:
-                client.set_missing_host_key_policy(WarningPolicy())
+                client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
                 await client.connect(host, port=port, username=user, password=password)
 
                 async with await client.open_sftp() as sftp:
@@ -457,7 +457,7 @@ class TestAsyncSFTP:
 
         async def run():
             async with AsyncSSHClient() as client:
-                client.set_missing_host_key_policy(WarningPolicy())
+                client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
                 await client.connect(host, port=port, username=user, password=password)
 
                 async with await client.open_sftp() as sftp:
@@ -476,7 +476,7 @@ class TestAsyncSFTP:
             local.write_bytes(b"statdata")
 
             async with AsyncSSHClient() as client:
-                client.set_missing_host_key_policy(WarningPolicy())
+                client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
                 await client.connect(host, port=port, username=user, password=password)
 
                 async with await client.open_sftp() as sftp:
@@ -495,7 +495,7 @@ class TestAsyncSFTP:
             local.write_bytes(b"rename")
 
             async with AsyncSSHClient() as client:
-                client.set_missing_host_key_policy(WarningPolicy())
+                client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
                 await client.connect(host, port=port, username=user, password=password)
 
                 async with await client.open_sftp() as sftp:
@@ -521,7 +521,7 @@ class TestAsyncSFTP:
             local_src.write_bytes(data)
 
             async with AsyncSSHClient() as client:
-                client.set_missing_host_key_policy(WarningPolicy())
+                client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
                 await client.connect(host, port=port, username=user, password=password)
 
                 async with await client.open_sftp() as sftp:
@@ -541,7 +541,7 @@ class TestAsyncSFTP:
             local.write_bytes(b"ch")
 
             async with AsyncSSHClient() as client:
-                client.set_missing_host_key_policy(WarningPolicy())
+                client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
                 await client.connect(host, port=port, username=user, password=password)
 
                 async with await client.open_sftp() as sftp:
@@ -558,7 +558,7 @@ class TestAsyncSFTP:
 
         async def run():
             async with AsyncSSHClient() as client:
-                client.set_missing_host_key_policy(WarningPolicy())
+                client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
                 await client.connect(host, port=port, username=user, password=password)
 
                 async with await client.open_sftp() as sftp:
@@ -572,7 +572,7 @@ class TestAsyncSFTP:
 
         async def run():
             async with AsyncSSHClient() as client:
-                client.set_missing_host_key_policy(WarningPolicy())
+                client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
                 await client.connect(host, port=port, username=user, password=password)
 
                 async with await client.open_sftp() as sftp:
@@ -594,7 +594,7 @@ class TestAsyncSFTP:
 
         async def run():
             async with AsyncSSHClient() as client:
-                client.set_missing_host_key_policy(WarningPolicy())
+                client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
                 await client.connect(host, port=port, username=user, password=password)
 
                 async with await client.open_sftp() as sftp:
