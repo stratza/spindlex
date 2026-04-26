@@ -4,6 +4,34 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.5] - 2026-04-26
+
+### Performance
+*   **SFTP 32-deep pipelined request window**: Replaced the strict send-one-wait-ACK-repeat loop in `SFTPFile.read(-1)` and `SFTPFile.write()` with a sliding window of 32 concurrent in-flight SFTP requests. Benchmark against a LAN server (1 MiB file): upload 79 ms → 14 ms (now ~1.6× faster than asyncssh), download 50 ms → 15 ms (on par with asyncssh). `SFTPClient.get()` and `SFTPClient.put()` also use equivalent pipelining.
+
+### Fixed
+*   **Transport rekeying deadlock**: `_recv_message` and `_expect_message` called `self._stop_event.wait(0.1)` while holding `self._lock`. `threading.Event.wait()` does not release locks, starving the KEX thread and causing rekeying to deadlock until pytest-timeout killed it. Fixed by moving the `wait()` call outside the `with self._lock:` block.
+*   **SFTP messages > 32 KB silently truncated**: `_send_message()` used `channel.send()` which sends only `min(data, window, max_packet_size)` bytes, silently dropping the remainder. Switched to `channel.sendall()` so full SFTP messages are always transmitted.
+*   **Transport cross-talk and deadlock**: Resolved a set of interleaved-lock and cross-talk issues in the transport layer that could cause hangs under concurrent channel use.
+*   **Async authentication gaps**: Implemented missing async authentication methods; removed test console interaction bugs that caused CI to hang.
+*   **KEX public-key parsing and algorithm negotiation**: Fixed edge cases in key-exchange public-key parsing and algorithm selection that could break handshakes with certain server configurations.
+*   **`AutoAddPolicy` secured with opt-in flag**: `AutoAddPolicy` now requires an explicit opt-in and logs a `DeprecationWarning`; host-key persistence errors are surfaced instead of silently swallowed.
+*   **IPv4 hardcoding removed**: All internal socket calls now work with IPv6 hosts; port validation added to reject out-of-range values early.
+*   **Python 3.9 compatibility**: Replaced `X | Y` union syntax with `Optional[X]` throughout to satisfy mypy on Python 3.9 targets.
+*   **`ForwardingTunnel` type definition**: Corrected the type alias so mypy no longer reports attribute errors for forwarding address tuples.
+*   **Missing `import asyncio` in `keyboard_interactive.py`**: Added the missing import; removed a redundant local `import threading` inside `Transport.close()` that shadowed the module-level import.
+
+### Added
+*   **`_receive_message_for_id()`**: New `SFTPClient` helper that reads SFTP responses and buffers out-of-order ones by request ID, enabling true request pipelining without response mismatches.
+*   **`_flush_write_queue()`**: New `SFTPFile` method that drains all deferred write ACKs on `close()`, ensuring write errors are always surfaced before the file handle is released.
+*   **CI coverage split**: Unit tests upload with `flag=unit`; Docker/integration tests upload with `flag=integration`. Codecov merges both per commit so real SSH server test coverage contributes to the overall reported percentage.
+*   **Docker-tests timeout**: Added `timeout-minutes=20` at the job level and `--timeout=120` per test via `pytest-timeout` to prevent indefinite CI hangs when SSH containers are slow to respond.
+
+### Changed
+*   **Test suite overhauled**: Removed nine redundant mock-heavy transport/SFTP test files; replaced with focused unit tests for auth, client, channel, kex, sftp, and logging modules. Expanded `real_server` coverage and updated CI to split unit and Docker-based integration suites cleanly.
+*   **README modernized**: Dark grey/purple theme, improved navigation, restored beta warning block, fixed XML entity error in logo URL, removed outdated demo paths.
+*   **`typing-extensions` dependency**: Updated minimum requirement to `>=4.15.0`.
+
 ## [0.6.4] - 2026-04-23
 
 ### Fixed
