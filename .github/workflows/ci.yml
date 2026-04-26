@@ -50,9 +50,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: uv pip install --system bandit safety
+      - run: uv pip install --system bandit \"safety<3.0\"
       - run: bandit -r spindlex/ -ll
-      - run: safety scan
+      - run: safety check
 
   # --- 2. Unit Tests (no Docker) ---
   unit-tests:
