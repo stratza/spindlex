@@ -71,11 +71,12 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: uv pip install --system -e ".[test]"
       - run: pytest tests/ -v -m "not integration and not real_server" --cov=spindlex --cov-report=xml
-      - name: Upload coverage
+      - name: Upload unit test coverage
         if: matrix.python-version == '3.11'
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
+          flags: unit
           token: ${{ secrets.CODECOV_TOKEN }}
 
   # --- 3. Docker-based Tests (integration + real_server share one container) ---
@@ -96,7 +97,15 @@ jobs:
           pytest tests/integration/ tests/real_server/ tests/misc/test_functional_integration.py \
             -v -m "integration or real_server" \
             --tb=short \
-            --timeout=120
+            --timeout=120 \
+            --cov=spindlex \
+            --cov-report=xml
+      - name: Upload integration coverage
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.xml
+          flags: integration
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   # --- 4. Documentation ---
   docs-build:
