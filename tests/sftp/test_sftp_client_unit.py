@@ -92,6 +92,7 @@ def _make_sftp_client() -> tuple[SFTPClient, MagicMock]:
     client._logger = logging.getLogger("test.sftp_client")
     client._server_version = 3
     client._server_extensions = {}
+    client._pending_responses = {}
     return client, channel
 
 
@@ -106,7 +107,11 @@ class TestSFTPFile:
     ) -> tuple[SFTPFile, SFTPClient]:
         client, _ = _make_sftp_client()
         client._send_request_and_wait_response = MagicMock()
+        client._send_message = MagicMock()
+        client._receive_message_for_id = MagicMock()
         f = SFTPFile(client, handle, mode)
+        # Depth 1 keeps the mock response sequences identical to sequential tests.
+        f._PIPELINE_DEPTH = 1
         return f, client
 
     # --- __init__ ---
@@ -161,20 +166,21 @@ class TestSFTPFile:
     # --- read: full (size = -1) ---
 
     def test_read_all_reads_until_eof(self):
+        # depth=1 means: one read in flight at a time, same response sequence as before.
         f, client = self._make_file()
         responses = [
             _make_data_msg(data=b"chunk1"),
             _make_data_msg(data=b"chunk2"),
             SFTPStatusMessage(1, SSH_FX_EOF, "EOF"),
         ]
-        client._send_request_and_wait_response.side_effect = responses
+        client._receive_message_for_id.side_effect = responses
         result = f.read(-1)
         assert result == b"chunk1chunk2"
         assert f._offset == 12
 
     def test_read_all_empty_file(self):
         f, client = self._make_file()
-        client._send_request_and_wait_response.return_value = SFTPStatusMessage(
+        client._receive_message_for_id.return_value = SFTPStatusMessage(
             1, SSH_FX_EOF, "EOF"
         )
         result = f.read(-1)
@@ -189,15 +195,17 @@ class TestSFTPFile:
             f.write(b"data")
 
     def test_write_success_advances_offset(self):
+        # depth=1: ACK collected immediately; mock _receive_message_for_id.
         f, client = self._make_file(mode="w")
-        client._send_request_and_wait_response.return_value = _make_ok_status()
+        client._receive_message_for_id.return_value = _make_ok_status()
         result = f.write(b"hello")
         assert result == 5
         assert f._offset == 5
 
     def test_write_error_raises(self):
+        # depth=1 means the ACK is collected immediately on each write.
         f, client = self._make_file(mode="w")
-        client._send_request_and_wait_response.return_value = _make_err_status(
+        client._receive_message_for_id.return_value = _make_err_status(
             code=SSH_FX_PERMISSION_DENIED
         )
         with pytest.raises(SFTPError):
@@ -205,7 +213,7 @@ class TestSFTPFile:
 
     def test_write_unexpected_response_raises(self):
         f, client = self._make_file(mode="w")
-        client._send_request_and_wait_response.return_value = _make_handle_msg()
+        client._receive_message_for_id.return_value = _make_handle_msg()
         with pytest.raises(SFTPError, match="Unexpected"):
             f.write(b"data")
 
@@ -364,15 +372,24 @@ class TestSFTPClientGet:
         return client
 
     def test_get_success(self, tmp_path):
+        import itertools
+
         client = self._client()
         local = str(tmp_path / "downloaded.txt")
-        responses = [
-            _make_handle_msg(handle=b"dl_handle"),  # open
-            _make_data_msg(data=b"file content"),  # read chunk 1
-            SFTPStatusMessage(1, SSH_FX_EOF, "EOF"),  # EOF
-            _make_ok_status(),  # close
+        # open + close go through _send_request_and_wait_response
+        client._send_request_and_wait_response.side_effect = [
+            _make_handle_msg(handle=b"dl_handle"),
+            _make_ok_status(),
         ]
-        client._send_request_and_wait_response.side_effect = responses
+        # pipelined reads go through _send_message + _receive_message_for_id
+        client._send_message = MagicMock()
+        eof = SFTPStatusMessage(1, SSH_FX_EOF, "EOF")
+        client._receive_message_for_id = MagicMock(
+            side_effect=itertools.chain(
+                [_make_data_msg(data=b"file content")],
+                itertools.repeat(eof),
+            )
+        )
         client.get("/remote/file.txt", local)
         with open(local, "rb") as fh:
             assert fh.read() == b"file content"
@@ -422,12 +439,14 @@ class TestSFTPClientPut:
         client = self._client()
         local = tmp_path / "upload.txt"
         local.write_bytes(b"upload data")
-        responses = [
-            _make_handle_msg(handle=b"ul_handle"),  # open
-            _make_ok_status(),  # write
-            _make_ok_status(),  # close
+        # open + close go through _send_request_and_wait_response
+        client._send_request_and_wait_response.side_effect = [
+            _make_handle_msg(handle=b"ul_handle"),
+            _make_ok_status(),
         ]
-        client._send_request_and_wait_response.side_effect = responses
+        # pipelined writes go through _send_message + _receive_message_for_id
+        client._send_message = MagicMock()
+        client._receive_message_for_id = MagicMock(return_value=_make_ok_status())
         client.put(str(local), "/remote/upload.txt")
 
     def test_put_open_fails_raises(self, tmp_path):

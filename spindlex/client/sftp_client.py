@@ -44,6 +44,8 @@ from ..transport.transport import Transport
 class SFTPFile:
     """SFTP file object for remote file operations."""
 
+    _PIPELINE_DEPTH = 32
+
     def __init__(self, client: "SFTPClient", handle: bytes, mode: str) -> None:
         """
         Initialize SFTP file.
@@ -58,6 +60,7 @@ class SFTPFile:
         self._mode = mode
         self._offset = 0
         self._closed = False
+        self._write_queue: list[int] = []
 
     def read(self, size: int = -1) -> bytes:
         """
@@ -73,17 +76,41 @@ class SFTPFile:
             raise SFTPError("File is closed")
 
         if size < 0:
-            # Read until EOF
+            # Read until EOF using a pipelined window of concurrent requests.
+            _CHUNK = SFTP_MAX_READ_SIZE
             result = bytearray()
-            # Use a chunk size slightly smaller than SFTP_MAX_READ_SIZE
-            # to allow for SSH channel and SFTP message overhead
-            chunk_size = SFTP_MAX_READ_SIZE - 1024
-            while True:
-                chunk = self.read(chunk_size)
+            in_flight: list[int] = []
+            eof = False
+            offset = self._offset
 
-                if not chunk:
+            while not eof or in_flight:
+                while not eof and len(in_flight) < self._PIPELINE_DEPTH:
+                    rid = self._client._get_next_request_id()
+                    self._client._send_message(
+                        SFTPReadMessage(rid, self._handle, offset, _CHUNK)
+                    )
+                    in_flight.append(rid)
+                    offset += _CHUNK
+
+                if not in_flight:
                     break
-                result.extend(chunk)
+
+                rid = in_flight.pop(0)
+                response = self._client._receive_message_for_id(rid)
+
+                if isinstance(response, SFTPDataMessage):
+                    result.extend(response.data)
+                elif isinstance(response, SFTPStatusMessage):
+                    if response.status_code == SSH_FX_EOF:
+                        eof = True
+                    else:
+                        raise SFTPError.from_status(
+                            response.status_code, response.message
+                        )
+                else:
+                    raise SFTPError("Unexpected response to read request")
+
+            self._offset += len(result)
             return bytes(result)
 
         request_id = self._client._get_next_request_id()
@@ -116,20 +143,38 @@ class SFTPFile:
 
         request_id = self._client._get_next_request_id()
         write_msg = SFTPWriteMessage(request_id, self._handle, self._offset, data)
+        self._client._send_message(write_msg)
+        self._write_queue.append(request_id)
+        self._offset += len(data)
 
-        response = self._client._send_request_and_wait_response(write_msg)
+        # Collect the oldest pending ACK when the pipeline is full so we
+        # surface write errors promptly and keep memory usage bounded.
+        if len(self._write_queue) >= self._PIPELINE_DEPTH:
+            rid = self._write_queue.pop(0)
+            response = self._client._receive_message_for_id(rid)
+            if isinstance(response, SFTPStatusMessage):
+                if response.status_code != SSH_FX_OK:
+                    raise SFTPError.from_status(response.status_code, response.message)
+            else:
+                raise SFTPError("Unexpected response to write request")
 
-        if isinstance(response, SFTPStatusMessage):
-            if response.status_code == SSH_FX_OK:
-                self._offset += len(data)
-                return len(data)
-            raise SFTPError.from_status(response.status_code, response.message)
-        else:
-            raise SFTPError("Unexpected response to write request")
+        return len(data)
+
+    def _flush_write_queue(self) -> None:
+        """Drain all outstanding pipelined write ACKs."""
+        for rid in self._write_queue:
+            response = self._client._receive_message_for_id(rid)
+            if isinstance(response, SFTPStatusMessage):
+                if response.status_code != SSH_FX_OK:
+                    raise SFTPError.from_status(response.status_code, response.message)
+            else:
+                raise SFTPError("Unexpected response to write request")
+        self._write_queue.clear()
 
     def close(self) -> None:
         """Close remote file."""
         if not self._closed:
+            self._flush_write_queue()
             request_id = self._client._get_next_request_id()
             close_msg = SFTPCloseMessage(request_id, self._handle)
             self._client._send_request_and_wait_response(close_msg)
@@ -169,6 +214,7 @@ class SFTPClient:
         self._logger = logging.getLogger(__name__)
         self._server_version: Optional[int] = None
         self._server_extensions: dict[str, str] = {}
+        self._pending_responses: dict[int, SFTPMessage] = {}
 
         # Initialize SFTP session
         self._initialize_sftp()
@@ -242,7 +288,7 @@ class SFTPClient:
 
         try:
             data = message.pack()
-            self._channel.send(data)
+            self._channel.sendall(data)
         except Exception as e:
             raise SFTPError(f"Failed to send SFTP message: {e}") from e
 
@@ -275,6 +321,21 @@ class SFTPClient:
         except Exception as e:
             raise SFTPError(f"Failed to receive SFTP message: {e}") from e
 
+    def _receive_message_for_id(self, target_id: int) -> SFTPMessage:
+        """
+        Receive the SFTP response matching target_id, buffering any others.
+
+        Enables pipelining by allowing out-of-order response collection.
+        """
+        if target_id in self._pending_responses:
+            return self._pending_responses.pop(target_id)
+        while True:
+            msg = self._receive_message()
+            if msg.request_id == target_id:
+                return msg
+            if msg.request_id is not None:
+                self._pending_responses[msg.request_id] = msg
+
     def _send_request_and_wait_response(self, request: SFTPMessage) -> SFTPMessage:
         """
         Send SFTP request and wait for response.
@@ -289,11 +350,8 @@ class SFTPClient:
             SFTPError: If request fails or response indicates error
         """
         self._send_message(request)
-        response = self._receive_message()
-
-        # Return response as-is - let caller handle status codes
-        # This allows EOF and other status codes to be handled appropriately
-        return response
+        assert request.request_id is not None
+        return self._receive_message_for_id(request.request_id)
 
     def get(self, remotepath: str, localpath: str) -> None:
         """
@@ -325,28 +383,40 @@ class SFTPClient:
 
             try:
                 # Open local file for writing
+                _CHUNK = 32768
+                _DEPTH = 32
                 with open(localpath, "wb") as local_file:
                     offset = 0
+                    in_flight: list[int] = []
+                    eof = False
 
-                    while True:
-                        # Read chunk from remote file
-                        request_id = self._get_next_request_id()
-                        read_msg = SFTPReadMessage(
-                            request_id, handle, offset, SFTP_MAX_READ_SIZE
-                        )
+                    while not eof or in_flight:
+                        # Issue read requests to fill the pipeline
+                        while not eof and len(in_flight) < _DEPTH:
+                            request_id = self._get_next_request_id()
+                            read_msg = SFTPReadMessage(
+                                request_id, handle, offset, _CHUNK
+                            )
+                            self._send_message(read_msg)
+                            in_flight.append(request_id)
+                            offset += _CHUNK
 
-                        response = self._send_request_and_wait_response(read_msg)
+                        if not in_flight:
+                            break
 
-                        if isinstance(response, SFTPStatusMessage):
+                        # Collect the next in-order response
+                        rid = in_flight.pop(0)
+                        response = self._receive_message_for_id(rid)
+
+                        if isinstance(response, SFTPDataMessage):
+                            local_file.write(response.data)
+                        elif isinstance(response, SFTPStatusMessage):
                             if response.status_code == SSH_FX_EOF:
-                                break  # End of file reached
+                                eof = True
                             else:
                                 raise SFTPError.from_status(
                                     response.status_code, response.message
                                 )
-                        elif isinstance(response, SFTPDataMessage):
-                            local_file.write(response.data)
-                            offset += len(response.data)
                         else:
                             raise SFTPError("Unexpected response to read request")
 
@@ -398,28 +468,35 @@ class SFTPClient:
             handle = response.handle
 
             try:
-                # Open local file for reading and upload in chunks
+                # Open local file for reading and upload in pipelined chunks
+                # 32700 fits the SFTP write message (header ~25B + handle ~4B) within
+                # the 32768-byte SSH channel max-packet limit (one packet per write).
+                _CHUNK = 32700
+                _DEPTH = 32
                 with open(localpath, "rb") as local_file:
                     offset = 0
-                    chunk_size = 30000
+                    in_flight: list[int] = []
 
                     while True:
-                        # Read chunk from local file
-                        chunk = local_file.read(chunk_size)
-                        if not chunk:
-                            break  # End of file reached
+                        # Fill the pipeline with write requests
+                        while len(in_flight) < _DEPTH:
+                            chunk = local_file.read(_CHUNK)
+                            if not chunk:
+                                break
+                            request_id = self._get_next_request_id()
+                            write_msg = SFTPWriteMessage(
+                                request_id, handle, offset, chunk
+                            )
+                            self._send_message(write_msg)
+                            in_flight.append(request_id)
+                            offset += len(chunk)
 
-                        # Write chunk to remote file
-                        request_id = self._get_next_request_id()
-                        write_msg = SFTPWriteMessage(request_id, handle, offset, chunk)
+                        if not in_flight:
+                            break
 
-                        self._logger.debug(
-                            f"SFTP PUT: Sending write request {request_id} for offset {offset}, size {len(chunk)}"
-                        )
-                        response = self._send_request_and_wait_response(write_msg)
-                        self._logger.debug(
-                            f"SFTP PUT: Received response for write request {request_id}"
-                        )
+                        # Collect one ACK before refilling
+                        rid = in_flight.pop(0)
+                        response = self._receive_message_for_id(rid)
                         if isinstance(response, SFTPStatusMessage):
                             if response.status_code != SSH_FX_OK:
                                 raise SFTPError.from_status(
@@ -427,8 +504,6 @@ class SFTPClient:
                                 )
                         else:
                             raise SFTPError("Unexpected response to write request")
-
-                        offset += len(chunk)
 
             finally:
                 # Close remote file
