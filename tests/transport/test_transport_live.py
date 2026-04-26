@@ -12,7 +12,7 @@ class TestTransportLive:
 
     def test_recv_bytes_via_real_connection(self, ssh_server):
         host, port, _, _ = ssh_server
-        sock = socket.create_connection((host, port))
+        sock = socket.create_connection((host, port), timeout=30)
         transport = Transport(sock)
         try:
             # The server should send a version string immediately
@@ -24,7 +24,7 @@ class TestTransportLive:
 
     def test_version_exchange_live(self, ssh_server):
         host, port, _, _ = ssh_server
-        sock = socket.create_connection((host, port))
+        sock = socket.create_connection((host, port), timeout=30)
         transport = Transport(sock)
         try:
             transport._recv_version()

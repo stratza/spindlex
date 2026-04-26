@@ -83,18 +83,20 @@ jobs:
     name: Docker Tests (OpenSSH + Dropbear)
     needs: [ruff]
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: uv pip install --system -e ".[test]" pytest-docker
+      - run: uv pip install --system -e ".[test]" pytest-docker pytest-timeout
       - name: Run integration + real_server suites
         run: |
           pytest tests/integration/ tests/real_server/ tests/misc/test_functional_integration.py \
             -v -m "integration or real_server" \
-            --tb=short
+            --tb=short \
+            --timeout=120
 
   # --- 4. Documentation ---
   docs-build:
