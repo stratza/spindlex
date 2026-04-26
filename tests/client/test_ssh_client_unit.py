@@ -781,11 +781,11 @@ class TestOpenSftp:
         client = _connected_client()
 
         # Direct injection: patch open_sftp to simulate the wrapped failure
-        with patch('spindlex.client.ssh_client.SSHClient.open_sftp') as mock_open:
+        with patch("spindlex.client.ssh_client.SSHClient.open_sftp") as mock_open:
             mock_open.side_effect = SSHException(
-                'Failed to open SFTP session: import error'
+                "Failed to open SFTP session: import error"
             )
-            with pytest.raises(SSHException, match='Failed to open SFTP'):
+            with pytest.raises(SSHException, match="Failed to open SFTP"):
                 client.open_sftp()
 
 
