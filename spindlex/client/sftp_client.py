@@ -8,6 +8,7 @@ secure file operations over SSH connections.
 import logging
 import os
 import threading
+import time
 from typing import Any, Optional
 
 from ..exceptions import SFTPError
@@ -60,7 +61,7 @@ class SFTPFile:
         self._mode = mode
         self._offset = 0
         self._closed = False
-        self._write_queue: list[int] = []
+        self._write_queue: list[tuple[int, int]] = []  # (request_id, data_length)
 
     def read(self, size: int = -1) -> bytes:
         """
@@ -142,19 +143,21 @@ class SFTPFile:
             raise SFTPError("File is closed")
 
         request_id = self._client._get_next_request_id()
-        write_msg = SFTPWriteMessage(request_id, self._handle, self._offset, data)
+        # Use current send offset (which may be ahead of committed offset in pipeline)
+        send_offset = self._offset + sum(n for _, n in self._write_queue)
+        write_msg = SFTPWriteMessage(request_id, self._handle, send_offset, data)
         self._client._send_message(write_msg)
-        self._write_queue.append(request_id)
-        self._offset += len(data)
+        self._write_queue.append((request_id, len(data)))
 
         # Collect the oldest pending ACK when the pipeline is full so we
         # surface write errors promptly and keep memory usage bounded.
         if len(self._write_queue) >= self._PIPELINE_DEPTH:
-            rid = self._write_queue.pop(0)
+            rid, nbytes = self._write_queue.pop(0)
             response = self._client._receive_message_for_id(rid)
             if isinstance(response, SFTPStatusMessage):
                 if response.status_code != SSH_FX_OK:
                     raise SFTPError.from_status(response.status_code, response.message)
+                self._offset += nbytes
             else:
                 raise SFTPError("Unexpected response to write request")
 
@@ -162,11 +165,12 @@ class SFTPFile:
 
     def _flush_write_queue(self) -> None:
         """Drain all outstanding pipelined write ACKs."""
-        for rid in self._write_queue:
+        for rid, nbytes in self._write_queue:
             response = self._client._receive_message_for_id(rid)
             if isinstance(response, SFTPStatusMessage):
                 if response.status_code != SSH_FX_OK:
                     raise SFTPError.from_status(response.status_code, response.message)
+                self._offset += nbytes
             else:
                 raise SFTPError("Unexpected response to write request")
         self._write_queue.clear()
@@ -174,11 +178,13 @@ class SFTPFile:
     def close(self) -> None:
         """Close remote file."""
         if not self._closed:
-            self._flush_write_queue()
-            request_id = self._client._get_next_request_id()
-            close_msg = SFTPCloseMessage(request_id, self._handle)
-            self._client._send_request_and_wait_response(close_msg)
             self._closed = True
+            try:
+                self._flush_write_queue()
+            finally:
+                request_id = self._client._get_next_request_id()
+                close_msg = SFTPCloseMessage(request_id, self._handle)
+                self._client._send_request_and_wait_response(close_msg)
 
     def __enter__(self) -> "SFTPFile":
         """Context manager entry."""
@@ -321,7 +327,7 @@ class SFTPClient:
         except Exception as e:
             raise SFTPError(f"Failed to receive SFTP message: {e}") from e
 
-    def _receive_message_for_id(self, target_id: int) -> SFTPMessage:
+    def _receive_message_for_id(self, target_id: int, timeout: float = 60.0) -> SFTPMessage:
         """
         Receive the SFTP response matching target_id, buffering any others.
 
@@ -329,7 +335,10 @@ class SFTPClient:
         """
         if target_id in self._pending_responses:
             return self._pending_responses.pop(target_id)
+        deadline = time.monotonic() + timeout
         while True:
+            if time.monotonic() > deadline:
+                raise SFTPError(f"Timeout waiting for response to request {target_id}")
             msg = self._receive_message()
             if msg.request_id == target_id:
                 return msg
@@ -532,7 +541,6 @@ class SFTPClient:
         try:
             # Open directory
             request_id = self._get_next_request_id()
-            SFTPAttributes()
             from ..protocol.sftp_messages import SFTPOpenDirMessage
 
             opendir_msg = SFTPOpenDirMessage(request_id, path)
