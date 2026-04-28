@@ -343,11 +343,7 @@ class LocalPortForwarder:
         try:
             while True:
                 # Read data from source
-                if hasattr(source, "recv"):
-                    data = source.recv(8192)
-                else:
-                    # Assume it's a socket
-                    data = source.recv(8192)
+                data = source.recv(8192)
 
                 if not data:
                     break
@@ -550,6 +546,7 @@ class RemotePortForwarder:
         origin_port = origin_addr[1]
         conn_id = f"{tunnel.tunnel_id}_{origin_host}_{origin_port}_{time.time()}"
 
+        local_socket = None
         try:
             # Bug #2.3 Fixed: Use getaddrinfo for local destination to support IPv6
             local_host, local_port = tunnel.local_addr
@@ -599,10 +596,11 @@ class RemotePortForwarder:
             )
         finally:
             # Cleanup connection
-            try:
-                local_socket.close()
-            except Exception:
-                pass
+            if local_socket:
+                try:
+                    local_socket.close()
+                except Exception:
+                    pass
 
             with tunnel._lock:
                 if conn_id in tunnel.connections:
@@ -627,11 +625,7 @@ class RemotePortForwarder:
         try:
             while True:
                 # Read data from source
-                if hasattr(source, "recv"):
-                    data = source.recv(8192)
-                else:
-                    # Assume it's a socket
-                    data = source.recv(8192)
+                data = source.recv(8192)
 
                 if not data:
                     break
