@@ -196,6 +196,10 @@ class Transport:
         self._sequence_number_in = 0
         self._sequence_number_out = 0
         self._packet_buffer = b""
+        # Lock ordering contract — to prevent ABBA deadlock, always acquire in this order:
+        #   1. _read_lock  (socket-level serialisation; held while reading a packet)
+        #   2. _lock       (state-level serialisation; held while mutating transport state)
+        # Never acquire _read_lock while already holding _lock.
         self._lock = threading.RLock()
         self._read_lock = threading.RLock()
         self._kex_condition = threading.Condition(self._lock)
@@ -709,14 +713,17 @@ class Transport:
     def _build_direct_tcpip_data(self, dest_addr: tuple[str, int]) -> bytes:
         """Build type-specific data for direct-tcpip channel."""
         try:
-            originator_ip = self._socket.getsockname()[0]
+            sockname = self._socket.getsockname()
+            originator_ip = sockname[0]
+            originator_port = sockname[1]
         except OSError:
             originator_ip = "127.0.0.1"
+            originator_port = 0
         data = bytearray()
         data.extend(write_string(dest_addr[0]))  # destination host
         data.extend(write_uint32(dest_addr[1]))  # destination port
         data.extend(write_string(originator_ip))  # originator IP
-        data.extend(write_uint32(0))  # originator port
+        data.extend(write_uint32(originator_port))  # originator port (RFC 4254 §7.2)
         return bytes(data)
 
     def _close_channel(self, channel_id: int) -> None:
@@ -770,49 +777,21 @@ class Transport:
             if channel:
                 try:
                     if msg.msg_type == MSG_CHANNEL_DATA:
-                        data_msg: ChannelDataMessage
-                        if not isinstance(msg, ChannelDataMessage):
-                            data_msg = ChannelDataMessage.unpack(msg.pack())  # type: ignore[assignment]
-                        else:
-                            data_msg = msg
-                        channel._handle_data(data_msg.data)
+                        self._handle_channel_data(msg)
                     elif msg.msg_type == MSG_CHANNEL_EXTENDED_DATA:
-                        data = msg._data
-                        _, offset = read_uint32(data, 0)
-                        data_type, offset = read_uint32(data, offset)
-                        message_data, _ = read_string(data, offset)
-                        channel._handle_extended_data(data_type, message_data)
+                        self._handle_channel_extended_data(msg)
                     elif msg.msg_type == MSG_CHANNEL_EOF:
-                        channel._handle_eof()
+                        self._handle_channel_eof(msg)
                     elif msg.msg_type == MSG_CHANNEL_CLOSE:
-                        channel._handle_close()
-                        with self._lock:
-                            if recipient_channel in self._channels:
-                                del self._channels[recipient_channel]
+                        self._handle_channel_close(msg)
                     elif msg.msg_type == MSG_CHANNEL_WINDOW_ADJUST:
-                        _, offset = read_uint32(msg._data, 0)
-                        bytes_to_add, _ = read_uint32(msg._data, offset)
-                        channel._handle_window_adjust(bytes_to_add)
+                        self._handle_channel_window_adjust(msg)
                     elif msg.msg_type == MSG_CHANNEL_SUCCESS:
-                        channel._handle_request_success()
+                        self._handle_channel_success(msg)
                     elif msg.msg_type == MSG_CHANNEL_FAILURE:
-                        channel._handle_request_failure()
+                        self._handle_channel_failure(msg)
                     elif msg.msg_type == MSG_CHANNEL_REQUEST:
-                        data = msg._data
-                        _, offset = read_uint32(data, 0)
-                        request_type_bytes, offset = read_string(data, offset)
-                        want_reply, offset = read_boolean(data, offset)
-                        request_type = request_type_bytes.decode(SSH_STRING_ENCODING)
-                        request_data = data[offset:] if offset < len(data) else b""
-
-                        success = channel._handle_request(request_type, request_data)
-                        if want_reply:
-                            reply_msg = Message(
-                                MSG_CHANNEL_SUCCESS if success else MSG_CHANNEL_FAILURE
-                            )
-                            if channel._remote_channel_id is not None:
-                                reply_msg.add_uint32(channel._remote_channel_id)
-                                self._send_message(reply_msg)
+                        self._handle_channel_request(msg)
                     else:
                         self._logger.debug(
                             f"Unhandled channel message type {msg.msg_type} for channel {recipient_channel}"
@@ -1669,7 +1648,10 @@ class Transport:
             # Servers don't send ext-info-c
             kex_algorithms = [a for a in kex_algorithms if a != "ext-info-c"]
         else:
-            # Client sends kex-strict-c (already in list likely, but ensure s is out)
+            # Client: append client-side signaling tokens, strip server-only token
+            for token in cipher_suite.KEX_SIGNAL_TOKENS:
+                if token not in kex_algorithms:
+                    kex_algorithms.append(token)
             kex_algorithms = [
                 a for a in kex_algorithms if a != "kex-strict-s-v01@openssh.com"
             ]
@@ -1729,12 +1711,11 @@ class Transport:
                     f"Triggering rekeying: bytes={self._bytes_since_rekey}, limit={self._rekey_bytes_limit}"
                 )
                 # Trigger rekeying in a separate thread to avoid blocking current I/O
-                # Set flag BEFORE starting thread to avoid race conditions
+                # _kex_thread is set inside _start_kex() under self._lock (single owner)
                 self._kex_in_progress = True
                 kex_thread = threading.Thread(
                     target=self._start_kex, name="RekeyingThread", daemon=True
                 )
-                self._kex_thread = kex_thread
                 kex_thread.start()
                 self._bytes_since_rekey = 0
                 self._last_rekey_time = time.time()
@@ -1947,7 +1928,7 @@ class Transport:
                 # Release _lock before waiting so the kex thread can acquire it
                 # (Event.wait does NOT release locks, causing starvation otherwise)
                 if self._stop_event.wait(0.1):
-                    return None  # type: ignore[return-value]
+                    raise TransportException("Transport is stopping")
 
             # Inner loop exited via break — safe to read from socket now
             msg = self._read_message()
@@ -1993,7 +1974,7 @@ class Transport:
                 # Release _lock before waiting so the kex thread can acquire it
                 # (Event.wait does NOT release locks, causing starvation otherwise)
                 if self._stop_event.wait(0.1):
-                    return None  # type: ignore[return-value]
+                    raise TransportException("Transport is stopping")
 
             # 2. Not in queue, read from socket
             try:
@@ -2493,6 +2474,7 @@ class Transport:
             self._send_message(UserAuthFailureMessage(["password", "publickey"], False))
             return
 
+        username = ""
         try:
             # Unpack request
             auth_req = UserAuthRequestMessage._unpack_data(msg._data)
@@ -2581,7 +2563,8 @@ class Transport:
             SSHException,
         ) as e:
             self._logger.error(f"Error handling userauth request: {e}")
-            self._send_message(UserAuthFailureMessage(["password"], False))
+            allowed = self._server_interface.get_allowed_auths(username)
+            self._send_message(UserAuthFailureMessage(allowed, False))
 
     def get_port_forwarding_manager(self) -> "PortForwardingManager":
         """
