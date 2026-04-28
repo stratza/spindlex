@@ -197,7 +197,9 @@ def configure_logging(
     if output_file:
         import os
 
-        os.makedirs(os.path.dirname(output_file), exist_ok=True)
+        dirname = os.path.dirname(output_file)
+        if dirname:
+            os.makedirs(dirname, exist_ok=True)
         handler = logging.FileHandler(output_file)
     else:
         handler = logging.StreamHandler()

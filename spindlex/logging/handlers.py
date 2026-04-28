@@ -8,6 +8,7 @@ import os
 from typing import Optional
 
 from .formatters import SecurityFormatter
+from .sanitizer import SanitizingFilter
 
 
 class SecurityHandler(logging.Handler):
@@ -28,12 +29,15 @@ class SecurityHandler(logging.Handler):
             backup_count: Number of backup files to keep
         """
         super().__init__()
+        self.addFilter(SanitizingFilter())
 
         self.filename = filename
 
         if filename:
             # Ensure directory exists
-            os.makedirs(os.path.dirname(filename), exist_ok=True)
+            dirname = os.path.dirname(filename)
+            if dirname:
+                os.makedirs(dirname, exist_ok=True)
 
             # Use rotating file handler
             self.file_handler = logging.handlers.RotatingFileHandler(
@@ -93,7 +97,9 @@ class PerformanceHandler(logging.Handler):
 
         if filename:
             # Ensure directory exists
-            os.makedirs(os.path.dirname(filename), exist_ok=True)
+            dirname = os.path.dirname(filename)
+            if dirname:
+                os.makedirs(dirname, exist_ok=True)
 
             self.file_handler = logging.FileHandler(filename)
             self.file_handler.setFormatter(formatter)
