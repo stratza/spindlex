@@ -158,19 +158,19 @@ class AsyncSSHClient:
             raise SSHException("No transport available")
 
         hostname = self._hostname or "unknown"
+        server_key = None
 
         try:
             # Get actual server host key from transport
             server_key = self._transport.get_server_host_key()
 
             if server_key is None:
-                self._logger.warning("No host key received from server")
-                return
+                raise SSHException("No server host key received")
 
-            # Check if we have a known host key for this hostname
-            known_key = self._host_key_storage.get(hostname)
+            # Check all stored keys for this hostname (MED-12)
+            known_keys = self._host_key_storage.get_all(hostname)
 
-            if known_key is None:
+            if not known_keys:
                 # No known key - apply missing host key policy
                 self._logger.debug(f"No known host key for {hostname}")
 
@@ -183,21 +183,24 @@ class AsyncSSHClient:
                     # Policy had an error but didn't reject
                     self._logger.warning(f"Host key policy error: {e}")
             else:
-                # We have a known key - compare with the actual server key
-                self._logger.debug(f"Found known host key for {hostname}")
+                # We have known keys - check if any match the server key
+                self._logger.debug(f"Found known host key(s) for {hostname}")
 
-                if (
-                    known_key.get_public_key_bytes()
-                    != server_key.get_public_key_bytes()
-                ):
-                    # Key mismatch!
-                    raise BadHostKeyException(hostname, server_key, known_key)
+                server_key_bytes = server_key.get_public_key_bytes()
+                for known_key in known_keys:
+                    if known_key.get_public_key_bytes() == server_key_bytes:
+                        return  # Matched one of the stored keys
+
+                # No match found — key mismatch
+                raise BadHostKeyException(hostname, server_key, known_keys[0])
 
         except BadHostKeyException:
             raise
+        except SSHException:
+            raise
         except Exception as e:
             self._logger.error(f"Host key verification error: {e}")
-            raise BadHostKeyException(hostname, None)
+            raise BadHostKeyException(hostname, server_key)
 
     async def _create_connection(
         self, hostname: str, port: int, timeout: float | None
