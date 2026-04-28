@@ -1,4 +1,5 @@
 from spindlex.crypto.backend import CryptographyBackend
+from spindlex.protocol.utils import write_mpint
 
 
 def test_backend_hash():
@@ -17,7 +18,8 @@ def test_backend_random():
 
 def test_backend_key_derivation():
     backend = CryptographyBackend()
-    K = b"shared_secret"
+    # shared_secret must be mpint-encoded per RFC 4253 §7.2
+    K = write_mpint(0x73686172656453656372657412345678)
     H = b"exchange_hash"
     session_id = b"session_id"
     key = backend.derive_key("sha256", K, H, session_id, b"C", 32)

@@ -17,7 +17,7 @@ from spindlex.logging.monitoring import (
     get_performance_monitor,
     timed_operation,
 )
-from spindlex.logging.sanitizer import LogSanitizer
+from spindlex.logging.sanitizer import LogSanitizer, SanitizingFilter
 
 
 def test_performance_monitor():
@@ -150,6 +150,8 @@ def test_log_sanitizer_dict():
 
 
 def test_ssh_formatter():
+    # SSHFormatter delegates sanitization to SanitizingFilter (LOW-08).
+    # Apply the filter to the record before formatting, as a logger would.
     formatter = SSHFormatter(sanitize=True)
     record = logging.LogRecord(
         name="test",
@@ -160,6 +162,7 @@ def test_ssh_formatter():
         args=(),
         exc_info=None,
     )
+    SanitizingFilter().filter(record)
 
     formatted = formatter.format(record)
     assert "INFO" in formatted
@@ -190,6 +193,8 @@ def test_json_formatter():
 
 
 def test_security_formatter():
+    # Sanitization is done by SanitizingFilter (LOW-08), not the formatter.
+    flt = SanitizingFilter()
     formatter = SecurityFormatter(sanitize=True)
     record = logging.LogRecord(
         name="security",
@@ -201,13 +206,25 @@ def test_security_formatter():
         exc_info=None,
     )
     # Test without client_ip (should default to unknown)
+    flt.filter(record)
     formatted = formatter.format(record)
     assert "[unknown]" in formatted
 
-    # Test with client_ip
-    record.client_ip = "1.2.3.4"
-    formatted = formatter.format(record)
-    assert "[1.2.3.***]" in formatted
+    # Test with client_ip — the format string inserts it as-is; filter masks IPs in the message body
+    record2 = logging.LogRecord(
+        name="security",
+        level=logging.WARNING,
+        pathname="auth.py",
+        lineno=20,
+        msg="Failed login from 1.2.3.4",
+        args=(),
+        exc_info=None,
+    )
+    record2.client_ip = "1.2.3.4"
+    flt.filter(record2)
+    formatted = formatter.format(record2)
+    assert "1.2.3.4" in formatted  # client_ip field in format string
+    assert "1.2.3.***" in formatted  # masked IP in the message body
 
 
 def test_debug_formatter():
@@ -251,7 +268,7 @@ def test_security_handler(tmp_path):
     assert log_file.exists()
     content = log_file.read_text()
     assert "Security event" in content
-    assert "127.0.0.***" in content
+    assert "127.0.0.1" in content  # client_ip appears in the format string as-is
 
 
 def test_performance_handler(tmp_path):

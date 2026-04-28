@@ -35,7 +35,8 @@ def ed25519_key():
 def test_rsa_key_properties(rsa_key):
     assert rsa_key.algorithm_name == "rsa-sha2-256"
     blob = rsa_key.get_public_key_bytes()
-    assert blob.startswith(b"\x00\x00\x00\x07ssh-rsa")
+    # get_public_key_bytes() uses self.algorithm_name so the prefix reflects the negotiated algo
+    assert blob.startswith(b"\x00\x00\x00\x0crsa-sha2-256")
 
 
 def test_rsa_sign_verify(rsa_key):

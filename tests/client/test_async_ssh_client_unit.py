@@ -290,11 +290,11 @@ class TestVerifyHostKey:
         with pytest.raises(SSHException, match="No transport available"):
             client._verify_host_key()
 
-    def test_no_server_key_logs_warning_and_returns(self):
+    def test_no_server_key_raises(self):
         client = _connected_client()
         client._transport.get_server_host_key.return_value = None
-        # Should not raise
-        client._verify_host_key()
+        with pytest.raises(SSHException, match="No server host key received"):
+            client._verify_host_key()
 
     def test_known_key_match_passes(self):
         client = _connected_client()
@@ -305,7 +305,7 @@ class TestVerifyHostKey:
         known_key = MagicMock()
         known_key.get_public_key_bytes.return_value = b"same"
         storage = MagicMock(spec=HostKeyStorage)
-        storage.get.return_value = known_key
+        storage.get_all.return_value = [known_key]
         client._host_key_storage = storage
         # Should not raise
         client._verify_host_key()
@@ -319,7 +319,7 @@ class TestVerifyHostKey:
         known_key = MagicMock()
         known_key.get_public_key_bytes.return_value = b"old"
         storage = MagicMock(spec=HostKeyStorage)
-        storage.get.return_value = known_key
+        storage.get_all.return_value = [known_key]
         client._host_key_storage = storage
 
         with pytest.raises(BadHostKeyException):
@@ -332,7 +332,7 @@ class TestVerifyHostKey:
         client._transport.get_server_host_key.return_value = server_key
 
         storage = MagicMock(spec=HostKeyStorage)
-        storage.get.return_value = None
+        storage.get_all.return_value = []
         client._host_key_storage = storage
         client._host_key_policy = RejectPolicy()
 
@@ -365,7 +365,7 @@ class TestVerifyHostKey:
         client._transport.get_server_host_key.return_value = server_key
 
         storage = MagicMock(spec=HostKeyStorage)
-        storage.get.return_value = None
+        storage.get_all.return_value = []
         client._host_key_storage = storage
 
         bad_policy = MagicMock(spec=RejectPolicy)

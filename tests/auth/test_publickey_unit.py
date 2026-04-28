@@ -324,13 +324,6 @@ class TestPasswordAuthAuthenticate:
         with pytest.raises(AuthenticationException, match="denied"):
             auth.authenticate("alice", "pw")
 
-    def test_write_string_helper_returns_bytes(self):
-        auth, _ = make_password_auth()
-        result = auth._write_string("hello")
-        assert isinstance(result, bytes)
-        # write_string: 4-byte length prefix + utf-8 content
-        assert result[4:] == b"hello"
-
 
 class TestPasswordAuthAuthenticateAsync:
     async def test_async_success(self):

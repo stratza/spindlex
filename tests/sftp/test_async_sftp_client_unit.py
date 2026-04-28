@@ -540,37 +540,69 @@ class TestAsyncSFTPClientInternalHelpers:
 
 class TestAsyncSFTPClientGetPut:
     async def test_get_success(self, tmp_path):
+        # The pipelined get() bypasses AsyncSFTPFile.read() and goes directly to the
+        # SFTP protocol layer.  We mock open(), _send_message(), and inject futures
+        # into _pending_requests to simulate the dispatcher.
         client = _make_async_client()
         local = str(tmp_path / "downloaded.txt")
 
         mock_file = MagicMock(spec=AsyncSFTPFile)
-        mock_file.read = AsyncMock(side_effect=[b"content", b""])
+        mock_file._handle = b"\x00\x01"
         mock_file.close = AsyncMock()
 
         async def mock_open(path, mode="r"):
             return mock_file
 
         client.open = mock_open
+
+        sent_ids: list[int] = []
+
+        async def mock_send(msg):
+            sent_ids.append(msg.request_id)
+            loop = asyncio.get_running_loop()
+            if len(sent_ids) == 1:
+                # First read returns data
+                data_msg = SFTPDataMessage(msg.request_id, b"content")
+            else:
+                # Subsequent reads return EOF
+                data_msg = SFTPStatusMessage(msg.request_id, SSH_FX_EOF, "EOF")
+            fut = client._pending_requests.get(msg.request_id)
+            if fut and not fut.done():
+                loop.call_soon(fut.set_result, data_msg)
+
+        client._send_message = mock_send
+
         await client.get("/remote/file.txt", local)
 
         with open(local, "rb") as fh:
             assert fh.read() == b"content"
 
     async def test_put_success(self, tmp_path):
+        # The pipelined put() bypasses AsyncSFTPFile.write() and goes directly to the
+        # SFTP protocol layer.  We mock open(), _send_message(), and inject OK statuses.
         client = _make_async_client()
         local = tmp_path / "upload.txt"
         local.write_bytes(b"upload data")
 
         mock_file = MagicMock(spec=AsyncSFTPFile)
-        mock_file.write = AsyncMock()
+        mock_file._handle = b"\x00\x01"
         mock_file.close = AsyncMock()
 
         async def mock_open(path, mode="r"):
             return mock_file
 
         client.open = mock_open
+
+        async def mock_send(msg):
+            loop = asyncio.get_running_loop()
+            ok = SFTPStatusMessage(msg.request_id, SSH_FX_OK, "OK")
+            fut = client._pending_requests.get(msg.request_id)
+            if fut and not fut.done():
+                loop.call_soon(fut.set_result, ok)
+
+        client._send_message = mock_send
+
         await client.put(str(local), "/remote/upload.txt")
-        mock_file.write.assert_called()
         mock_file.close.assert_called_once()
 
     async def test_get_propagates_sftp_error(self, tmp_path):
