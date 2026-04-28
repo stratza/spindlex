@@ -77,10 +77,6 @@ class AsyncTransport(Transport):
         self._writer: asyncio.StreamWriter | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self._port_forwarding_manager: AsyncPortForwardingManager | None = None  # type: ignore[assignment]
-        try:
-            self._loop = asyncio.get_event_loop()
-        except RuntimeError:
-            self._loop = None
 
         # Locks for async safety
         self._send_lock = asyncio.Lock()
@@ -92,11 +88,13 @@ class AsyncTransport(Transport):
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> None:
         """Initialize with existing asyncio streams."""
+        self._loop = asyncio.get_running_loop()
         async with self._state_lock:
             self._reader = reader
             self._writer = writer
 
     async def start_client(self, timeout: float | None = None) -> None:  # type: ignore[override]
+        self._loop = asyncio.get_running_loop()
         if timeout is not None:
             self._connect_timeout = timeout
 
