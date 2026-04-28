@@ -7,6 +7,7 @@ Implements SSH password authentication method according to RFC 4252.
 from typing import Any
 
 from ..exceptions import AuthenticationException
+from ..protocol.utils import write_string
 
 
 class PasswordAuth:
@@ -53,7 +54,7 @@ class PasswordAuth:
                 username=username,
                 service=SERVICE_CONNECTION,
                 method="password",
-                method_data=b"\x00" + self._write_string(password),
+                method_data=b"\x00" + write_string(password),
             )
 
             # Send authentication request
@@ -96,7 +97,7 @@ class PasswordAuth:
                 username=username,
                 service=SERVICE_CONNECTION,
                 method="password",
-                method_data=b"\x00" + self._write_string(password),
+                method_data=b"\x00" + write_string(password),
             )
 
             # Send authentication request
@@ -112,8 +113,3 @@ class PasswordAuth:
                 raise
             raise AuthenticationException(f"Password authentication failed: {e}") from e
 
-    def _write_string(self, s: str) -> bytes:
-        """Helper to write SSH string."""
-        from ..protocol.utils import write_string
-
-        return write_string(s)
