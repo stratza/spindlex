@@ -84,7 +84,7 @@ class SFTPError(SSHException):
     error codes matching the SFTP specification.
     """
 
-    # SFTP error codes from RFC 4254
+    # SFTP error codes from draft-ietf-secsh-filexfer
     SSH_FX_OK = 0
     SSH_FX_EOF = 1
     SSH_FX_NO_SUCH_FILE = 2
