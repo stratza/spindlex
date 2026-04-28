@@ -36,20 +36,8 @@ class SSHFormatter(logging.Formatter):
         self.sanitize = sanitize
 
     def format(self, record: logging.LogRecord) -> str:
-        """Format log record with optional sanitization."""
-        if self.sanitize:
-            # Create a copy to avoid modifying the original record
-            record_copy = logging.makeLogRecord(record.__dict__)
-
-            # First format the message normally to get the final message
-            formatted_message = super().format(record_copy)
-
-            # Then sanitize the final formatted message
-            sanitized_message = LogSanitizer.sanitize_message(formatted_message)
-
-            return sanitized_message
-        else:
-            return super().format(record)
+        """Format log record. Sanitization is handled by SanitizingFilter."""
+        return super().format(record)
 
 
 class JSONFormatter(logging.Formatter):
