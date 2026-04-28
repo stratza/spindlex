@@ -43,11 +43,11 @@ MSG_USERAUTH_BANNER = 53
 # / GSSAPI) and type 61 is shared by two.  The wire type byte is NOT sufficient for
 # dispatch — callers MUST use the currently active authentication method as context and
 # assert they are in the expected auth state before interpreting the payload.
-MSG_USERAUTH_PK_OK = 60             # publickey: key acceptable (query response)
+MSG_USERAUTH_PK_OK = 60  # publickey: key acceptable (query response)
 MSG_USERAUTH_PASSWD_CHANGEREQ = 60  # password: change required
-MSG_USERAUTH_INFO_REQUEST = 60      # keyboard-interactive: challenge prompt
+MSG_USERAUTH_INFO_REQUEST = 60  # keyboard-interactive: challenge prompt
 MSG_USERAUTH_INFO_RESPONSE = 61
-MSG_USERAUTH_GSSAPI_RESPONSE = 60   # GSSAPI: mechanism selected
+MSG_USERAUTH_GSSAPI_RESPONSE = 60  # GSSAPI: mechanism selected
 MSG_USERAUTH_GSSAPI_TOKEN = 61
 MSG_USERAUTH_GSSAPI_EXCHANGE_COMPLETE = 63
 MSG_USERAUTH_GSSAPI_ERROR = 64

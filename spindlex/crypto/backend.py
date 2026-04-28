@@ -227,7 +227,7 @@ class CryptographyBackend:
             data_bytes = bytes(data)
 
             hash_class = self.HASH_ALGORITHMS[algorithm]
-            digest = hashes.Hash(hash_class(), backend=self.backend)
+            digest = hashes.Hash(hash_class(), backend=self.backend)  # type: ignore[abstract]
             digest.update(data_bytes)
             return digest.finalize()
         except CryptoException:
@@ -456,13 +456,13 @@ class CryptographyBackend:
             )
 
             # Hash the initial data
-            digest = hashes.Hash(hash_class(), backend=self.backend)
+            digest = hashes.Hash(hash_class(), backend=self.backend)  # type: ignore[abstract]
             digest.update(initial_data)
             key_material = digest.finalize()
 
             # Extend key material if needed
             while len(key_material) < key_length:
-                digest = hashes.Hash(hash_class(), backend=self.backend)
+                digest = hashes.Hash(hash_class(), backend=self.backend)  # type: ignore[abstract]
                 digest.update(shared_secret_bytes + exchange_hash_bytes + key_material)
                 key_material += digest.finalize()
 

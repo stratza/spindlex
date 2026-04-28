@@ -45,7 +45,6 @@ from ..protocol.sftp_messages import (
     SFTPWriteMessage,
 )
 
-
 # Sentinel key for the init VERSION response — intentionally outside uint32 range
 _SFTP_INIT_SENTINEL: int = -2
 

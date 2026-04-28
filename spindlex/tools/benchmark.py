@@ -159,7 +159,9 @@ Examples:
 
     parser.add_argument("-u", "--username", help="SSH username")
 
-    parser.add_argument("-p", "--password", action="store_true", help="Prompt for SSH password")
+    parser.add_argument(
+        "-p", "--password", action="store_true", help="Prompt for SSH password"
+    )
 
     parser.add_argument("-k", "--key-filename", help="SSH private key file")
 

@@ -297,12 +297,18 @@ class AsyncRemotePortForwarder:
             reader, writer = await asyncio.open_connection(*tunnel.local_addr)
 
             # Start relay
-            relay1 = asyncio.create_task(self._relay_stream_to_channel(reader, channel, writer))
+            relay1 = asyncio.create_task(
+                self._relay_stream_to_channel(reader, channel, writer)
+            )
             relay2 = asyncio.create_task(self._relay_channel_to_stream(channel, writer))
 
             tunnel.tasks.extend([relay1, relay2])
-            relay1.add_done_callback(lambda t: tunnel.tasks.remove(t) if t in tunnel.tasks else None)
-            relay2.add_done_callback(lambda t: tunnel.tasks.remove(t) if t in tunnel.tasks else None)
+            relay1.add_done_callback(
+                lambda t: tunnel.tasks.remove(t) if t in tunnel.tasks else None
+            )
+            relay2.add_done_callback(
+                lambda t: tunnel.tasks.remove(t) if t in tunnel.tasks else None
+            )
 
         except Exception as e:
             self._logger.error(f"Failed to handle remote forwarded connection: {e}")

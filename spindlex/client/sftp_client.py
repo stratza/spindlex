@@ -327,7 +327,9 @@ class SFTPClient:
         except Exception as e:
             raise SFTPError(f"Failed to receive SFTP message: {e}") from e
 
-    def _receive_message_for_id(self, target_id: int, timeout: float = 60.0) -> SFTPMessage:
+    def _receive_message_for_id(
+        self, target_id: int, timeout: float = 60.0
+    ) -> SFTPMessage:
         """
         Receive the SFTP response matching target_id, buffering any others.
 

@@ -176,7 +176,9 @@ class KeyExchange:
         cookie = default_crypto_backend.generate_random(KEX_COOKIE_SIZE)
 
         # Client KEXINIT includes signaling tokens appended after real algorithms
-        kex_algorithms = self._cipher_suite.KEX_ALGORITHMS + self._cipher_suite.KEX_SIGNAL_TOKENS
+        kex_algorithms = (
+            self._cipher_suite.KEX_ALGORITHMS + self._cipher_suite.KEX_SIGNAL_TOKENS
+        )
         kexinit_msg = KexInitMessage(
             cookie=cookie,
             kex_algorithms=kex_algorithms,

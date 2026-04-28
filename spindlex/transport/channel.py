@@ -145,9 +145,7 @@ class Channel:
                 except socket.timeout:
                     pass  # Retry after window adjust
                 except Exception as e:
-                    raise ChannelException(
-                        f"Transport error during send: {e}"
-                    ) from e
+                    raise ChannelException(f"Transport error during send: {e}") from e
                 finally:
                     self._lock.acquire()
 

@@ -112,4 +112,3 @@ class PasswordAuth:
             if isinstance(e, AuthenticationException):
                 raise
             raise AuthenticationException(f"Password authentication failed: {e}") from e
-

@@ -329,7 +329,12 @@ class SFTPServer:
             try:
                 message = self._receive_message()
                 self._handle_message(message)
-            except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError, EOFError) as e:
+            except (
+                ConnectionResetError,
+                ConnectionAbortedError,
+                BrokenPipeError,
+                EOFError,
+            ) as e:
                 self._logger.debug(f"SFTP session ended: {e}")
                 break
             except (OSError, struct.error, SSHException) as e:
