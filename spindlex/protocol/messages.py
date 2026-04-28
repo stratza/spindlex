@@ -106,11 +106,12 @@ class Message:
             MSG_USERAUTH_FAILURE: UserAuthFailureMessage,
             MSG_USERAUTH_SUCCESS: UserAuthSuccessMessage,
             MSG_USERAUTH_BANNER: UserAuthBannerMessage,
-            # Method-specific messages (60-79) should be handled manually by the auth method
-            # to avoid disambiguation issues.
-            # MSG_USERAUTH_PK_OK: UserAuthPKOKMessage,
-            # MSG_USERAUTH_INFO_REQUEST: UserAuthInfoRequestMessage,
-            # MSG_USERAUTH_INFO_RESPONSE: UserAuthInfoResponseMessage,
+            # Types 60 and 61 are INTENTIONALLY omitted from this table (see constants.py).
+            # Four auth methods share type 60 and two share type 61 (RFC 4252 / 4256 /
+            # draft-ietf-secsh-gss).  The wire type alone is ambiguous — each auth handler
+            # MUST receive these as a raw Message and re-interpret the payload using the
+            # known active auth method as context before casting to a concrete class.
+            # MSG_USERAUTH_PK_OK / MSG_USERAUTH_INFO_REQUEST / MSG_USERAUTH_GSSAPI_RESPONSE
             MSG_GLOBAL_REQUEST: GlobalRequestMessage,
             MSG_REQUEST_SUCCESS: RequestSuccessMessage,
             MSG_REQUEST_FAILURE: RequestFailureMessage,
@@ -518,6 +519,7 @@ class UserAuthRequestMessage(Message):
             AUTH_PUBLICKEY,
             AUTH_HOSTBASED,
             AUTH_KEYBOARD_INTERACTIVE,
+            AUTH_GSSAPI_WITH_MIC,
         ]
         if self.method not in valid_methods:
             raise ProtocolException(f"Invalid authentication method: {self.method}")
@@ -1238,7 +1240,7 @@ class ChannelExtendedDataMessage(Message):
         # Build message data
         self.add_uint32(recipient_channel)
         self.add_uint32(data_type)
-        self._data.extend(data)
+        self.add_string(data)
 
     @classmethod
     def _unpack_data(cls, data: bytes) -> "ChannelExtendedDataMessage":
@@ -1246,7 +1248,7 @@ class ChannelExtendedDataMessage(Message):
         offset = 0
         recipient_channel, offset = read_uint32(data, offset)
         data_type, offset = read_uint32(data, offset)
-        message_data = data[offset:]
+        message_data, offset = read_string(data, offset)
 
         return cls(recipient_channel, data_type, message_data)
 
