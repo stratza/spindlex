@@ -6,6 +6,7 @@ A tool for benchmarking SSH operations and comparing performance (part of Spindl
 """
 
 import argparse
+import getpass
 import statistics
 import time
 from typing import Any, Optional
@@ -158,7 +159,7 @@ Examples:
 
     parser.add_argument("-u", "--username", help="SSH username")
 
-    parser.add_argument("-p", "--password", help="SSH password")
+    parser.add_argument("-p", "--password", action="store_true", help="Prompt for SSH password")
 
     parser.add_argument("-k", "--key-filename", help="SSH private key file")
 
@@ -201,12 +202,14 @@ Examples:
             parser.print_help()
             return 1
 
+        password = getpass.getpass("SSH password: ") if args.password else None
+
         # Benchmark connection
         print(f"Benchmarking connections to {args.hostname}...")
         conn_result = benchmark_connection(
             args.hostname,
             args.username,
-            args.password,
+            password,
             args.key_filename,
             args.iterations,
         )
@@ -218,7 +221,7 @@ Examples:
             client.connect(
                 hostname=args.hostname,
                 username=args.username,
-                password=args.password,
+                password=password,
                 key_filename=args.key_filename,
             )
 
