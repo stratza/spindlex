@@ -46,6 +46,10 @@ from ..protocol.sftp_messages import (
 )
 
 
+# Sentinel key for the init VERSION response — intentionally outside uint32 range
+_SFTP_INIT_SENTINEL: int = -2
+
+
 class AsyncSFTPClient:
     """
     Async SFTP client for file transfer operations.
@@ -82,7 +86,7 @@ class AsyncSFTPClient:
 
         # Wait for version response (special case in dispatcher uses ID -1)
         fut = asyncio.get_running_loop().create_future()
-        self._pending_requests[-1] = fut
+        self._pending_requests[_SFTP_INIT_SENTINEL] = fut
 
         try:
             response = await fut
@@ -104,7 +108,7 @@ class AsyncSFTPClient:
                     # In SFTP protocol, VERSION is the only one without ID
                     request_id: Optional[int]
                     if isinstance(response, SFTPVersionMessage):
-                        request_id = -1
+                        request_id = _SFTP_INIT_SENTINEL
                     else:
                         request_id = getattr(response, "request_id", None)
 
@@ -169,20 +173,52 @@ class AsyncSFTPClient:
         Raises:
             SFTPError: If download fails
         """
+        _CHUNK = 32768
+        _WINDOW = 16
         try:
-            # Open remote file for reading
             remote_file = await self.open(remotepath, "rb")
+            try:
+                loop = asyncio.get_running_loop()
+                with open(localpath, "wb") as local_file:
+                    offset = 0
+                    inflight: list[asyncio.Future] = []
+                    done = False
 
-            # Create local file
-            with open(localpath, "wb") as local_file:
-                # Read and write in chunks
-                while True:
-                    chunk = await remote_file.read(32768)
-                    if not chunk:
-                        break
-                    local_file.write(chunk)
+                    while not done or inflight:
+                        # Fill pipeline up to window size
+                        while not done and len(inflight) < _WINDOW:
+                            req_id = self._get_next_request_id()
+                            fut: asyncio.Future = loop.create_future()
+                            self._pending_requests[req_id] = fut
+                            msg = SFTPReadMessage(
+                                request_id=req_id,
+                                handle=remote_file._handle,
+                                offset=offset,
+                                length=_CHUNK,
+                            )
+                            await self._send_message(msg)
+                            inflight.append(fut)
+                            offset += _CHUNK
 
-            await remote_file.close()
+                        if not inflight:
+                            break
+
+                        # Drain oldest in-order
+                        response = await inflight.pop(0)
+                        if isinstance(response, SFTPDataMessage):
+                            local_file.write(response.data)
+                        elif isinstance(response, SFTPStatusMessage):
+                            if response.status_code == SSH_FX_EOF:
+                                done = True
+                            else:
+                                raise SFTPError(
+                                    f"Read failed: {response.message}",
+                                    response.status_code,
+                                )
+                        else:
+                            raise SFTPError("Unexpected response to read request")
+            finally:
+                await remote_file.close()
 
         except Exception as e:
             if isinstance(e, SFTPError):
@@ -200,19 +236,57 @@ class AsyncSFTPClient:
         Raises:
             SFTPError: If upload fails
         """
+        _CHUNK = 32768
+        _WINDOW = 16
         try:
-            # Open remote file for writing
             remote_file = await self.open(remotepath, "wb")
+            try:
+                loop = asyncio.get_running_loop()
+                with open(localpath, "rb") as local_file:
+                    offset = 0
+                    inflight: list[asyncio.Future] = []
 
-            # Read local file and upload in chunks
-            with open(localpath, "rb") as local_file:
-                while True:
-                    chunk = local_file.read(32768)
-                    if not chunk:
-                        break
-                    await remote_file.write(chunk)
+                    while True:
+                        chunk = local_file.read(_CHUNK)
+                        if not chunk:
+                            break
 
-            await remote_file.close()
+                        req_id = self._get_next_request_id()
+                        fut: asyncio.Future = loop.create_future()
+                        self._pending_requests[req_id] = fut
+                        msg = SFTPWriteMessage(
+                            request_id=req_id,
+                            handle=remote_file._handle,
+                            offset=offset,
+                            data=chunk,
+                        )
+                        await self._send_message(msg)
+                        inflight.append(fut)
+                        offset += len(chunk)
+
+                        # Drain when window is full
+                        while len(inflight) >= _WINDOW:
+                            response = await inflight.pop(0)
+                            if not isinstance(response, SFTPStatusMessage):
+                                raise SFTPError("Unexpected response to write request")
+                            if response.status_code != SSH_FX_OK:
+                                raise SFTPError(
+                                    f"Write failed: {response.message}",
+                                    response.status_code,
+                                )
+
+                    # Drain remaining inflight
+                    for fut in inflight:
+                        response = await fut
+                        if not isinstance(response, SFTPStatusMessage):
+                            raise SFTPError("Unexpected response to write request")
+                        if response.status_code != SSH_FX_OK:
+                            raise SFTPError(
+                                f"Write failed: {response.message}",
+                                response.status_code,
+                            )
+            finally:
+                await remote_file.close()
 
         except Exception as e:
             if isinstance(e, SFTPError):
@@ -549,11 +623,15 @@ class AsyncSFTPClient:
         # Parse message
         return SFTPMessage.unpack(length_data + data)
 
-    async def _wait_for_response(self, request_id: int) -> Any:
+    async def _wait_for_response(self, request_id: int, timeout: float = 60.0) -> Any:
         """Wait for response to specific request using dispatcher."""
         fut = asyncio.get_running_loop().create_future()
         self._pending_requests[request_id] = fut
-        return await fut
+        try:
+            return await asyncio.wait_for(asyncio.shield(fut), timeout=timeout)
+        except asyncio.TimeoutError:
+            self._pending_requests.pop(request_id, None)
+            raise SFTPError(f"Timeout waiting for response to request {request_id}")
 
     async def _opendir(self, path: str) -> bytes:
         """
