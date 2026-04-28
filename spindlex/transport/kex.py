@@ -175,10 +175,11 @@ class KeyExchange:
         """Send KEXINIT message with supported algorithms."""
         cookie = default_crypto_backend.generate_random(KEX_COOKIE_SIZE)
 
-        # Use algorithms from CipherSuite
+        # Client KEXINIT includes signaling tokens appended after real algorithms
+        kex_algorithms = self._cipher_suite.KEX_ALGORITHMS + self._cipher_suite.KEX_SIGNAL_TOKENS
         kexinit_msg = KexInitMessage(
             cookie=cookie,
-            kex_algorithms=self._cipher_suite.KEX_ALGORITHMS,
+            kex_algorithms=kex_algorithms,
             server_host_key_algorithms=self._cipher_suite.HOST_KEY_ALGORITHMS,
             encryption_algorithms_client_to_server=self._cipher_suite.ENCRYPTION_ALGORITHMS,
             encryption_algorithms_server_to_client=self._cipher_suite.ENCRYPTION_ALGORITHMS,
@@ -758,7 +759,8 @@ class KeyExchange:
         # Server DH public key (f) as mpint (RFC 4253 §8)
         hash_data.extend(server_dh_public)
 
-        # Shared secret        if self._shared_secret is None:
+        # Shared secret
+        if self._shared_secret is None:
             raise CryptoException("Missing shared secret")
         hash_data.extend(self._shared_secret)
 
@@ -888,7 +890,8 @@ class KeyExchange:
         self._transport._cipher_s2c = self._encryption_algorithm_s2c
         self._transport._mac_c2s = self._mac_algorithm_c2s
         self._transport._mac_s2c = self._mac_algorithm_s2c
-        self._transport._session_id = self._session_id
+        if self._transport._session_id is None:
+            self._transport._session_id = self._session_id
 
     def _send_newkeys(self) -> None:
         """Send NEWKEYS message to activate new keys."""
