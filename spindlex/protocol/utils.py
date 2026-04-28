@@ -100,13 +100,16 @@ def read_uint64(data: bytes, offset: int) -> tuple[int, int]:
     return value, offset + 8
 
 
-def read_string(data: bytes, offset: int) -> tuple[bytes, int]:
+def read_string(
+    data: bytes, offset: int, max_size: int = MAX_PACKET_SIZE
+) -> tuple[bytes, int]:
     """
     Read string from data.
 
     Args:
         data: Data buffer
         offset: Current offset
+        max_size: Maximum allowed string length (use a larger value for SFTP payloads)
 
     Returns:
         Tuple of (string_bytes, new_offset)
@@ -119,7 +122,7 @@ def read_string(data: bytes, offset: int) -> tuple[bytes, int]:
     if new_offset + length > len(data):
         raise ProtocolException("Not enough data to read string")
 
-    if length > MAX_PACKET_SIZE:
+    if length > max_size:
         raise ProtocolException(f"String too long: {length}")
 
     # Ensure result is bytes, even if data is bytearray
