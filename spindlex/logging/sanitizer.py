@@ -16,7 +16,7 @@ class LogSanitizer:
         "password": re.compile(r'(?i)(\bpassword(?:[\s:=]|is\b)+)([^\s,"}]+)'),
         "secret": re.compile(r'(?i)(\bsecret(?:[\s:=]|is\b)+)([^\s,"}]+)'),
         "token": re.compile(r'(?i)(\btoken(?:[\s:=]|is\b)+)([^\s,"}]+)'),
-        "key": re.compile(r'(?i)(\bkey(?:[\s:=]|is\b)+)([^\s,"}]+)'),
+        "key": re.compile(r'(?i)(\b(?:api_key|private_key|host_key|secret_key|auth_key|access_key|encryption_key)(?:[\s:=]|is\b)+)([^\s,"}]+)'),
         "passphrase": re.compile(r'(?i)(\bpassphrase(?:[\s:=]|is\b)+)([^\s,"}]+)'),
         # SSH key material (base64 encoded)
         "ssh_key": re.compile(r"AAAA[A-Za-z0-9+/]{20,}={0,2}"),
