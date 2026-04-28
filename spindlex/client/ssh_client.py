@@ -174,7 +174,9 @@ class ChannelFile:
 
     def close(self) -> None:
         """Close the file."""
-        self._closed = True
+        if not self._closed:
+            self._closed = True
+            self._channel.close()
 
     def __enter__(self) -> "ChannelFile":
         """Context manager entry."""
