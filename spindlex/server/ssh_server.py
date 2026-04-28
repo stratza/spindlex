@@ -77,11 +77,12 @@ class SSHServer:
         # Create transport for this connection
         transport = Transport(sock)
 
+        # Set server interface before starting so auth requests are never
+        # received without an interface in place (MED-15)
+        transport.set_server_interface(self)
+
         # Start server-side transport
         transport.start_server(self._server_key, timeout)
-
-        # Set server interface for authentication callbacks
-        transport.set_server_interface(self)
 
         with self._lock:
             self._transports.append(transport)
