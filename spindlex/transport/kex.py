@@ -546,7 +546,7 @@ class KeyExchange:
             # 6. Compute exchange hash H — pass client key explicitly to avoid mutating state
             self._compute_exchange_hash(
                 server_host_key_blob,
-                write_mpint(server_public_numbers.y)[4:],  # strip 4-byte length prefix
+                write_mpint(server_public_numbers.y),  # f as mpint (RFC 4253 §8)
                 b"",  # signature not used during hash computation itself
                 client_dh_public_mpint=write_mpint(client_public_key_int),
             )
@@ -755,11 +755,10 @@ class KeyExchange:
             raise CryptoException("Missing DH client public key")
         hash_data.extend(client_mpint)
 
-        # Server DH public key (f) - must be encoded as mpint/string
-        hash_data.extend(write_string(server_dh_public))
+        # Server DH public key (f) as mpint (RFC 4253 §8)
+        hash_data.extend(server_dh_public)
 
-        # Shared secret
-        if self._shared_secret is None:
+        # Shared secret        if self._shared_secret is None:
             raise CryptoException("Missing shared secret")
         hash_data.extend(self._shared_secret)
 
