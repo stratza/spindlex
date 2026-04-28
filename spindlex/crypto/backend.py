@@ -6,6 +6,7 @@ cryptography library implementation.
 """
 
 import os
+import struct
 from typing import Any, Protocol
 
 from cryptography.hazmat.backends import default_backend
@@ -169,6 +170,7 @@ class CryptographyBackend:
 
     # Hash algorithm mapping
     HASH_ALGORITHMS = {
+        "sha1": hashes.SHA1,
         "sha256": hashes.SHA256,
         "sha512": hashes.SHA512,
     }
@@ -228,6 +230,8 @@ class CryptographyBackend:
             digest = hashes.Hash(hash_class(), backend=self.backend)
             digest.update(data_bytes)
             return digest.finalize()
+        except CryptoException:
+            raise
         except Exception as e:
             raise CryptoException(f"Hash operation failed: {e}") from e
 
@@ -403,7 +407,10 @@ class CryptographyBackend:
 
         Args:
             algorithm: Hash algorithm for key derivation
-            shared_secret: Shared secret from key exchange
+            shared_secret: Shared secret K — MUST be mpint-encoded per RFC 4253 §7.2,
+                i.e. a 4-byte big-endian length prefix followed by the minimal
+                two's-complement big-endian representation of K (with a leading
+                0x00 byte if the MSB is set). Pass write_mpint(K) from protocol.utils.
             exchange_hash: Hash of key exchange
             session_id: Session identifier
             key_type: Key type identifier (A, B, C, D, E, F)
@@ -413,7 +420,7 @@ class CryptographyBackend:
             Derived key
 
         Raises:
-            CryptoException: If key derivation fails
+            CryptoException: If key derivation fails or shared_secret is not mpint-encoded
         """
         try:
             if algorithm not in self.HASH_ALGORITHMS:
@@ -423,6 +430,19 @@ class CryptographyBackend:
 
             # Ensure all inputs are bytes
             shared_secret_bytes = bytes(shared_secret)
+
+            # Validate mpint envelope: 4-byte length prefix + payload (RFC 4253 §7.2)
+            if len(shared_secret_bytes) < 4:
+                raise CryptoException(
+                    "shared_secret must be mpint-encoded (RFC 4253 §7.2): too short"
+                )
+            declared = struct.unpack(">I", shared_secret_bytes[:4])[0]
+            if len(shared_secret_bytes) != 4 + declared:
+                raise CryptoException(
+                    "shared_secret must be mpint-encoded (RFC 4253 §7.2): "
+                    f"declared length {declared} does not match actual payload length "
+                    f"{len(shared_secret_bytes) - 4}"
+                )
             exchange_hash_bytes = bytes(exchange_hash)
             key_type_bytes = bytes(key_type)
             session_id_bytes = bytes(session_id)
