@@ -5,6 +5,7 @@ Provides asynchronous SSH channel functionality for command execution and data t
 """
 
 import asyncio
+import threading
 from typing import Any, Union
 
 from ..exceptions import ChannelException
@@ -40,8 +41,6 @@ class AsyncChannel(Channel):
         # Override parent's deque buffers with bytes for async
         self._recv_buffer: bytes = b""
         self._stderr_buffer: bytes = b""
-        import threading
-
         self._buffer_lock = threading.Lock()
 
     def _handle_data(self, data: bytes) -> None:
@@ -143,20 +142,25 @@ class AsyncChannel(Channel):
         try:
             # Wait for data or channel close
             while True:
-                if self._recv_buffer:
-                    # Return available data
-                    if nbytes <= 0:
-                        data = self._recv_buffer
-                        self._recv_buffer = b""
+                with self._buffer_lock:
+                    if self._recv_buffer:
+                        # Return available data
+                        if nbytes <= 0:
+                            data = self._recv_buffer
+                            self._recv_buffer = b""
+                        else:
+                            data = self._recv_buffer[:nbytes]
+                            self._recv_buffer = self._recv_buffer[nbytes:]
+
+                        bytes_read = bytes(data)
+
                     else:
-                        data = self._recv_buffer[:nbytes]
-                        self._recv_buffer = self._recv_buffer[nbytes:]
+                        bytes_read = None
 
-                    # Adjust window if needed
-                    if len(data) > 0:
-                        await self._adjust_window_async(len(data))
-
-                    return bytes(data)
+                if bytes_read is not None:
+                    if len(bytes_read) > 0:
+                        await self._adjust_window_async(len(bytes_read))
+                    return bytes_read
 
                 if self.eof_received:
                     return b""
@@ -212,23 +216,27 @@ class AsyncChannel(Channel):
         try:
             # Wait for data or channel close
             while True:
+                with self._buffer_lock:
+                    if self._stderr_buffer:
+                        # Return available data
+                        if nbytes <= 0:
+                            data = self._stderr_buffer
+                            self._stderr_buffer = b""
+                        else:
+                            data = self._stderr_buffer[:nbytes]
+                            self._stderr_buffer = self._stderr_buffer[nbytes:]
+
+                        bytes_read = bytes(data)
+                    else:
+                        bytes_read = None
+
+                if bytes_read is not None:
+                    if len(bytes_read) > 0:
+                        await self._adjust_window_async(len(bytes_read))
+                    return bytes_read
+
                 if not self._stderr_buffer and self.eof_received:
                     return b""
-
-                if self._stderr_buffer:
-                    # Return available data
-                    if nbytes <= 0:
-                        data = self._stderr_buffer
-                        self._stderr_buffer = b""
-                    else:
-                        data = self._stderr_buffer[:nbytes]
-                        self._stderr_buffer = self._stderr_buffer[nbytes:]
-
-                    # Adjust window if needed
-                    if len(data) > 0:
-                        await self._adjust_window_async(len(data))
-
-                    return bytes(data)
 
                 # Wait for more data by pumping the transport
                 await self._transport._pump_async()
