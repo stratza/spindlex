@@ -416,21 +416,11 @@ class GSSAPIAuth:
         return self._gss_credentials
 
     def cleanup(self) -> None:
-        """Clean up GSSAPI resources."""
-        if self._gss_context:
-            try:
-                # Context cleanup is handled automatically by gssapi library
-                pass
-            except Exception:
-                pass
-            finally:
-                self._gss_context = None
+        """Clean up GSSAPI resources.
 
-        if self._gss_credentials:
-            try:
-                # Credentials cleanup is handled automatically by gssapi library
-                pass
-            except Exception:
-                pass
-            finally:
-                self._gss_credentials = None
+        The gssapi library releases the underlying context/credentials via __del__
+        (gss_delete_sec_context / gss_release_cred) when the Python objects are
+        garbage-collected. Dropping our references here triggers that cleanup.
+        """
+        self._gss_context = None
+        self._gss_credentials = None
