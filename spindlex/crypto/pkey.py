@@ -529,16 +529,21 @@ class ECDSAKey(PKey):
         Load ECDSA private key.
 
         Args:
-            key_data: Private key data (PEM format)
+            key_data: Private key data (PEM or OpenSSH format)
             password: Optional password for encrypted keys
 
         Raises:
             CryptoException: If key loading fails
         """
         try:
-            self._key = serialization.load_pem_private_key(
-                key_data, password=password, backend=default_backend()
-            )
+            if b"BEGIN OPENSSH PRIVATE KEY" in key_data:
+                self._key = serialization.load_ssh_private_key(
+                    key_data, password=password, backend=default_backend()
+                )
+            else:
+                self._key = serialization.load_pem_private_key(
+                    key_data, password=password, backend=default_backend()
+                )
             if not isinstance(self._key, ec.EllipticCurvePrivateKey):
                 raise CryptoException("Key is not ECDSA private key")
 
@@ -858,8 +863,8 @@ class RSAKey(PKey):
             # Get public numbers
             numbers = public_key.public_numbers()
 
-            # Format as SSH wire format: string "ssh-rsa", mpint e, mpint n
-            algorithm = b"ssh-rsa"
+            # Format as SSH wire format: string <algorithm>, mpint e, mpint n
+            algorithm = self.algorithm_name.encode()
             result = struct.pack(">I", len(algorithm)) + algorithm
             result += write_mpint(numbers.e)
             result += write_mpint(numbers.n)
