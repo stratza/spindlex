@@ -5,6 +5,7 @@ Represents individual communication channels within SSH connections
 with support for different channel types and operations.
 """
 
+import socket
 import threading
 import time
 from collections import deque
@@ -68,6 +69,7 @@ class Channel:
         self._data_event = threading.Event()
         self._window_event = threading.Event()
         self._request_event = threading.Event()
+        self._exit_status_event = threading.Event()
         self._timeout: Optional[float] = None
 
     def settimeout(self, timeout: Optional[float]) -> None:
@@ -140,12 +142,12 @@ class Channel:
                     # Otherwise, we will wait forever in a single-threaded environment.
                     if not self._window_event.wait(timeout=0.1):
                         self._transport._pump()
+                except socket.timeout:
+                    pass  # Retry after window adjust
                 except Exception as e:
-                    # Ignore timeout errors from pump
-                    if "timeout" not in str(e).lower():
-                        raise ChannelException(
-                            f"Transport error during send: {e}"
-                        ) from e
+                    raise ChannelException(
+                        f"Transport error during send: {e}"
+                    ) from e
                 finally:
                     self._lock.acquire()
 
@@ -285,10 +287,8 @@ class Channel:
                                 pass  # fall through to _pump()
 
                 self._transport._pump()
-            except Exception as e:
-                if "timeout" not in str(e).lower():
-                    raise
-                # Loop back so the channel-timeout check at the top fires.
+            except socket.timeout:
+                pass  # Loop back so the channel-timeout check at the top fires.
 
     def recv_exactly(self, nbytes: int) -> bytes:
         """
@@ -445,24 +445,30 @@ class Channel:
         Raises:
             ChannelException: If timeout reached
         """
-        start_time = time.time()
         effective_timeout = timeout if timeout is not None else self._timeout
 
+        if self._exit_status is not None:
+            return self.get_exit_status()
+
+        has_bg_thread = getattr(self._transport, "_kex_thread", None) is not None
+
+        if has_bg_thread:
+            signaled = self._exit_status_event.wait(timeout=effective_timeout)
+            if not signaled and self._exit_status is None:
+                raise ChannelException("Timeout waiting for exit status")
+            return self.get_exit_status()
+
+        # No background receive thread — pump until exit status arrives.
+        start_time = time.time()
         while self._exit_status is None and not self._closed:
-            # Check timeout
             if effective_timeout is not None:
                 elapsed = time.time() - start_time
                 if elapsed >= effective_timeout:
                     raise ChannelException("Timeout waiting for exit status")
-
             try:
                 self._transport._pump()
             except Exception:
                 break
-
-            # Small sleep to prevent busy-waiting if _pump is non-blocking
-            if self._exit_status is None and not self._closed:
-                time.sleep(0.01)
 
         return self.get_exit_status()
 
@@ -783,6 +789,7 @@ class Channel:
         """
         with self._lock:
             self._exit_status = exit_status
+        self._exit_status_event.set()
 
     def _handle_request(self, request_type: str, data: bytes) -> bool:
         """
@@ -941,6 +948,7 @@ class Channel:
             # Set exit status to indicate signal termination
             # Convention: 128 + signal number
             self._exit_status = 128 + signum
+            self._exit_status_event.set()
             # Store signal info for debugging
             self._exit_signal = {
                 "signal_name": signal_name,
