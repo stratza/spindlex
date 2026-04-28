@@ -19,11 +19,18 @@ class CipherSuite:
     with preference for modern, secure cryptographic primitives.
     """
 
-    # Supported key exchange algorithms (in preference order)
+    # Negotiable key exchange algorithms (in preference order)
+    # Do NOT include signaling tokens here — they are not real KEX algorithms
+    # and must not appear in server-bound KEXINIT lists.
     KEX_ALGORITHMS = [
         "curve25519-sha256",
         "ecdh-sha2-nistp256",
         "diffie-hellman-group14-sha256",
+    ]
+
+    # Client-only signaling tokens appended to the client's KEXINIT kex list.
+    # Servers MUST NOT include these; clients include them to advertise capabilities.
+    KEX_SIGNAL_TOKENS = [
         "kex-strict-c-v01@openssh.com",
         "ext-info-c",
     ]
@@ -54,6 +61,8 @@ class CipherSuite:
     # Cipher key and IV lengths
     CIPHER_INFO = {
         "chacha20-poly1305@openssh.com": {"key_len": 64, "iv_len": 0, "aead": True},
+        # iv_len is the fixed salt only (4 bytes). The caller appends an 8-byte
+        # sequence counter to form the full 12-byte nonce (RFC 5116 §3.2).
         "aes256-gcm@openssh.com": {"key_len": 32, "iv_len": 4, "aead": True},
         "aes128-gcm@openssh.com": {"key_len": 16, "iv_len": 4, "aead": True},
         "aes256-ctr": {"key_len": 32, "iv_len": 16, "aead": False},
