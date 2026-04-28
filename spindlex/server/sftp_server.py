@@ -5,6 +5,7 @@ Provides server-side SFTP functionality with file system operations
 and customizable authorization hooks.
 """
 
+import errno
 import logging
 import os
 import stat
@@ -328,34 +329,23 @@ class SFTPServer:
             try:
                 message = self._receive_message()
                 self._handle_message(message)
+            except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError, EOFError) as e:
+                self._logger.debug(f"SFTP session ended: {e}")
+                break
             except (OSError, struct.error, SSHException) as e:
-                err = str(e).lower()
-                # Treat EOF / connection-closed as a clean shutdown, not an error
-                if any(
-                    k in err
-                    for k in (
-                        "connection closed",
-                        "eof",
-                        "closed",
-                        "bad file descriptor",
-                        "timeout",
-                    )
-                ):
-                    self._logger.debug(f"SFTP session ended: {e}")
-                else:
-                    self._logger.error(f"Error processing SFTP message: {e}")
-                    try:
-                        if (
-                            message is not None
-                            and hasattr(message, "request_id")
-                            and message.request_id is not None
-                        ):
-                            error_msg = SFTPStatusMessage(
-                                message.request_id, SSH_FX_FAILURE, str(e)
-                            )
-                            self._send_message(error_msg)
-                    except (OSError, SFTPError):
-                        pass
+                self._logger.error(f"Error processing SFTP message: {e}")
+                try:
+                    if (
+                        message is not None
+                        and hasattr(message, "request_id")
+                        and message.request_id is not None
+                    ):
+                        error_msg = SFTPStatusMessage(
+                            message.request_id, SSH_FX_FAILURE, str(e)
+                        )
+                        self._send_message(error_msg)
+                except (OSError, SFTPError):
+                    pass
                 break
 
     def _handle_message(self, message: SFTPMessage) -> None:
@@ -488,7 +478,7 @@ class SFTPServer:
 
             return attrs
         except OSError as e:
-            if e.errno == 2:  # No such file or directory
+            if e.errno == errno.ENOENT:
                 raise SFTPError("No such file or directory", SSH_FX_NO_SUCH_FILE)
             else:
                 raise SFTPError(f"Stat failed: {e}", SSH_FX_FAILURE)
@@ -560,6 +550,7 @@ class SFTPServer:
                 with self._handle_lock:
                     # Bug #12 Fixed: Enforce limit on open file handles
                     if len(self._handles) >= MAX_SFTP_HANDLES:
+                        file_obj.close()
                         error_msg = SFTPStatusMessage(
                             message.request_id,
                             SSH_FX_FAILURE,
@@ -782,7 +773,7 @@ class SFTPServer:
                 attrs.gid = st.st_gid
 
             except OSError as e:
-                if e.errno == 2:  # No such file or directory
+                if e.errno == errno.ENOENT:
                     raise SFTPError("No such file or directory", SSH_FX_NO_SUCH_FILE)
                 else:
                     raise SFTPError(f"Lstat failed: {e}", SSH_FX_FAILURE)
