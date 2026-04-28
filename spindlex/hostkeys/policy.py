@@ -141,5 +141,5 @@ class WarningPolicy(MissingHostKeyPolicy):
             key: Server's host key
         """
         self._logger.warning(
-            f"Unknown host key for {hostname}: {key.get_name()} {key.get_fingerprint()}"
+            f"Unknown host key for {hostname}: {key.algorithm_name} {key.get_fingerprint()}"
         )
