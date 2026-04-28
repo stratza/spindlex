@@ -288,8 +288,8 @@ class KeyExchange:
             # Extract server's DH public key (f)
             server_public_int, offset = read_mpint(reply_msg._data, offset)
 
-            # Re-serialize for hash computation (H = hash(... || f || ...))
-            server_dh_public_blob = write_mpint(server_public_int)[4:]
+            # Encode f as mpint for exchange hash (RFC 4253 §8)
+            server_dh_public_blob = write_mpint(server_public_int)
 
             signature_blob, offset = read_string(reply_msg._data, offset)
 
