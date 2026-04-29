@@ -83,7 +83,7 @@ class AsyncSFTPClient:
         init_msg = SFTPInitMessage(version=SFTP_VERSION)
         await self._send_message(init_msg)
 
-        # Wait for version response (special case in dispatcher uses ID -1)
+        # Wait for version response (special case in dispatcher uses ID -2)
         fut = asyncio.get_running_loop().create_future()
         self._pending_requests[_SFTP_INIT_SENTINEL] = fut
 

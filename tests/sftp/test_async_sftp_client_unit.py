@@ -853,11 +853,11 @@ class TestAsyncSFTPClientInitialize:
 
             async def fake_dispatch():
                 task_started.set()
-                # Find the -1 future and resolve it
+                # Find the -2 future and resolve it
                 for _ in range(100):
                     await asyncio.sleep(0)
-                    if -1 in client._pending_requests:
-                        fut = client._pending_requests[-1]
+                    if -2 in client._pending_requests:
+                        fut = client._pending_requests[-2]
                         if not fut.done():
                             fut.set_result(version_msg)
                         break
@@ -883,8 +883,8 @@ class TestAsyncSFTPClientInitialize:
                 # Give initialize a tick to register the future
                 await asyncio.sleep(0)
                 await asyncio.sleep(0)
-                if -1 in client._pending_requests:
-                    client._pending_requests[-1].set_result(version_msg)
+                if -2 in client._pending_requests:
+                    client._pending_requests[-2].set_result(version_msg)
                 await init_task
 
             await run_init()
