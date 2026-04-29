@@ -85,6 +85,10 @@ class AsyncSSHClient:
         if self._connected:
             raise SSHException("Already connected")
 
+        # Validate port
+        if not (0 < port <= 65535):
+            raise SSHException(f"Invalid port number: {port}")
+
         try:
             if sock is None:
                 # Create socket connection
@@ -574,6 +578,50 @@ class AsyncSSHClient:
             storage: Host key storage to use
         """
         self._host_key_storage = storage
+
+    async def load_host_keys(self, filename: str) -> None:
+        """
+        Load host keys from a file.
+
+        Args:
+            filename: Path to known_hosts file
+        """
+        if not self._host_key_storage:
+            self._host_key_storage = HostKeyStorage(filename)
+        else:
+            await asyncio.to_thread(self._host_key_storage.load, filename)
+
+    async def load_system_host_keys(self) -> None:
+        """
+        Load host keys from system default locations.
+        """
+        # Common locations
+        import os
+        paths = [
+            os.path.expanduser("~/.ssh/known_hosts"),
+            os.path.expanduser("~/.ssh/known_hosts2"),
+            "/etc/ssh/ssh_known_hosts",
+            "/etc/ssh/ssh_known_hosts2",
+        ]
+        for path in paths:
+            if await asyncio.to_thread(os.path.exists, path):
+                await self.load_host_keys(path)
+
+    async def save_host_keys(self, filename: str) -> None:
+        """
+        Save host keys to a file.
+
+        Args:
+            filename: Path to save known_hosts
+        """
+        if not self._host_key_storage or self._host_key_storage._filename != filename:
+            old_storage = self._host_key_storage
+            self._host_key_storage = HostKeyStorage(filename)
+            if old_storage:
+                self._host_key_storage._keys = old_storage._keys
+
+        # save() is sync, run in thread
+        await asyncio.to_thread(self._host_key_storage.save)
 
     def get_host_key_storage(self) -> HostKeyStorage:
         """

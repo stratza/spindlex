@@ -39,19 +39,23 @@ class HostKeyStorage:
         except Exception as e:
             self._logger.debug(f"Could not load host keys from {self._filename}: {e}")
 
-    def load(self) -> None:
+    def load(self, filename: Optional[str] = None) -> None:
         """
         Load host keys from storage file.
+
+        Args:
+            filename: Path to file (defaults to storage's filename)
 
         Raises:
             SSHException: If loading fails
         """
-        if not os.path.exists(self._filename):
-            self._logger.debug(f"Host key file {self._filename} does not exist")
+        target_file = filename or self._filename
+        if not os.path.exists(target_file):
+            self._logger.debug(f"Host key file {target_file} does not exist")
             return
 
         try:
-            with open(self._filename, encoding="utf-8") as f:
+            with open(target_file, encoding="utf-8") as f:
                 for line_num, line in enumerate(f, 1):
                     line = line.strip()
 
@@ -63,12 +67,12 @@ class HostKeyStorage:
                         self._parse_host_key_line(line)
                     except Exception as e:
                         self._logger.warning(
-                            f"Error parsing line {line_num} in {self._filename}: {e}"
+                            f"Error parsing line {line_num} in {target_file}: {e}"
                         )
 
         except Exception as e:
             raise SSHException(
-                f"Failed to load host keys from {self._filename}: {e}"
+                f"Failed to load host keys from {target_file}: {e}"
             ) from e
 
     def _parse_host_key_line(self, line: str) -> None:

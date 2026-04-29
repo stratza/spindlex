@@ -527,6 +527,51 @@ class SFTPClient:
                 raise
             raise SFTPError(f"File upload failed: {e}", filename=localpath)
 
+    def get_recursive(self, remotepath: str, localpath: str) -> None:
+        """
+        Download directory recursively.
+
+        Args:
+            remotepath: Remote directory path
+            localpath: Local destination path
+        """
+        import stat
+        attrs = self.stat(remotepath)
+        if not stat.S_ISDIR(attrs.st_mode):
+            self.get(remotepath, localpath)
+            return
+
+        if not os.path.exists(localpath):
+            os.makedirs(localpath)
+
+        for item in self.listdir(remotepath):
+            # SFTP paths always use forward slash
+            remote_item = f"{remotepath}/{item}" if not remotepath.endswith("/") else f"{remotepath}{item}"
+            local_item = os.path.join(localpath, item)
+            self.get_recursive(remote_item, local_item)
+
+    def put_recursive(self, localpath: str, remotepath: str) -> None:
+        """
+        Upload directory recursively.
+
+        Args:
+            localpath: Local directory path
+            remotepath: Remote destination path
+        """
+        if not os.path.isdir(localpath):
+            self.put(localpath, remotepath)
+            return
+
+        try:
+            self.mkdir(remotepath)
+        except SFTPError:
+            pass  # Directory might already exist
+
+        for item in os.listdir(localpath):
+            local_item = os.path.join(localpath, item)
+            remote_item = f"{remotepath}/{item}" if not remotepath.endswith("/") else f"{remotepath}{item}"
+            self.put_recursive(local_item, remote_item)
+
     def listdir(self, path: str = ".") -> list[str]:
         """
         List directory contents.

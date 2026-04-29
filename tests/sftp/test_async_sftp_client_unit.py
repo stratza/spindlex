@@ -691,6 +691,8 @@ class TestAsyncSFTPFile:
     ) -> tuple[AsyncSFTPFile, AsyncSFTPClient]:
         client = _make_async_client()
         f = AsyncSFTPFile(client, handle, mode)
+        # Depth 1 keeps the mock response sequences identical to sequential tests.
+        f._PIPELINE_DEPTH = 1
         return f, client
 
     # --- __init__ ---
@@ -740,10 +742,14 @@ class TestAsyncSFTPFile:
             await f.read(10)
 
     async def test_read_default_size(self):
-        """read() with no size arg should use 32768."""
+        """read() with no size arg should use 32768 and read until EOF."""
         f, client = self._make_file()
-        client._wait_for_response.return_value = _make_data_msg(data=b"x")
-        await f.read()
+        client._wait_for_response.side_effect = [
+            _make_data_msg(data=b"x"),
+            _make_err_status(code=SSH_FX_EOF),
+        ]
+        data = await f.read()
+        assert data == b"x"
         # Verify read was attempted (offset advanced)
         assert f._offset == 1
 

@@ -48,7 +48,6 @@ When deploying SpindleX in production, consider these best practices:
 
 ```python
 from spindlex.hostkeys.policy import RejectPolicy
-from spindlex.hostkeys.storage import FileHostKeyStorage
 
 client.set_missing_host_key_policy(RejectPolicy())
 client.load_host_keys('/etc/ssh/known_hosts')

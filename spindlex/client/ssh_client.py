@@ -222,6 +222,50 @@ class SSHClient:
         """
         self._host_key_storage = storage
 
+    def load_host_keys(self, filename: str) -> None:
+        """
+        Load host keys from a file.
+
+        Args:
+            filename: Path to known_hosts file
+        """
+        if not self._host_key_storage:
+            self._host_key_storage = HostKeyStorage(filename)
+        else:
+            self._host_key_storage.load(filename)
+
+    def load_system_host_keys(self) -> None:
+        """
+        Load host keys from system default locations.
+        """
+        # Common locations
+        import os
+        paths = [
+            os.path.expanduser("~/.ssh/known_hosts"),
+            os.path.expanduser("~/.ssh/known_hosts2"),
+            "/etc/ssh/ssh_known_hosts",
+            "/etc/ssh/ssh_known_hosts2",
+        ]
+        for path in paths:
+            if os.path.exists(path):
+                self.load_host_keys(path)
+
+    def save_host_keys(self, filename: str) -> None:
+        """
+        Save host keys to a file.
+
+        Args:
+            filename: Path to save known_hosts
+        """
+        # If storage doesn't exist or filename is different, create new storage
+        if not self._host_key_storage or self._host_key_storage._filename != filename:
+            old_storage = self._host_key_storage
+            self._host_key_storage = HostKeyStorage(filename)
+            if old_storage:
+                self._host_key_storage._keys = old_storage._keys
+
+        self._host_key_storage.save()
+
     def get_host_key_storage(self) -> HostKeyStorage:
         """
         Get host key storage instance.
@@ -278,6 +322,10 @@ class SSHClient:
 
         self._hostname = hostname
         self._port = port
+
+        # Validate port
+        if not (0 < port <= 65535):
+            raise SSHException(f"Invalid port number: {port}")
 
         try:
             if sock is None:

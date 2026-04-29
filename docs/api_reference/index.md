@@ -14,4 +14,5 @@ This section provides detailed technical documentation for all modules in Spindl
 *   [**Crypto**](crypto.md): Cryptographic backends and primitives.
 *   [**Host Keys**](hostkeys.md): Host key storage and verification policies.
 *   [**Logging**](logging.md): Built-in logging and sanitization.
+*   [**Tools**](tools.md): Key generation and benchmarking tools.
 *   [**Exceptions**](exceptions.md): Exception hierarchy.
