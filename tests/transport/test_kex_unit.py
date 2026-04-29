@@ -29,7 +29,7 @@ def make_kex() -> tuple[KeyExchange, MagicMock]:
     transport = MagicMock()
     transport._send_message = MagicMock()
     transport._expect_message = MagicMock()
-    transport.session_id = b"\x00" * 32
+    transport._session_id = None
     transport._client_version = "SSH-2.0-SpindleX_Test"
     transport._server_version = "SSH-2.0-MockServer"
     transport._server_mode = False
