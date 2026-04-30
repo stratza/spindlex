@@ -536,8 +536,9 @@ class SFTPClient:
             localpath: Local destination path
         """
         import stat
+
         attrs = self.stat(remotepath)
-        if not stat.S_ISDIR(attrs.st_mode):
+        if not stat.S_ISDIR(attrs.st_mode or 0):
             self.get(remotepath, localpath)
             return
 
@@ -546,7 +547,11 @@ class SFTPClient:
 
         for item in self.listdir(remotepath):
             # SFTP paths always use forward slash
-            remote_item = f"{remotepath}/{item}" if not remotepath.endswith("/") else f"{remotepath}{item}"
+            remote_item = (
+                f"{remotepath}/{item}"
+                if not remotepath.endswith("/")
+                else f"{remotepath}{item}"
+            )
             local_item = os.path.join(localpath, item)
             self.get_recursive(remote_item, local_item)
 
@@ -569,7 +574,11 @@ class SFTPClient:
 
         for item in os.listdir(localpath):
             local_item = os.path.join(localpath, item)
-            remote_item = f"{remotepath}/{item}" if not remotepath.endswith("/") else f"{remotepath}{item}"
+            remote_item = (
+                f"{remotepath}/{item}"
+                if not remotepath.endswith("/")
+                else f"{remotepath}{item}"
+            )
             self.put_recursive(local_item, remote_item)
 
     def listdir(self, path: str = ".") -> list[str]:

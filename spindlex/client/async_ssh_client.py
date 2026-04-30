@@ -597,6 +597,7 @@ class AsyncSSHClient:
         """
         # Common locations
         import os
+
         paths = [
             os.path.expanduser("~/.ssh/known_hosts"),
             os.path.expanduser("~/.ssh/known_hosts2"),

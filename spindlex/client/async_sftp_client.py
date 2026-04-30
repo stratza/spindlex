@@ -302,6 +302,7 @@ class AsyncSFTPClient:
             localpath: Local destination path
         """
         import stat
+
         attrs = await self.stat(remotepath)
         if not stat.S_ISDIR(attrs.st_mode):
             await self.get(remotepath, localpath)
@@ -313,7 +314,11 @@ class AsyncSFTPClient:
         items = await self.listdir(remotepath)
         tasks = []
         for item in items:
-            remote_item = f"{remotepath}/{item}" if not remotepath.endswith("/") else f"{remotepath}{item}"
+            remote_item = (
+                f"{remotepath}/{item}"
+                if not remotepath.endswith("/")
+                else f"{remotepath}{item}"
+            )
             local_item = os.path.join(localpath, item)
             tasks.append(self.get_recursive(remote_item, local_item))
 
@@ -341,7 +346,11 @@ class AsyncSFTPClient:
         tasks = []
         for item in items:
             local_item = os.path.join(localpath, item)
-            remote_item = f"{remotepath}/{item}" if not remotepath.endswith("/") else f"{remotepath}{item}"
+            remote_item = (
+                f"{remotepath}/{item}"
+                if not remotepath.endswith("/")
+                else f"{remotepath}{item}"
+            )
             tasks.append(self.put_recursive(local_item, remote_item))
 
         if tasks:
@@ -797,7 +806,7 @@ class AsyncSFTPFile:
         self._mode = mode
         self._offset = 0
         self._closed = False
-        self._write_queue: list[tuple[int, int, asyncio.Future]] = []
+        self._write_queue: list[tuple[int, int]] = []
 
     async def read(self, size: int = -1) -> bytes:
         """
