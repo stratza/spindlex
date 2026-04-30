@@ -5,6 +5,7 @@ Provides asynchronous SFTP client functionality for file operations.
 """
 
 import asyncio
+import os
 import struct
 from typing import Any, Optional
 
