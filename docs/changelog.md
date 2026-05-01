@@ -181,7 +181,7 @@ This release is a broad hardening pass across every layer of the library — SFT
 *   **Unified Client API**: Standardized the interface between `SSHClient` and `AsyncSSHClient` for better consistency and easier migration between sync and async code.
 *   **Improved SSH Key Management**: Enhanced Ed25519 and RSA key generation/loading with broader compatibility for OpenSSH-formatted keys.
 *   **Enhanced Demos**: Added a suite of comprehensive, high-fidelity demo scripts (`complex_setup_demo.py`, etc.) to showcase real-world performance.
-*   **Verified Demo Results**: Integrated a new [demo_results.md](demo_results.md) tracking actual execution metrics.
+*   **Verified Demo Results**: Integrated demo result tracking for actual execution metrics.
 
 ### Changed
 *   **Performance**: Optimized internal buffering in `AsyncTransport` for high-throughput scenarios. Connection establishment is ~2.6x faster than legacy libraries.
