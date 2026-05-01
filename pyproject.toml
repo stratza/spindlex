@@ -55,6 +55,7 @@ dev = [
     "pytest-cov>=4.0.0",
     "pytest-asyncio>=0.21.0",
     "pytest-xdist>=2.0",
+    "pytest-timeout>=2.0.0",
     "tox>=4.0",
     "ruff>=0.1.0",
     "bandit[toml]>=1.7.5",
@@ -77,6 +78,7 @@ test = [
     "pytest-cov>=4.0.0",
     "pytest-asyncio>=0.21.0",
     "pytest-xdist>=2.0",
+    "pytest-timeout>=2.0.0",
     "coverage>=6.0",
 ]
 
@@ -231,7 +233,7 @@ src = ["spindlex"]
 select = ["E", "F", "I", "UP", "B", "S", "C4", "PT"]
 ignore = [
     "S101", # Use of `assert` detected (common in tests/libraries)
-    "E501", # Line too long (already handled by black)
+    "E501", # Line too long (handled by formatter)
     "UP035", # Use `typing` instead of `typing_extensions`
     "UP007", # Use `X | Y` for type annotations
     "UP045", # Use `X | None` for type annotations

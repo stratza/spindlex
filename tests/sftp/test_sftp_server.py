@@ -161,10 +161,10 @@ def test_sftp_server_resolve_path_security(mock_channel, temp_root):
     with patch.object(SFTPServer, "_start_sftp_session"):
         server = SFTPServer(mock_channel, temp_root, start_thread=False)
 
-        assert server._resolve_path("test.txt") == os.path.abspath(
+        assert server._resolve_path("test.txt") == os.path.realpath(
             os.path.join(temp_root, "test.txt")
         )
-        assert server._resolve_path("/test.txt") == os.path.abspath(
+        assert server._resolve_path("/test.txt") == os.path.realpath(
             os.path.join(temp_root, "test.txt")
         )
 

@@ -1,6 +1,8 @@
 # Deployment Guide
 
-SpindleX is designed for modern cloud environments where speed and minimal footprint are critical. Its lean architecture makes it ideal for Dockerized deployments.
+SpindleX can be used inside modern cloud applications where speed and minimal footprint are important. This page shows how to containerize your own Python application that depends on SpindleX.
+
+SpindleX does not currently publish an official server Docker image. An official image should wait until the project exposes a supported `spindlex-server` CLI, healthcheck, documented environment variables, and image-level integration tests.
 
 ## Lean Dependency Tree
 
@@ -8,7 +10,7 @@ SpindleX leverages the standard `cryptography` library for robust, secure crypto
 
 ## Minimal Dockerfile
 
-Here's how to create a production-ready Docker image with SpindleX:
+Here's how to create an application image that installs SpindleX:
 
 ```dockerfile
 # Use a slim Python image

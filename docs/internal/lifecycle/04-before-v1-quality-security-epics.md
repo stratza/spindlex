@@ -110,12 +110,12 @@ Implementation tasks:
 - Add a drift-check script or CI step.
 - Read entry points from `pyproject.toml`.
 - Search docs, README, examples, and metadata for CLI names.
-- Fail if docs mention obsolete commands such as `spindle-keygen` when the real
-  command is `spindlex-keygen`.
+- Fail if docs mention obsolete CLI command names instead of the real
+  `[project.scripts]` entry points.
 - Read `requires-python` and classifiers from `pyproject.toml`.
 - Search docs and README for Python support claims.
 - Fail if docs claim unsupported versions such as Python `3.8+`.
-- Fail if classifiers include untested versions such as Python `3.14`.
+- Fail if classifiers include untested Python versions.
 
 Acceptance criteria:
 
@@ -134,12 +134,12 @@ Goal: remove known contradictions before `1.0.0`.
 Known drift to fix:
 
 - README says Python `3.8+`; package requires `>=3.9`.
-- `pyproject.toml` has Python `3.14` classifier without official CI support.
+- `pyproject.toml` has unsupported Python classifiers without official CI support.
 - `.readthedocs.yaml` references missing `async` extra.
-- `scripts/Makefile` uses `pflake8` and Sphinx while repo uses Ruff and MkDocs.
+- `scripts/Makefile` uses stale lint/docs commands while repo uses Ruff and MkDocs.
 - `scripts/release.py` describes manual PyPI jobs that do not exist.
 - Contributing docs still describe older Black/isort/flake8/tox-first flow.
-- `spindle-keygen` appears in examples but actual command is `spindlex-keygen`.
+- stale CLI command names appear in examples instead of actual entry points.
 - Deployment docs imply Dockerized use but no official product image exists yet.
 
 Acceptance criteria:

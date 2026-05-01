@@ -5,46 +5,46 @@ PIP := $(PYTHON) -m pip
 PYTEST := $(PYTHON) -m pytest
 
 help:
-	@echo "🛠️ SpindleX Development Makefile"
+	@echo "SpindleX Development Makefile"
 	@echo ""
 	@echo "Available commands:"
 	@echo "  setup       Install development dependencies"
 	@echo "  test        Run all tests"
-	@echo "  docker-test Run integration tests using docker-compose"
-	@echo "  lint        Run linting checks (black, isort, flake8, mypy)"
-	@echo "  format      Auto-format code (black, isort)"
+	@echo "  docker-test Run Docker-backed integration tests"
+	@echo "  lint        Run linting checks (ruff, mypy)"
+	@echo "  format      Auto-format code with Ruff"
 	@echo "  docs        Build documentation locally"
 	@echo "  build       Build package distribution"
 	@echo "  clean       Remove build and test artifacts"
 
 setup:
 	$(PIP) install --upgrade pip
-	$(PIP) install -e .[dev,test,async,docs]
+	$(PIP) install -e .[dev,test,docs]
 	pre-commit install
 
 test:
 	$(PYTEST) tests/ -v --cov=spindlex
 
 docker-test:
-	docker-compose up --build --exit-code-from tests
+	$(PYTEST) tests/integration tests/real_server tests/misc/test_functional_integration.py \
+		-v -m "integration or real_server" --tb=short --timeout=120
 
 lint:
-	black --check spindlex tests
-	isort --check-only spindlex tests
-	pflake8 spindlex tests
+	ruff check spindlex tests
+	ruff format --check spindlex tests
 	mypy spindlex
 
 format:
-	black spindlex tests
-	isort spindlex tests
+	ruff check --fix spindlex tests
+	ruff format spindlex tests
 
 docs:
-	sphinx-build -b html docs/ docs/_build/html
-	@echo "📖 Docs built at docs/_build/html/index.html"
+	mkdocs build --strict
+	@echo "Docs built in site/"
 
 build:
 	$(PYTHON) -m build
 
 clean:
-	rm -rf build/ dist/ *.egg-info .pytest_cache .coverage htmlcov/ .mypy_cache docs/_build/
+	rm -rf build/ dist/ *.egg-info .pytest_cache .coverage htmlcov/ .mypy_cache docs/_build/ site/
 	find . -type d -name "__pycache__" -exec rm -rf {} +

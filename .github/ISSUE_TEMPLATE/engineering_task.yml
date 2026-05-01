@@ -8,7 +8,7 @@ body:
     attributes:
       label: Epic / Source Doc
       description: Link to the lifecycle doc or section this task comes from.
-      placeholder: docs/internal/lfecycle/02-before-v1-lifecycle-epics.md#epic-1-protected-trunk-based-development
+      placeholder: docs/internal/lifecycle/02-before-v1-lifecycle-epics.md#epic-1-protected-trunk-based-development
     validations:
       required: false 
 

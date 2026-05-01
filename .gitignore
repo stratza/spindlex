@@ -42,10 +42,11 @@ coverage.xml
 .pytest_cache/
 cover/
 
-# --- Sphinx documentation ---
+# --- Documentation ---
 docs/_build/
 docs/.doctrees/
 public/
+site/
 
 # --- GitLab CI reports ---
 bandit-report.json

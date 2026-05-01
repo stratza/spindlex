@@ -168,7 +168,7 @@ Scope:
 
 - Official pre-`1.0.0` Python support: `3.9-3.13`.
 - Python `3.9` is legacy support because it is upstream EOL.
-- Python `3.14` is not official until CI tests it.
+- Future Python versions are not official until CI tests them.
 
 Implementation tasks:
 
