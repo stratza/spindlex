@@ -24,7 +24,7 @@ By participating in this project, you agree to abide by the project's Code of Co
 
 3. **Install Development Dependencies**
    ```bash
-   pip install -e .[dev]
+   pip install -e ".[dev,docs,test]"
    ```
 
 4. **Install Pre-commit Hooks**
@@ -35,8 +35,8 @@ By participating in this project, you agree to abide by the project's Code of Co
 ### Running Tests
 
 ```bash
-# Run all tests
-python -m pytest
+# Run the fast local test suite
+python -m pytest tests -m "not integration and not real_server and not slow and not performance"
 
 # Run with coverage
 python -m pytest --cov=spindlex --cov-report=html
@@ -47,7 +47,7 @@ python -m pytest -m integration
 python -m pytest -m performance
 
 # Run tests for specific modules
-python -m pytest tests/test_protocol_utils.py
+python -m pytest tests/protocol/test_protocol_utils.py
 ```
 
 ### Code Quality
@@ -55,12 +55,15 @@ python -m pytest tests/test_protocol_utils.py
 I maintain high code quality standards:
 
 ```bash
-# Format code
-black spindlex tests
-isort spindlex tests
-
 # Lint code
-flake8 spindlex tests
+ruff check spindlex tests
+
+# Check formatting
+ruff format --check spindlex tests
+
+# Format code
+ruff check --fix spindlex tests
+ruff format spindlex tests
 
 # Type checking
 mypy spindlex
@@ -68,8 +71,8 @@ mypy spindlex
 # Security scanning
 bandit -r spindlex -c pyproject.toml
 
-# Run all quality checks
-tox -e lint,type-check,security
+# Build docs
+mkdocs build --strict
 ```
 
 ## Contributing Guidelines
@@ -102,8 +105,11 @@ Use the project's issue templates:
 
 3. **Test Changes**
    ```bash
-   python -m pytest
-   tox  # Test across multiple Python versions
+   ruff check spindlex tests
+   ruff format --check spindlex tests
+   mypy spindlex
+   python -m pytest tests -m "not integration and not real_server and not slow and not performance"
+   mkdocs build --strict
    ```
 
 4. **Commit Changes**
@@ -152,8 +158,8 @@ test(crypto): add tests for key generation
 
 I follow PEP 8 with some modifications:
 
-- **Line Length**: 88 characters (Black default)
-- **Imports**: Use isort for import sorting
+- **Line Length**: 88 characters
+- **Imports**: Use Ruff import sorting
 - **Type Hints**: Required for all public APIs
 - **Docstrings**: Google style docstrings
 
@@ -259,7 +265,7 @@ class TestSSHClient:
 - **API Documentation**: All public APIs must have docstrings
 - **Type Hints**: Required for all function signatures
 - **Examples**: Include usage examples in docstrings
-- **Sphinx**: Use Sphinx-compatible docstring format
+- **MkDocs / mkdocstrings**: Public APIs should have docstrings that render clearly in the generated documentation
 
 ```python
 def connect(

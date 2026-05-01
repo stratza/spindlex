@@ -40,9 +40,11 @@ def sftp_server(mock_channel, temp_root):
 
 def test_sftp_server_resolve_path(sftp_server, temp_root):
     # Within root
-    assert sftp_server._resolve_path("file.txt") == os.path.join(temp_root, "file.txt")
-    assert sftp_server._resolve_path("/subdir/file.txt") == os.path.join(
-        temp_root, "subdir", "file.txt"
+    assert sftp_server._resolve_path("file.txt") == os.path.realpath(
+        os.path.join(temp_root, "file.txt")
+    )
+    assert sftp_server._resolve_path("/subdir/file.txt") == os.path.realpath(
+        os.path.join(temp_root, "subdir", "file.txt")
     )
 
     # Outside root

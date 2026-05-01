@@ -2,11 +2,14 @@
 """
 SpindleX Release Automation Script
 
-This script automates the release process for SpindleX:
+This legacy helper prepares a local release bump for SpindleX:
 1. Updates version numbers
 2. Updates changelog
 3. Creates git tag
-4. Pushes to GitHub (triggers CI/CD pipeline)
+4. Pushes to GitHub
+
+Publishing is handled by GitHub Actions using PyPI trusted publishing after a
+GitHub Release is published. This helper does not upload to TestPyPI or PyPI.
 
 Usage:
     python scripts/release.py --version 0.6.2 --type minor
@@ -184,11 +187,11 @@ def main():
 
     args = parser.parse_args()
 
-    print(f"🚀 Starting SpindleX release process for version {args.version}")
+    print(f"Starting SpindleX release preparation for version {args.version}")
     print(f"Release type: {args.type}")
 
     if args.dry_run:
-        print("🔍 DRY RUN MODE - No changes will be made")
+        print("DRY RUN MODE - No changes will be made")
 
     # Validate inputs
     validate_version(args.version)
@@ -199,54 +202,49 @@ def main():
 
     # Run tests unless skipped
     if not args.skip_tests:
-        print("🧪 Running tests...")
+        print("Running tests...")
         if not args.dry_run:
             run_command(
                 "python -m pytest tests --ignore=tests/integration --ignore=tests/real_server -q"
             )
-        print("✅ Tests passed")
+        print("Tests passed")
 
     # Update version files
     if not args.dry_run:
-        print("📝 Updating version files...")
+        print("Updating version files...")
         update_version_file(args.version)
         update_pyproject_toml(args.version)
         update_changelog(args.version, args.type)
-        print("✅ Version files updated")
+        print("Version files updated")
     else:
-        print("📝 Would update version files")
+        print("Would update version files")
 
     # Git operations
     if not args.skip_git and not args.dry_run:
-        print("📦 Committing changes...")
+        print("Committing changes...")
         run_command("git add .")
         run_command(f'git commit -m "Release version {args.version}"')
 
-        print("🏷️ Creating git tag...")
+        print("Creating git tag...")
         tag_name = create_git_tag(args.version)
 
-        print("🚀 Pushing to GitHub...")
+        print("Pushing to GitHub...")
         run_command("git push origin main")
         run_command(f"git push origin {tag_name}")
 
-        print("✅ Git operations completed")
+        print("Git operations completed")
     elif not args.skip_git:
-        print("📦 Would commit changes and create tag")
+        print("Would commit changes and create tag")
 
     print(f"""
-🎉 Release process completed for SpindleX {args.version}!
+Release preparation completed for SpindleX {args.version}.
 
 Next steps:
-1. Go to GitHub Actions: https://github.com/stratza/spindlex/actions
-2. Find the pipeline for tag v{args.version}
-3. Manually trigger the PyPI deployment jobs:
-   - First: deploy:pypi:test (uploads to Test PyPI)
-   - Then: deploy:pypi:production (uploads to Production PyPI)
+1. Push the release commit and tag if this helper did not already do so.
+2. Create or publish the GitHub Release for tag v{args.version}.
+3. Let the release workflow publish to PyPI through trusted publishing.
 
-📋 Don't forget to:
-- Update the GitHub release notes
-- Announce the release
-- Update documentation if needed
+Do not manually upload artifacts to TestPyPI or PyPI from this helper.
 """)
 
 

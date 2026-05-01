@@ -105,7 +105,7 @@ Before `1.0.0`:
 
 - Document tested Python versions: `3.9-3.13`.
 - Treat Python `3.9` as legacy support because it is EOL upstream.
-- Remove Python `3.14` classifier unless CI officially tests it.
+- Remove unsupported future Python classifiers unless CI officially tests them.
 - Document tested OpenSSH versions from Docker and real canary hosts.
 - Keep compatibility claims conservative.
 

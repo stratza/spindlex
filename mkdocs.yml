@@ -102,6 +102,7 @@ nav:
       - Protocol: api_reference/protocol.md
       - Crypto: api_reference/crypto.md
       - Host Keys: api_reference/hostkeys.md
+      - Tools: api_reference/tools.md
       - Logging: api_reference/logging.md
       - Exceptions: api_reference/exceptions.md
   - Security: security.md

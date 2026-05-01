@@ -16,11 +16,11 @@ Epics:
 Tasks:
 
 - Fix README Python version claim.
-- Remove or validate Python `3.14` classifier.
+- Remove or validate unsupported Python classifiers.
 - Fix `.readthedocs.yaml` missing `async` extra.
 - Fix `scripts/Makefile` to use Ruff and MkDocs.
 - Retire or rewrite `scripts/release.py`.
-- Replace `spindle-keygen` docs with `spindlex-keygen`.
+- Replace stale CLI command names with actual entry points.
 - Update contributing docs with canonical local commands.
 
 Done when:
