@@ -1,0 +1,11 @@
+title = "SpindleX Gitleaks Configuration"
+
+[allowlist]
+description = "Ignore intentional examples, docs, tests, and sanitizer fixtures."
+paths = [
+  '''^docs/''',
+  '''^examples/''',
+  '''^meta/''',
+  '''^tests/''',
+  '''^spindlex/logging/sanitizer.py$''',
+]

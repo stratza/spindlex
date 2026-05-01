@@ -93,9 +93,25 @@ Use the project's issue templates:
 
 ### Submitting Changes
 
+The default development flow is:
+
+1. Create a short-lived branch from an up-to-date `main`.
+2. Open a pull request back to `main`.
+3. Fill the PR template completely.
+4. Select exactly one `Type of Change` token.
+5. Wait for the required `quality-gate` check to pass.
+6. Resolve review conversations before merge.
+
+`main` is the protected integration branch. Maintainers should configure branch
+protection to require pull requests, conversation resolution, and the
+`quality-gate` status check before merge. Direct pushes to `main` should be
+reserved for emergency recovery by repository administrators.
+
 1. **Create Feature Branch**
    ```bash
-   git checkout -b feature/your-feature-name
+   git switch main
+   git pull --ff-only
+   git switch -c feature/your-feature-name
    ```
 
 2. **Make Changes**
@@ -122,6 +138,18 @@ Use the project's issue templates:
    ```bash
    git push origin feature/your-feature-name
    ```
+
+   In the PR body, select one `Type of Change`:
+
+   - `bug`: patch release after merge
+   - `feature`: minor release after merge
+   - `breaking`: major release after merge
+   - `docs`: no release
+   - `refactor`: no release
+   - `test`: no release
+
+   Release-impact types (`bug`, `feature`, `breaking`) must include test
+   evidence in the PR body.
 
 ### Commit Message Format
 
