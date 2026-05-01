@@ -1,0 +1,95 @@
+name: Engineering Task
+description: Internal engineering / CI / release / infra task
+title: "[ENG] "
+labels: ["engineering", "triage"]
+body:
+  - type: input
+    id: source
+    attributes:
+      label: Epic / Source Doc
+      description: Link to the lifecycle doc or section this task comes from.
+      placeholder: docs/internal/lfecycle/02-before-v1-lifecycle-epics.md#epic-1-protected-trunk-based-development
+    validations:
+      required: false 
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What are we trying to achieve?
+      placeholder: Implement PR validation workflow
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What is included in this task?
+      placeholder: |
+        - Parse PR body
+        - Validate Type of Change
+        - Fail on invalid structure
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: When is this considered done?
+      placeholder: |
+        - PR without type fails
+        - Multiple types fail
+        - Output variables available
+    validations:
+      required: true
+
+  - type: dropdown
+    id: type
+    attributes:
+      label: Type
+      options:
+        - Implementation
+        - Setup
+        - Improvement
+        - Cleanup
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - High
+        - Medium
+        - Low
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - CI
+        - Release
+        - Integration
+        - Security
+        - Docs
+        - DX
+        - Compatibility
+        - Canary
+        - Benchmark
+        - Adoption
+        - Failure Tracking
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Optional implementation notes.
+      placeholder: Use GitHub Actions + bash/python
