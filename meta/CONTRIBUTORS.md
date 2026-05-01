@@ -2,9 +2,11 @@
 
 I thank all the contributors who have helped make SpindleX better!
 
-## Creator
+## Creators
 
-- **Di3Z1E** - Initial development and maintenance
+- **Stratza Labs** - Organization and maintenance
+- **David Azani (Di3Z1E)** - Initial development and maintenance
+- **Adi Roth (adirothbuilds)** - Core development and maintenance
 
 ## Contributors
 
@@ -61,8 +63,8 @@ Contributors are recognized in several ways:
 To get started contributing:
 
 1. Read my [Contributing Guide](docs/contributing.rst)
-2. Check out the [good first issue](https://github.com/Di3Z1E/spindlex/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22) label
+2. Check out the [good first issue](https://github.com/stratza/spindlex/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22) label
 3. Join the community discussions
 4. Fork the repository and start coding!
 
-Thank you to everyone who contributes to making SpindleX better! 🎉
+Thank you to everyone who contributes to making SpindleX better! 🎉 🎉

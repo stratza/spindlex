@@ -3,10 +3,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from spindlex.client.ssh_client import ChannelFile, SSHClient
-from spindlex.exceptions import (
-    BadHostKeyException,
-    SSHException,
-)
+from spindlex.exceptions import BadHostKeyException, SSHException
 from spindlex.hostkeys.policy import AutoAddPolicy, RejectPolicy
 
 

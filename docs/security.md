@@ -51,9 +51,6 @@ SpindleX prioritizes modern, secure cryptographic algorithms and disables legacy
 
 ### Encryption Ciphers
 
--   `chacha20-poly1305@openssh.com` (AEAD)
--   `aes256-gcm@openssh.com` (AEAD)
--   `aes128-gcm@openssh.com` (AEAD)
 -   `aes256-ctr`
 -   `aes192-ctr`
 -   `aes128-ctr`
@@ -76,7 +73,7 @@ SpindleX prioritizes modern, secure cryptographic algorithms and disables legacy
 
 ## Security Policy
 
-For information on how to report vulnerabilities or our disclosure policy, please see our [Responsible Disclosure Policy](https://github.com/Di3Z1E/spindlex/blob/main/meta/SECURITY.md).
+For information on how to report vulnerabilities or our disclosure policy, please see our [Responsible Disclosure Policy](https://github.com/stratza/spindlex/blob/main/meta/SECURITY.md).
 
 ### Supported Versions
 
@@ -89,4 +86,4 @@ Only the latest version of SpindleX is currently supported for security updates.
 
 ### Reporting a Vulnerability
 
-If you believe you have found a security vulnerability, please report it privately through [GitHub Security Advisories](https://github.com/Di3Z1E/spindlex/security/advisories/new).
+If you believe you have found a security vulnerability, please report it privately through [GitHub Security Advisories](https://github.com/stratza/spindlex/security/advisories/new).

@@ -32,7 +32,6 @@ def test_cipher_info():
     suite = CipherSuite()
     info = suite.get_cipher_info("aes256-ctr")
     assert info["key_len"] == 32
-    assert not info["aead"]
 
 
 def test_mac_info():

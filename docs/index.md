@@ -2,11 +2,11 @@
 
 Welcome to SpindleX's documentation! SpindleX is a modern, high-performance SSHv2 and SFTP client/server library.
 
-[![CI Status](https://img.shields.io/github/actions/workflow/status/Di3Z1E/spindlex/ci.yml?branch=main&style=flat-square)](https://github.com/Di3Z1E/spindlex/actions)
-[![Coverage](https://img.shields.io/codecov/c/github/Di3Z1E/spindlex?style=flat-square)](https://codecov.io/gh/Di3Z1E/spindlex)
+[![CI Status](https://img.shields.io/github/actions/workflow/status/stratza/spindlex/ci.yml?branch=main&style=flat-square)](https://github.com/stratza/spindlex/actions)
+[![Coverage](https://img.shields.io/codecov/c/github/stratza/spindlex?style=flat-square)](https://codecov.io/gh/stratza/spindlex)
 [![PyPI Version](https://img.shields.io/pypi/v/spindlex?style=flat-square)](https://pypi.org/project/spindlex/)
 [![Python Support](https://img.shields.io/pypi/pyversions/spindlex?style=flat-square)](https://pypi.org/project/spindlex/)
-[![License](https://img.shields.io/pypi/l/spindlex?style=flat-square)](https://github.com/Di3Z1E/spindlex/blob/main/LICENSE)
+[![License](https://img.shields.io/pypi/l/spindlex?style=flat-square)](https://github.com/stratza/spindlex/blob/main/LICENSE)
 
 ## Features
 

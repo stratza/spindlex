@@ -5,6 +5,7 @@ Provides asynchronous SFTP client functionality for file operations.
 """
 
 import asyncio
+import logging
 import os
 import struct
 from typing import Any, Optional
@@ -71,6 +72,7 @@ class AsyncSFTPClient:
         self._initialized = False
         self._dispatch_task: Optional[asyncio.Task] = None
         self._lock = asyncio.Lock()
+        self._logger = logging.getLogger(__name__)
 
     async def _initialize(self) -> None:
         """Initialize SFTP subsystem."""
@@ -979,8 +981,10 @@ class AsyncSFTPFile:
                 # Wait for response
                 await self._client._wait_for_response(request_id)
 
-            except Exception:
-                pass  # Ignore errors during close
+            except Exception as e:
+                self._client._logger.debug(
+                    f"Ignore error during SFTP client close: {e}"
+                )
             finally:
                 self._closed = True
 

@@ -191,12 +191,36 @@ class AsyncSSHClient:
                 self._logger.debug(f"Found known host key(s) for {hostname}")
 
                 server_key_bytes = server_key.get_public_key_bytes()
-                for known_key in known_keys:
-                    if known_key.get_public_key_bytes() == server_key_bytes:
-                        return  # Matched one of the stored keys
 
-                # No match found — key mismatch
-                raise BadHostKeyException(hostname, server_key, known_keys[0])
+                # Filter known keys by algorithm to avoid false positives for different key types
+                known_keys_of_type = [
+                    k
+                    for k in known_keys
+                    if k.algorithm_name == server_key.algorithm_name
+                ]
+
+                if known_keys_of_type:
+                    if not any(
+                        k.get_public_key_bytes() == server_key_bytes
+                        for k in known_keys_of_type
+                    ):
+                        raise BadHostKeyException(
+                            hostname, server_key, known_keys_of_type[0]
+                        )
+                else:
+                    # We have keys for this host, but not of this type.
+                    # Standard behavior is to treat it as a new (missing) host key.
+                    self._logger.debug(
+                        f"No known {server_key.algorithm_name} host key for {hostname}"
+                    )
+                    try:
+                        self._host_key_policy.missing_host_key(
+                            self, hostname, server_key
+                        )
+                    except BadHostKeyException:
+                        raise
+                    except Exception as e:
+                        self._logger.warning(f"Host key policy error: {e}")
 
         except BadHostKeyException:
             raise

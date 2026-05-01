@@ -9,10 +9,7 @@ import threading
 from typing import Any, Union
 
 from ..exceptions import ChannelException
-from ..protocol.constants import (
-    DEFAULT_WINDOW_SIZE,
-    SSH_EXTENDED_DATA_STDERR,
-)
+from ..protocol.constants import DEFAULT_WINDOW_SIZE, SSH_EXTENDED_DATA_STDERR
 from ..protocol.utils import write_string
 from .channel import Channel
 
@@ -377,10 +374,9 @@ class AsyncChannel(Channel):
                 # Send close
                 await self._transport._send_channel_close_async(self._channel_id)
 
-            except Exception:
-                pass  # Ignore errors during close
-            finally:
-                # Remove from transport
+            except Exception as e:
+                self._logger.debug(f"Error during async channel close: {e}")
+            finally:  # Remove from transport
                 if (
                     hasattr(self._transport, "_channels")
                     and self._channel_id in self._transport._channels

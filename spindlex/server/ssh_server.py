@@ -36,6 +36,7 @@ class SSHServer:
         self._transports: list[Transport] = []
         self._authenticated_users: dict[str, bool] = {}
         self._lock = threading.Lock()
+        self._logger = get_logger("spindlex.server.ssh_server")
 
     def set_server_key(self, server_key: PKey) -> None:
         """
@@ -461,9 +462,9 @@ class SSHServer:
         """
         try:
             channel.close()
-        except Exception:
-            # Ignore errors during channel close
-            pass
+        except Exception as e:
+            # Log errors during channel close
+            self._logger.debug(f"Error during channel close: {e}")
 
     def close_all_channels(self) -> None:
         """Close all active channels."""
@@ -821,10 +822,9 @@ class SSHServerManager:
             # Close socket
             client_socket.close()
 
-        except Exception:
+        except Exception as e:
             # Ignore cleanup errors
-            pass
-
+            self._logger.debug(f"Cleanup error: {e}")
         finally:
             with self._lock:
                 # Remove from active connections
@@ -843,8 +843,8 @@ class SSHServerManager:
         for _connection_id, transport in connections_to_close:
             try:
                 transport.close()
-            except Exception:
-                pass
+            except Exception as e:
+                self._logger.debug(f"Server socket close error: {e}")
 
         # Wait for connection threads to finish
         threads_to_join = []
@@ -865,8 +865,8 @@ class SSHServerManager:
         if self._server_socket:
             try:
                 self._server_socket.close()
-            except Exception:
-                pass
+            except Exception as e:
+                self._logger.debug(f"Server socket close error: {e}")
             finally:
                 self._server_socket = None
 
@@ -930,7 +930,7 @@ class SSHServerManager:
                 try:
                     transport.close()
                     return True
-                except Exception:
-                    pass
+                except Exception as e:
+                    self._logger.debug(f"Error during transport close: {e}")
 
         return False

@@ -5,6 +5,7 @@ Represents individual communication channels within SSH connections
 with support for different channel types and operations.
 """
 
+import logging
 import socket
 import threading
 import time
@@ -12,15 +13,8 @@ from collections import deque
 from typing import Any, Optional, Union
 
 from ..exceptions import ChannelException, ProtocolException
-from ..protocol.constants import (
-    DEFAULT_WINDOW_SIZE,
-    SSH_STRING_ENCODING,
-)
-from ..protocol.utils import (
-    read_boolean,
-    read_string,
-    read_uint32,
-)
+from ..protocol.constants import DEFAULT_WINDOW_SIZE, SSH_STRING_ENCODING
+from ..protocol.utils import read_boolean, read_string, read_uint32
 
 
 class Channel:
@@ -71,6 +65,7 @@ class Channel:
         self._request_event = threading.Event()
         self._exit_status_event = threading.Event()
         self._timeout: Optional[float] = None
+        self._logger = logging.getLogger(__name__)
 
     def settimeout(self, timeout: Optional[float]) -> None:
         """
@@ -281,9 +276,10 @@ class Channel:
                                 )
                                 if not r:
                                     continue  # no data yet, loop back
-                            except Exception:
-                                pass  # fall through to _pump()
-
+                            except Exception as e:
+                                self._logger.debug(
+                                    f"Pump error (expected on close): {e}"
+                                )  # fall through to _pump()
                 self._transport._pump()
             except socket.timeout:
                 pass  # Loop back so the channel-timeout check at the top fires.
@@ -668,8 +664,8 @@ class Channel:
                                 )
                                 if not r:
                                     continue
-                            except Exception:
-                                pass
+                            except Exception as e:
+                                self._logger.debug(f"Select error: {e}")
 
                 self._transport._pump()
             except Exception as e:

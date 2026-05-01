@@ -1,13 +1,19 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 authors:
-- family-names: "Zilberstein"
+- family-names: "Labs"
+  given-names: "Stratza"
+  alias: "stratza"
+- family-names: "Azani"
   given-names: "David"
   alias: "Di3Z1E"
+- family-names: "Roth"
+  given-names: "Adi"
+  alias: "adirothbuilds"
 title: "SpindleX"
-version: 0.6.5
-date-released: 2026-04-26
-url: "https://github.com/Di3Z1E/spindlex"
+version: 0.6.6
+date-released: 2026-05-01
+url: "https://github.com/stratza/spindlex"
 abstract: "A modern, high-performance SSHv2 and SFTP library focused on speed, security, and developer experience."
 keywords:
   - ssh
@@ -18,5 +24,5 @@ keywords:
   - cryptography
   - asyncio
 license: MIT
-repository-code: "https://github.com/Di3Z1E/spindlex"
+repository-code: "https://github.com/stratza/spindlex"
 type: software

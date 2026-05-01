@@ -6,10 +6,10 @@
 
 <br/>
 
-[![CI Status](https://img.shields.io/github/actions/workflow/status/Di3Z1E/spindlex/ci.yml?branch=main&style=for-the-badge&logo=github&labelColor=1a1a1a)](https://github.com/Di3Z1E/spindlex/actions)
-[![Coverage](https://img.shields.io/codecov/c/github/Di3Z1E/spindlex?style=for-the-badge&logo=codecov&labelColor=1a1a1a)](https://codecov.io/gh/Di3Z1E/spindlex)
+[![CI Status](https://img.shields.io/github/actions/workflow/status/stratza/spindlex/ci.yml?branch=main&style=for-the-badge&logo=github&labelColor=1a1a1a)](https://github.com/stratza/spindlex/actions)
+[![Coverage](https://img.shields.io/codecov/c/github/stratza/spindlex?style=for-the-badge&logo=codecov&labelColor=1a1a1a)](https://codecov.io/gh/stratza/spindlex)
 [![PyPI Version](https://img.shields.io/pypi/v/spindlex?style=for-the-badge&logo=pypi&logoColor=white&labelColor=1a1a1a)](https://pypi.org/project/spindlex/)
-[![License](https://img.shields.io/pypi/l/spindlex?style=for-the-badge&color=bb86fc&labelColor=1a1a1a)](https://github.com/Di3Z1E/spindlex/blob/main/LICENSE)
+[![License](https://img.shields.io/pypi/l/spindlex?style=for-the-badge&color=bb86fc&labelColor=1a1a1a)](https://github.com/stratza/spindlex/blob/main/LICENSE)
 
 <br />
 
@@ -145,6 +145,6 @@ Distributed under the **MIT License**. See `LICENSE` for more information.
 
 ---
 
-*SpindleX Project © 2026*
+*SpindleX Project © 2026 Stratza Labs*
 
 </div>

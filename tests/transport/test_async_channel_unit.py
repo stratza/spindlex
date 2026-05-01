@@ -15,10 +15,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from spindlex.exceptions import ChannelException
-from spindlex.protocol.constants import (
-    DEFAULT_WINDOW_SIZE,
-    SSH_EXTENDED_DATA_STDERR,
-)
+from spindlex.protocol.constants import DEFAULT_WINDOW_SIZE, SSH_EXTENDED_DATA_STDERR
 from spindlex.transport.async_channel import AsyncChannel, AsyncChannelFile
 
 # ---------------------------------------------------------------------------

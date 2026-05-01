@@ -68,8 +68,8 @@ class ForwardingTunnel:
                         if isinstance(item, (socket.socket, Channel)):
                             try:
                                 item.close()
-                            except Exception:
-                                pass
+                            except Exception as e:
+                                self._logger.debug(f"Forwarding close error: {e}")
                 except Exception as e:
                     self._logger.debug(f"Error closing connection {conn_id}: {e}")
 
@@ -193,17 +193,16 @@ class LocalPortForwarder:
                 if tunnel_id in self._servers:
                     try:
                         self._servers[tunnel_id].close()
-                    except Exception:
-                        pass
+                    except Exception as cleanup_err:
+                        self._logger.debug(f"Forwarding close error: {cleanup_err}")
                     del self._servers[tunnel_id]
                 # If bind/listen failed before the socket was stored in
                 # _servers, close it here so the fd isn't leaked.
                 elif server_socket is not None:
                     try:
                         server_socket.close()
-                    except Exception:
-                        pass
-
+                    except Exception as cleanup_err:
+                        self._logger.debug(f"Forwarding close error: {cleanup_err}")
                 raise SSHException(
                     f"Failed to create local port forwarding: {e}"
                 ) from e
@@ -311,17 +310,16 @@ class LocalPortForwarder:
             # Cleanup connection
             try:
                 client_socket.close()
-            except Exception:
-                pass
-
+            except Exception as e:
+                self._logger.debug(f"Forwarding close error: {e}")
             with tunnel._lock:
                 if conn_id in tunnel.connections:
                     chan = tunnel.connections[conn_id].get("channel")
                     if isinstance(chan, Channel):
                         try:
                             chan.close()
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            self._logger.debug(f"Forwarding close error: {e}")
                     del tunnel.connections[conn_id]
 
             self._logger.debug(f"Local connection {conn_id} closed")
@@ -377,8 +375,8 @@ class LocalPortForwarder:
             if tunnel_id in self._servers:
                 try:
                     self._servers[tunnel_id].close()
-                except Exception:
-                    pass
+                except Exception as e:
+                    self._logger.debug(f"Forwarding close error: {e}")
                 del self._servers[tunnel_id]
 
             del self._tunnels[tunnel_id]
@@ -599,9 +597,8 @@ class RemotePortForwarder:
             if local_socket:
                 try:
                     local_socket.close()
-                except Exception:
-                    pass
-
+                except Exception as e:
+                    self._logger.debug(f"Forwarding close error: {e}")
             with tunnel._lock:
                 if conn_id in tunnel.connections:
                     del tunnel.connections[conn_id]

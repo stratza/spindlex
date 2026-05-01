@@ -4,17 +4,21 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "spindlex"
-version = "0.6.5"
+version = "0.6.6"
 
 description = "A modern, high-performance SSHv2 and SFTP client/server library"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [
-    {name = "Di3Z1E"}
+    {name = "Stratza Labs"},
+    {name = "David Azani", email = "david@stratza.com"},
+    {name = "Adi Roth", email = "adi@stratza.com"}
 ]
 maintainers = [
-    {name = "Di3Z1E"}
+    {name = "Stratza Labs"},
+    {name = "David Azani", email = "david@stratza.com"},
+    {name = "Adi Roth", email = "adi@stratza.com"}
 ]
 keywords = ["ssh", "sftp", "client", "server", "cryptography", "security", "automation", "devops", "asyncio", "high-performance", "remote-execution", "file-transfer", "modern-ssh", "secure-shell"]
 classifiers = [
@@ -28,7 +32,6 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
-    "Programming Language :: Python :: 3.14",
     "Topic :: Internet",
     "Topic :: Security :: Cryptography",
     "Topic :: Software Development :: Libraries :: Python Modules",
@@ -46,9 +49,6 @@ gssapi = [
     "gssapi>=1.8.0; sys_platform!='win32'",
 ]
 dev = [
-    "black>=23.0.0",
-    "isort>=5.12.0",
-    "flake8>=6.0.0",
     "mypy>=1.0.0",
     "pre-commit>=3.0.0",
     "pytest>=7.0.0",
@@ -81,11 +81,11 @@ test = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Di3Z1E/SpindleX"
+Homepage = "https://github.com/stratza/spindlex"
 Documentation = "https://spindlex.readthedocs.io/"
-Repository = "https://github.com/Di3Z1E/SpindleX"
-Issues = "https://github.com/Di3Z1E/SpindleX/issues"
-Changelog = "https://github.com/Di3Z1E/SpindleX/blob/main/docs/changelog.md"
+Repository = "https://github.com/stratza/spindlex"
+Issues = "https://github.com/stratza/spindlex/issues"
+Changelog = "https://github.com/stratza/spindlex/blob/main/docs/changelog.md"
 
 [project.scripts]
 spindlex-keygen = "spindlex.tools.keygen:main"
@@ -98,30 +98,6 @@ exclude = ["tests*", "docs*"]
 
 [tool.setuptools.package-data]
 spindlex = ["py.typed"]
-
-[tool.black]
-line-length = 88
-target-version = ['py311']
-include = '\.pyi?$'
-extend-exclude = '''
-/(
-  # directories
-  \.eggs
-  | \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | build
-  | dist
-)/
-'''
-
-[tool.isort]
-profile = "black"
-multi_line_output = 3
-line_length = 88
-known_first_party = ["spindlex"]
 
 [tool.mypy]
 python_version = "3.9"
@@ -173,8 +149,6 @@ source = ["spindlex"]
 omit = [
     "*/tests/*",
     "*/test_*",
-    "setup.py",
-    "*/demo/*",
     "*/examples/*",
     "spindlex/tools/benchmark.py",
 ]
@@ -199,19 +173,10 @@ exclude_lines = [
     '@(abc\.)?abstractmethod',
     ]
 
-[tool.flake8]
-max-line-length = 88
-extend-ignore = "E203,W503,F401"
-exclude = ".git,__pycache__,.venv,venv,build,dist,*.egg-info,.tox,docs/_build"
-per-file-ignores = [
-    "__init__.py:F401,F403",
-    "tests/*:F401,F403,E501",
-]
-
 [tool.tox]
 legacy_tox_ini = """
 [tox]
-envlist = py39,py310,py311,py312,py313,py314,lint,type-check,security
+envlist = py39,py310,py311,py312,py313,lint,type-check,security
 isolated_build = True
 
 [testenv]
@@ -224,13 +189,10 @@ commands =
 
 [testenv:lint]
 deps = 
-    black>=23.0.0
-    isort>=5.12.0
-    flake8>=6.0.0
+    ruff>=0.1.0
 commands = 
-    black --check spindlex tests
-    isort --check-only spindlex tests
-    flake8 spindlex tests
+    ruff check spindlex tests
+    ruff format --check spindlex tests
 
 [testenv:type-check]
 deps = 
@@ -249,19 +211,11 @@ commands =
 
 [testenv:docs]
 deps = 
-    sphinx>=6.0.0
-    sphinx-rtd-theme>=1.2.0
-    myst-parser>=1.0.0
+    mkdocs>=1.5.0
+    mkdocs-material>=9.1.0
+    mkdocstrings[python]>=0.22.0
 commands = 
-    sphinx-build -W -b html docs docs/_build/html
-
-[testenv:build]
-deps = 
-    build>=0.10.0
-    twine>=4.0.0
-commands = 
-    python -m build
-    twine check dist/*
+    mkdocs build
 """
 
 [tool.bandit]

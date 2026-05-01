@@ -237,7 +237,7 @@ def main():
 🎉 Release process completed for SpindleX {args.version}!
 
 Next steps:
-1. Go to GitHub Actions: https://github.com/Di3Z1E/spindlex/actions
+1. Go to GitHub Actions: https://github.com/stratza/spindlex/actions
 2. Find the pipeline for tag v{args.version}
 3. Manually trigger the PyPI deployment jobs:
    - First: deploy:pypi:test (uploads to Test PyPI)

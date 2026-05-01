@@ -10,103 +10,10 @@ import struct
 from typing import Any, Protocol
 
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import hashes, hmac, poly1305
+from cryptography.hazmat.primitives import hashes, hmac
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from ..exceptions import CryptoException
-
-
-class ChaCha20Poly1305OpenSSH:
-    """
-    OpenSSH-specific ChaCha20-Poly1305 implementation.
-    Reference: PROTOCOL.chacha20poly1305 in OpenSSH source.
-    """
-
-    def __init__(self, key: bytes) -> None:
-        if len(key) != 64:
-            raise CryptoException("ChaCha20-Poly1305 key must be 64 bytes")
-        self.k_main = key[:32]
-        self.k_len = key[32:]
-
-    def _get_poly_key(self, nonce: bytes) -> bytes:
-        # Poly1305 key is ChaCha20(k_main, nonce) at block 0
-        # nonce in cryptography library is 16 bytes: 8 bytes counter (LE) + 8 bytes nonce
-        nonce16 = b"\x00" * 8 + nonce
-        cipher = Cipher(algorithms.ChaCha20(self.k_main, nonce16), mode=None)
-        encryptor = cipher.encryptor()
-        return encryptor.update(b"\x00" * 32)
-
-    def encrypt(self, nonce: bytes, data: bytes) -> bytes:
-        """
-        Encrypt data.
-        data is the full packet: length (4) + payload + padding
-        """
-        if len(data) < 4:
-            raise CryptoException("Data too short for encryption")
-
-        # 1. Encrypt length (first 4 bytes) with k_len
-        # Length encryption uses block 0
-        len_nonce16 = b"\x00" * 8 + nonce
-        len_cipher = Cipher(algorithms.ChaCha20(self.k_len, len_nonce16), mode=None)
-        len_encryptor = len_cipher.encryptor()
-        enc_len = len_encryptor.update(data[:4])
-
-        # 2. Encrypt payload with k_main, starting at block 1
-        main_nonce16 = b"\x01\x00\x00\x00\x00\x00\x00\x00" + nonce
-        main_cipher = Cipher(algorithms.ChaCha20(self.k_main, main_nonce16), mode=None)
-        main_encryptor = main_cipher.encryptor()
-        enc_payload = main_encryptor.update(data[4:])
-
-        # 3. Compute Poly1305 MAC over Enc(len) + Enc(payload)
-        poly_key = self._get_poly_key(nonce)
-        p = poly1305.Poly1305(poly_key)
-        p.update(enc_len + enc_payload)
-        mac = p.finalize()
-
-        return enc_len + enc_payload + mac
-
-    def decrypt(self, nonce: bytes, data: bytes) -> bytes:
-        """
-        Decrypt data.
-        data is Enc(len) + Enc(payload) + MAC
-        """
-        if len(data) < 4 + 16:
-            raise CryptoException("Data too short for decryption")
-
-        enc_len = data[:4]
-        mac = data[-16:]
-        enc_payload = data[4:-16]
-
-        # 1. Verify MAC
-        poly_key = self._get_poly_key(nonce)
-        p = poly1305.Poly1305(poly_key)
-        p.update(enc_len + enc_payload)
-        try:
-            p.verify(mac)
-        except Exception:
-            raise CryptoException("MAC verification failed")
-
-        # 2. Decrypt length
-        len_nonce16 = b"\x00" * 8 + nonce
-        len_cipher = Cipher(algorithms.ChaCha20(self.k_len, len_nonce16), mode=None)
-        len_decryptor = len_cipher.decryptor()
-        dec_len = len_decryptor.update(enc_len)
-
-        # 3. Decrypt payload
-        main_nonce16 = b"\x01\x00\x00\x00\x00\x00\x00\x00" + nonce
-        main_cipher = Cipher(algorithms.ChaCha20(self.k_main, main_nonce16), mode=None)
-        main_decryptor = main_cipher.decryptor()
-        dec_payload = main_decryptor.update(enc_payload)
-
-        return dec_len + dec_payload
-
-    def decrypt_length(self, nonce: bytes, enc_len: bytes) -> bytes:
-        """Decrypt only the length field."""
-        len_nonce16 = b"\x00" * 8 + nonce
-        len_cipher = Cipher(algorithms.ChaCha20(self.k_len, len_nonce16), mode=None)
-        len_decryptor = len_cipher.decryptor()
-        return bytes(len_decryptor.update(enc_len) + len_decryptor.finalize())
 
 
 class CryptoBackend(Protocol):
@@ -136,7 +43,9 @@ class CryptoBackend(Protocol):
     def decrypt_length(
         self, algorithm: str, key: bytes, iv: bytes, data: bytes
     ) -> bytes:
-        """Decrypt only the length field for AEAD ciphers that encrypt it."""
+        """
+        Decrypt only the length field for ciphers that encrypt it.
+        """
         ...
 
     def create_cipher(self, algorithm: str, key: bytes, iv: bytes) -> Any:
@@ -257,22 +166,7 @@ class CryptographyBackend:
             iv_bytes = bytes(iv)
             data_bytes = bytes(data)
 
-            cipher: Any
-            if algorithm == "chacha20-poly1305@openssh.com":
-                # SSH ChaCha20-Poly1305 (OpenSSH):
-                # The 64-bit record sequence number is used as the nonce.
-                cipher = ChaCha20Poly1305OpenSSH(key_bytes)
-                return bytes(cipher.encrypt(iv_bytes, data_bytes))
-            elif algorithm in ["aes256-gcm@openssh.com", "aes128-gcm@openssh.com"]:
-                # SSH AES-GCM (RFC 5647):
-                # data is full packet: length (4) + payload + padding
-                # length is AAD, payload+padding is encrypted
-                # iv_bytes is the 12-byte nonce (4-byte salt + 8-byte counter)
-                cipher = AESGCM(key_bytes)
-                aad = data_bytes[:4]
-                payload = data_bytes[4:]
-                return aad + bytes(cipher.encrypt(iv_bytes, payload, aad))
-            elif algorithm == "aes256-ctr":
+            if algorithm in ["aes128-ctr", "aes192-ctr", "aes256-ctr"]:
                 cipher_algo = algorithms.AES(key_bytes)
                 mode = modes.CTR(iv_bytes)
                 cipher = Cipher(cipher_algo, mode, backend=self.backend)
@@ -305,19 +199,7 @@ class CryptographyBackend:
             iv_bytes = bytes(iv)
             data_bytes = bytes(data)
 
-            cipher: Any
-            if algorithm == "chacha20-poly1305@openssh.com":
-                cipher = ChaCha20Poly1305OpenSSH(key_bytes)
-                return bytes(cipher.decrypt(iv_bytes, data_bytes))
-            elif algorithm in ["aes256-gcm@openssh.com", "aes128-gcm@openssh.com"]:
-                # SSH AES-GCM (RFC 5647):
-                # data is Length (4) + Enc(payload) + Tag (16)
-                # iv_bytes is the 12-byte nonce (4-byte salt + 8-byte counter)
-                cipher = AESGCM(key_bytes)
-                aad = data_bytes[:4]
-                ciphertext = data_bytes[4:]
-                return aad + bytes(cipher.decrypt(iv_bytes, ciphertext, aad))
-            elif algorithm == "aes256-ctr":
+            if algorithm in ["aes128-ctr", "aes192-ctr", "aes256-ctr"]:
                 cipher_algo = algorithms.AES(key_bytes)
                 mode = modes.CTR(iv_bytes)
                 cipher = Cipher(cipher_algo, mode, backend=self.backend)
@@ -352,10 +234,6 @@ class CryptographyBackend:
                 cipher_algo = algorithms.AES(key_bytes)
                 mode = modes.CTR(iv_bytes)
                 return Cipher(cipher_algo, mode, backend=self.backend)
-            elif algorithm == "chacha20-poly1305@openssh.com":
-                return ChaCha20Poly1305OpenSSH(key_bytes)
-            elif algorithm in ["aes256-gcm@openssh.com", "aes128-gcm@openssh.com"]:
-                return AESGCM(key_bytes)
             else:
                 raise CryptoException(
                     f"Streaming cipher not supported for: {algorithm}"
@@ -474,7 +352,7 @@ class CryptographyBackend:
         self, algorithm: str, key: bytes, iv: bytes, data: bytes
     ) -> bytes:
         """
-        Decrypt only the length field for AEAD ciphers that encrypt it.
+        Decrypt only the length field for ciphers that encrypt it.
 
         Args:
             algorithm: Cipher algorithm name
@@ -489,16 +367,8 @@ class CryptographyBackend:
             CryptoException: If decryption fails
         """
         try:
-            key_bytes = bytes(key)
-            iv_bytes = bytes(iv)
-            data_bytes = bytes(data)
-
-            if algorithm == "chacha20-poly1305@openssh.com":
-                cipher = ChaCha20Poly1305OpenSSH(key_bytes)
-                return bytes(cipher.decrypt_length(iv_bytes, data_bytes))
-            else:
-                # Ciphers that don't encrypt the length just return it as is
-                return data_bytes
+            # Ciphers that don't encrypt the length just return it as is
+            return bytes(data)
         except Exception as e:
             raise CryptoException(f"Length decryption failed: {e}") from e
 

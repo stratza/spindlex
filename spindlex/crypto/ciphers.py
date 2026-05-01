@@ -47,9 +47,6 @@ class CipherSuite:
         "aes256-ctr",
         "aes192-ctr",
         "aes128-ctr",
-        "aes128-gcm@openssh.com",
-        "aes256-gcm@openssh.com",
-        "chacha20-poly1305@openssh.com",
     ]
 
     # Supported MAC algorithms (in preference order)
@@ -60,14 +57,9 @@ class CipherSuite:
 
     # Cipher key and IV lengths
     CIPHER_INFO = {
-        "chacha20-poly1305@openssh.com": {"key_len": 64, "iv_len": 0, "aead": True},
-        # iv_len is the fixed salt only (4 bytes). The caller appends an 8-byte
-        # sequence counter to form the full 12-byte nonce (RFC 5116 §3.2).
-        "aes256-gcm@openssh.com": {"key_len": 32, "iv_len": 4, "aead": True},
-        "aes128-gcm@openssh.com": {"key_len": 16, "iv_len": 4, "aead": True},
-        "aes256-ctr": {"key_len": 32, "iv_len": 16, "aead": False},
-        "aes192-ctr": {"key_len": 24, "iv_len": 16, "aead": False},
-        "aes128-ctr": {"key_len": 16, "iv_len": 16, "aead": False},
+        "aes256-ctr": {"key_len": 32, "iv_len": 16},
+        "aes192-ctr": {"key_len": 24, "iv_len": 16},
+        "aes128-ctr": {"key_len": 16, "iv_len": 16},
     }
 
     # MAC key lengths
@@ -165,15 +157,6 @@ class CipherSuite:
 
             negotiated[category] = selected
 
-        # Handle AEAD ciphers (no separate MAC needed)
-        enc_c2s = negotiated["encryption_client_to_server"]
-        enc_s2c = negotiated["encryption_server_to_client"]
-
-        if self.is_aead_cipher(enc_c2s):
-            negotiated["mac_client_to_server"] = "none"
-        if self.is_aead_cipher(enc_s2c):
-            negotiated["mac_server_to_client"] = "none"
-
         self.negotiated_algorithms = negotiated
         return negotiated
 
@@ -185,7 +168,7 @@ class CipherSuite:
             algorithm: Cipher algorithm name
 
         Returns:
-            Dictionary with key_len, iv_len, and aead properties
+            Dictionary with key_len and iv_len properties
 
         Raises:
             CryptoException: If algorithm is unsupported
@@ -210,16 +193,3 @@ class CipherSuite:
         if algorithm not in self.MAC_INFO:
             raise CryptoException(f"Unsupported MAC algorithm: {algorithm}")
         return self.MAC_INFO[algorithm]
-
-    def is_aead_cipher(self, algorithm: str) -> bool:
-        """
-        Check if cipher algorithm is AEAD (Authenticated Encryption with Associated Data).
-
-        Args:
-            algorithm: Cipher algorithm name
-
-        Returns:
-            True if algorithm is AEAD, False otherwise
-        """
-        info = self.get_cipher_info(algorithm)
-        return bool(info.get("aead", False))

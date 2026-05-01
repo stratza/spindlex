@@ -300,10 +300,12 @@ class TestVerifyHostKey:
         client = _connected_client()
         server_key = MagicMock()
         server_key.get_public_key_bytes.return_value = b"same"
+        server_key.algorithm_name = "ssh-rsa"  # Added to match filtering
         client._transport.get_server_host_key.return_value = server_key
 
         known_key = MagicMock()
         known_key.get_public_key_bytes.return_value = b"same"
+        known_key.algorithm_name = "ssh-rsa"  # Added to match filtering
         storage = MagicMock(spec=HostKeyStorage)
         storage.get_all.return_value = [known_key]
         client._host_key_storage = storage

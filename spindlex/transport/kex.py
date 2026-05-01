@@ -28,12 +28,7 @@ from ..protocol.constants import (
     MSG_NEWKEYS,
 )
 from ..protocol.messages import KexInitMessage, Message
-from ..protocol.utils import (
-    read_mpint,
-    read_string,
-    write_mpint,
-    write_string,
-)
+from ..protocol.utils import read_mpint, read_string, write_mpint, write_string
 
 
 class KeyExchange:

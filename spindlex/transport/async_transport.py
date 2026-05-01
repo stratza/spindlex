@@ -625,20 +625,19 @@ class AsyncTransport(Transport):
                     await c.close()
                 else:
                     c.close()
-            except Exception:
-                pass
-
+            except Exception as e:
+                self._logger.debug(f"Channel close error in transport: {e}")
         async with self._state_lock:
             if self._writer:
                 try:
                     self._writer.close()
                     await asyncio.wait_for(self._writer.wait_closed(), timeout=2.0)
-                except Exception:
-                    pass
+                except Exception as e:
+                    self._logger.debug(f"Error closing channel in transport: {e}")
                 self._writer = None
             self._reader = None
             if self._socket:
                 try:
                     self._socket.close()
-                except Exception:
-                    pass
+                except Exception as e:
+                    self._logger.debug(f"Error closing channel in transport: {e}")

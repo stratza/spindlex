@@ -144,8 +144,8 @@ class AsyncLocalPortForwarder:
             writer.close()
             try:
                 await writer.wait_closed()
-            except Exception:
-                pass
+            except Exception as e:
+                self._logger.debug(f"Forwarding cleanup error: {e}")
             self._logger.debug(
                 f"Local client connection closed for tunnel {tunnel.tunnel_id}"
             )
@@ -159,13 +159,13 @@ class AsyncLocalPortForwarder:
                 if not data:
                     break
                 await channel.send(data)
-        except Exception:
-            pass
+        except Exception as e:
+            self._logger.debug(f"Forwarding cleanup error: {e}")
         finally:
             try:
                 await channel.close()
-            except Exception:
-                pass
+            except Exception as e:
+                self._logger.debug(f"Forwarding cleanup error: {e}")
 
     async def _relay_channel_to_stream(
         self, channel: Any, writer: asyncio.StreamWriter
@@ -177,8 +177,8 @@ class AsyncLocalPortForwarder:
                     break
                 writer.write(data)
                 await writer.drain()
-        except Exception:
-            pass
+        except Exception as e:
+            self._logger.debug(f"Forwarding cleanup error: {e}")
         finally:
             writer.close()
 
@@ -323,8 +323,8 @@ class AsyncRemotePortForwarder:
                     description=str(e),
                 )
                 await self._transport._send_message_async(fail)
-            except Exception:
-                pass
+            except Exception as e:
+                self._logger.debug(f"Forwarding cleanup error: {e}")
 
     async def _relay_stream_to_channel(
         self,
@@ -338,13 +338,13 @@ class AsyncRemotePortForwarder:
                 if not data:
                     break
                 await channel.send(data)
-        except Exception:
-            pass
+        except Exception as e:
+            self._logger.debug(f"Forwarding cleanup error: {e}")
         finally:
             try:
                 await channel.close()
-            except Exception:
-                pass
+            except Exception as e:
+                self._logger.debug(f"Forwarding cleanup error: {e}")
             if writer is not None:
                 writer.close()
 
@@ -358,8 +358,8 @@ class AsyncRemotePortForwarder:
                     break
                 writer.write(data)
                 await writer.drain()
-        except Exception:
-            pass
+        except Exception as e:
+            self._logger.debug(f"Forwarding cleanup error: {e}")
         finally:
             writer.close()
 

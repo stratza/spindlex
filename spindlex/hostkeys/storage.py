@@ -185,8 +185,8 @@ class HostKeyStorage:
             if os.path.exists(temp_filename):
                 try:
                     os.remove(temp_filename)
-                except Exception:
-                    pass
+                except OSError:
+                    pass  # Ignore errors if file already gone or inaccessible
             raise SSHException(
                 f"Failed to save host keys to {self._filename}: {e}"
             ) from e

@@ -1,8 +1,8 @@
 site_name: SpindleX
 site_description: A modern, high-performance SSHv2 and SFTP client/server library
 site_url: https://spindlex.readthedocs.io/
-repo_url: https://github.com/Di3Z1E/spindlex
-repo_name: Di3Z1E/spindlex
+repo_url: https://github.com/stratza/spindlex
+repo_name: stratza/spindlex
 edit_uri: edit/main/docs/
 
 theme:
@@ -83,7 +83,6 @@ plugins:
 nav:
   - Home: index.md
   - Quick Start: quickstart.md
-  - Demos: demo_results.md
   - User Guide:
       - Introduction: user_guide/index.md
       - Authentication: user_guide/authentication.md

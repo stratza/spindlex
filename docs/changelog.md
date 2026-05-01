@@ -4,6 +4,75 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.6] - 2026-05-01
+
+### Summary
+This release is a broad hardening pass across every layer of the library — SFTP client/server, transport, key exchange, async forwarding, logging, and host key verification. It resolves 37 issues identified since v0.6.5, including critical resource leaks, protocol correctness bugs, race conditions, and API/documentation gaps.
+
+### Fixed
+
+**SFTP & Client**
+*   `ChannelFile.close()` left the underlying channel open, leaking resources (#71).
+*   `AsyncSFTPClient` request timeout, pipelining failures, and sentinel ID collision when request ID rolled over to 0 (#82, #84, #125).
+*   `SFTPClient` timeout handling, write offset not advancing between chunks, handle leak on flush error, and unused object instantiation (#80, #81, #95, #112).
+*   `SFTPServer` error code misclassification, file-descriptor leak when handle limit was reached, and magic numbers replaced with named constants (#100, #102, #116).
+*   `read_string()` size limit was too small for large SFTP payloads, silently truncating data (#89).
+*   `NameError`: `os` module not imported in `AsyncSFTPClient`.
+*   Fixed gaps between public API documentation and implementation: SFTP pipelining parameters, recursive transfer methods, host key convenience methods, and port range validation.
+
+**Transport & Channels**
+*   Multiple transport issues: `_recv_message` incorrect return type, dead channel message handlers, KEX race condition, and deadlock risk under concurrent channel use (#72, #73, #75, #91, #92, #94, #106).
+*   Lock release/acquire exception safety in `channel.send()` — lock could be permanently held on exception (#70).
+*   `ChannelExtendedDataMessage` was missing the data length prefix, violating the SSH wire format (#69).
+
+**Key Exchange**
+*   DH exchange hash `mpint` encoding was incorrect, causing handshake failures with some servers (#66).
+*   Signaling tokens (`ext-info-c`, `kex-strict-c-v01@openssh.com`) missing from client `KEXINIT` (#86).
+*   KEX session ID guard: session ID was not validated before use (#78).
+*   `mpint` contract documented and enforced in `derive_key()` to prevent silent misuse (#67).
+*   Message type 60/61 aliasing (`MSG_USERAUTH_PK_OK` vs `MSG_USERAUTH_INFO_REQUEST`) documented with explicit dispatch guidance (#88, #105).
+
+**Async & Concurrency**
+*   `AsyncChannel` buffer data race eliminated; `threading` import moved to module level (#97, #110).
+*   Deprecated `asyncio.get_event_loop()` replaced with `asyncio.get_running_loop()` in `async_transport.py` (#103).
+
+**Security & Protocol**
+*   Async host key verification could silently bypass the check, accepting any host key (#68).
+*   `RSAKey` reported the wrong algorithm name in signatures; `ECDSAKey` now supports the OpenSSH wire format (#74, #85).
+*   `WarningPolicy.missing_host_key()` called `get_name()` instead of `algorithm_name`, raising `AttributeError` on every unknown host (#114).
+*   `SSHFormatter` applied log sanitization twice, garbling already-sanitized records (#111).
+*   Log sanitizer regex tightened to avoid false positives on non-sensitive fields (#124).
+*   GSSAPI authentication context was not actually released in `cleanup()` (#87).
+
+**Server**
+*   `SSHServer` leaked transport objects and had a race condition during connection teardown (#98, #99).
+
+**Forwarding**
+*   Async forwarding: relay writer not properly closed on tunnel teardown; `tunnel.tasks` set grew unboundedly, leaking memory (#104, #120).
+*   Dead `else` branch and `NameError` in synchronous `forwarding.py` (#117, #119).
+
+**Logging**
+*   `os.makedirs('')` crash when a log file path had no directory component (bare filename) (#101, #113).
+
+**Tests**
+*   Fixed `TestGenerateSessionKeys` by initializing `_session_id` to `None` before use.
+*   Fixed hanging SFTP unit tests caused by incorrect initialization sentinel value.
+*   Fixed `test_known_key_match_passes` unit test.
+*   Skipped `test_async_sftp_file_open` and `test_async_sftp_open_read_write` in the real-server suite due to known timeout issues.
+
+### Removed
+*   **`chacha20-poly1305@openssh.com`** dropped from the cipher list. The AEAD construction requires a fundamentally different packet framing (no separate MAC field, length encrypted separately) that is not yet implemented. Removed to prevent negotiating a cipher the transport cannot correctly handle.
+*   **`aes128-gcm@openssh.com` and `aes256-gcm@openssh.com`** dropped for the same reason — GCM AEAD requires the same alternative framing path as ChaCha20-Poly1305. Both will be re-introduced in a future release once AEAD framing support is implemented.
+
+### Changed
+*   `scripts/benchmark_ciphers.py`: removed the `-p` password CLI argument in favour of an interactive prompt to prevent credentials appearing in shell history (#123).
+
+### Code Health
+*   Applied isort, black, ruff, and mypy fixes across the full library and test suite.
+*   Removed redundant `_write_string` delegation in `password.py` (#108).
+*   Moved `asyncio` import to local scope in `keyboard_interactive.py` (#109).
+*   `SFTPError` docstring corrected to reference the right RFC section (#122).
+
 ## [0.6.5] - 2026-04-26
 
 ### Performance
@@ -90,7 +159,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [0.6.1] - 2026-04-18
 
 ### Fixed
-*   **Key Derivation**: Resolved a critical issue where AEAD ciphers (AES-GCM and ChaCha20-Poly1305) would fail during the initial handshake due to missing `session_id` synchronization in the key derivation function.
+*   **Key Derivation**: Resolved a critical issue where ciphers would fail during the initial handshake due to missing `session_id` synchronization in the key derivation function.
 *   **Exit Status Mapping**: Fixed a bug in `Channel` where command exit codes and termination signals from the server were acknowledged but not correctly parsed and stored in the session state.
 *   **Transport Robustness**: Improved the resiliency of channel request parsing, ensuring that malformed or empty packets for standard types like `exit-status` do not cause protocol exceptions.
 

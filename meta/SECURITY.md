@@ -19,7 +19,7 @@ I take the security of SpindleX seriously. If you believe you have found a secur
 
 You can report security vulnerabilities through the following channels:
 
-1. **GitHub Advisory**: Use the [GitHub Security Advisory](https://github.com/Di3Z1E/spindlex/security/advisories/new) system to report vulnerabilities privately.
+1. **GitHub Advisory**: Use the [GitHub Security Advisory](https://github.com/stratza/spindlex/security/advisories/new) system to report vulnerabilities privately.
 2. **GitHub Issue (with 'security' label)**: Only if you cannot use the advisory system. Please mark it as private if GitHub allows, or request a private reporting channel first.
 
 ### What to Include in Your Report
