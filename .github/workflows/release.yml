@@ -33,11 +33,6 @@ on:
           - minor
           - major
           - none
-      smoke_push:
-        description: "Temporarily test whether the release GitHub App can push to protected main."
-        required: false
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -48,36 +43,6 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  protected-main-smoke:
-    name: Protected main push smoke test
-    if: github.event_name == 'workflow_dispatch' && inputs.smoke_push == true
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - id: release-token
-        name: Create release app token
-        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
-        with:
-          app-id: ${{ secrets.RELEASE_APP_ID }}
-          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          ref: main
-          fetch-depth: 0
-          token: ${{ steps.release-token.outputs.token }}
-      - name: Push harmless smoke-test commit
-        run: |
-          git config user.name "spindlex-release-bot"
-          git config user.email "spindlex-release-bot@users.noreply.github.com"
-
-          mkdir -p .github/release-smoke
-          date -u +"%Y-%m-%dT%H:%M:%SZ" > .github/release-smoke/last-app-push.txt
-
-          git add .github/release-smoke/last-app-push.txt
-          git commit -m "chore(release): smoke test protected main push [skip release]"
-          git push origin HEAD:main
-
   plan:
     name: Release plan
     runs-on: ubuntu-latest
