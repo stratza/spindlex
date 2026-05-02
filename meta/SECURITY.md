@@ -36,11 +36,26 @@ A good security report should include:
 
 SpindleX follows these security principles:
 
-- **Modern Cryptography**: Only supports secure, modern algorithms (Ed25519, AES-256-CTR, HMAC-SHA2, etc.).
+- **Cryptography Dependency Model**: SpindleX uses the Python `cryptography` package for low-level primitives and implements SSH protocol behavior, negotiation, host key policy, authentication flow, and SFTP behavior around those primitives.
+- **Modern Cryptography**: Prefer modern algorithms such as Ed25519, AES-CTR, and HMAC-SHA2 where supported by both client and server.
 - **Secure Defaults**: Insecure algorithms and protocols are disabled by default.
+- **Host Key Verification**: Unknown host keys should be rejected by default. `AutoAddPolicy` is for disposable tests and controlled development environments only.
 - **Input Validation**: Rigorous validation of all protocol inputs.
-- **Dependency Scanning**: Regular automated scanning for vulnerable dependencies.
+- **Dependency Scanning**: Regular automated scanning for vulnerable runtime dependencies.
+- **Layered Security Scanning**: CodeQL, Semgrep CE, Bandit, pip-audit, Gitleaks, Trivy, and OpenSSF Scorecard are used where appropriate.
 - **Type Safety**: Use of type hints to prevent entire classes of logic errors.
+
+## Minimal Threat Model
+
+SpindleX is intended to protect SSH and SFTP sessions from passive observation
+and active network interception when host key verification is correctly
+configured. It validates SSH/SFTP protocol data and avoids known-weak defaults
+where practical.
+
+SpindleX does not protect against compromised hosts, stolen credentials,
+malicious commands intentionally executed by the caller, disabled host key
+verification, or vulnerabilities in the operating system, Python runtime, or
+third-party cryptographic backend.
 
 ## Disclosure Policy
 

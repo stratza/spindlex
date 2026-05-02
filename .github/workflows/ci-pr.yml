@@ -89,8 +89,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: uv pip install --system ".[dev]" pip-audit
+      - run: uv pip install --system ".[dev]" pip-audit "setuptools<81" "semgrep>=1.136.0"
       - run: bandit -r spindlex -c pyproject.toml
+      - run: semgrep scan --config p/python --config p/security-audit --metrics=off --severity ERROR --error spindlex
       - run: python scripts/export_runtime_requirements.py --output runtime-requirements.txt
       - run: pip-audit -r runtime-requirements.txt --cache-dir .pip-audit-cache
       - run: |
