@@ -1,43 +1,240 @@
 name: Release
 
 on:
-  release:
-    types: [published]
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - ".github/workflows/release.yml"
+      - ".github/workflows/ci-matrix.yml"
+      - ".github/workflows/integration.yml"
+      - "scripts/plan_release.py"
+      - "scripts/sync_project_version.py"
+      - "scripts/validate_pr_body.py"
+      - "tests/scripts/**"
+      - "pyproject.toml"
+      - "spindlex/_version.py"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Validate the release path without creating tags, releases, or PyPI uploads."
+        required: true
+        type: boolean
+        default: true
+      release_type:
+        description: "Release type to simulate for manual dry runs."
+        required: true
+        type: choice
+        default: patch
+        options:
+          - patch
+          - minor
+          - major
+          - none
 
 permissions:
   contents: read
+  pull-requests: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
+  plan:
+    name: Release plan
+    runs-on: ubuntu-latest
+    outputs:
+      release_needed: ${{ steps.plan.outputs.release_needed }}
+      release_type: ${{ steps.plan.outputs.release_type }}
+      change_type: ${{ steps.plan.outputs.change_type }}
+      current_version: ${{ steps.plan.outputs.current_version }}
+      next_version: ${{ steps.plan.outputs.next_version }}
+      tag: ${{ steps.plan.outputs.tag }}
+      dry_run: ${{ steps.plan.outputs.dry_run }}
+      source_pr: ${{ steps.plan.outputs.source_pr }}
+      source_pr_url: ${{ steps.plan.outputs.source_pr_url }}
+      source_sha: ${{ steps.plan.outputs.source_sha }}
+      reason: ${{ steps.plan.outputs.reason }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11"
+      - id: plan
+        name: Compute release plan
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python scripts/plan_release.py --event-path "$GITHUB_EVENT_PATH"
+      - name: Summary
+        run: |
+          {
+            echo "## Release plan"
+            echo ""
+            echo "- release needed: \`${{ steps.plan.outputs.release_needed }}\`"
+            echo "- dry run: \`${{ steps.plan.outputs.dry_run }}\`"
+            echo "- release type: \`${{ steps.plan.outputs.release_type }}\`"
+            echo "- current version: \`${{ steps.plan.outputs.current_version }}\`"
+            echo "- next version: \`${{ steps.plan.outputs.next_version }}\`"
+            echo "- tag: \`${{ steps.plan.outputs.tag }}\`"
+            echo "- source PR: \`${{ steps.plan.outputs.source_pr }}\`"
+            echo "- reason: ${{ steps.plan.outputs.reason }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   compatibility-matrix:
     name: Release compatibility matrix
+    needs: plan
+    if: needs.plan.outputs.release_needed == 'true'
     uses: ./.github/workflows/ci-matrix.yml
     secrets: inherit
 
   integration:
     name: Release integration
+    needs: plan
+    if: needs.plan.outputs.release_needed == 'true'
     uses: ./.github/workflows/integration.yml
     secrets: inherit
 
-  pypi-publish:
-    name: Upload release to PyPI
+  dry-run-release:
+    name: Release dry run
     needs:
+      - plan
       - compatibility-matrix
       - integration
+    if: >
+      always() &&
+      needs.plan.outputs.release_needed == 'true' &&
+      needs.plan.outputs.dry_run == 'true' &&
+      needs.compatibility-matrix.result == 'success' &&
+      needs.integration.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11"
+      - name: Install build tooling
+        run: uv pip install --system build twine
+      - name: Simulate version bump
+        run: |
+          python scripts/sync_project_version.py --version "${{ needs.plan.outputs.next_version }}"
+          python scripts/sync_project_version.py --check
+      - name: Build and validate distributions
+        run: |
+          python -m build
+          python -m twine check dist/*
+      - name: Validate built wheel import
+        run: |
+          python -m venv /tmp/spindlex-release-check
+          /tmp/spindlex-release-check/bin/python -m pip install --upgrade pip
+          /tmp/spindlex-release-check/bin/python -m pip install dist/*.whl
+          /tmp/spindlex-release-check/bin/python -c "import spindlex; assert spindlex.__version__ == '${{ needs.plan.outputs.next_version }}', spindlex.__version__"
+      - name: Upload dry-run artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-dry-run-dist-${{ needs.plan.outputs.next_version }}
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    name: Tag, release, and publish to PyPI
+    needs:
+      - plan
+      - compatibility-matrix
+      - integration
+    if: >
+      always() &&
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      needs.plan.outputs.release_needed == 'true' &&
+      needs.plan.outputs.dry_run == 'false' &&
+      needs.compatibility-matrix.result == 'success' &&
+      needs.integration.result == 'success'
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       id-token: write
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-      - name: Install uv
-        uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3
-      - name: Set up Python
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
-          python-version: '3.11'
-      - name: Build
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11"
+      - name: Install build tooling
+        run: uv pip install --system build twine
+      - id: prepare
+        name: Prepare release commit
+        env:
+          TAG: ${{ needs.plan.outputs.tag }}
+          NEXT_VERSION: ${{ needs.plan.outputs.next_version }}
         run: |
-          uv pip install --system build
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "publish_needed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Tag $TAG already exists; skipping duplicate release."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          python scripts/sync_project_version.py --version "$NEXT_VERSION"
+          python scripts/sync_project_version.py --check
+
+          git add pyproject.toml spindlex/_version.py
+          git commit -m "chore(release): $TAG [skip release]"
+          git push origin HEAD:main
+
+          echo "publish_needed=true" >> "$GITHUB_OUTPUT"
+      - name: Build and validate distributions
+        if: steps.prepare.outputs.publish_needed == 'true'
+        run: |
           python -m build
+          python -m twine check dist/*
+      - name: Validate built wheel import
+        if: steps.prepare.outputs.publish_needed == 'true'
+        run: |
+          python -m venv /tmp/spindlex-release-check
+          /tmp/spindlex-release-check/bin/python -m pip install --upgrade pip
+          /tmp/spindlex-release-check/bin/python -m pip install dist/*.whl
+          /tmp/spindlex-release-check/bin/python -c "import spindlex; assert spindlex.__version__ == '${{ needs.plan.outputs.next_version }}', spindlex.__version__"
+      - name: Create tag and GitHub Release
+        if: steps.prepare.outputs.publish_needed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.plan.outputs.tag }}
+          SOURCE_PR: ${{ needs.plan.outputs.source_pr }}
+          SOURCE_PR_URL: ${{ needs.plan.outputs.source_pr_url }}
+          RELEASE_TYPE: ${{ needs.plan.outputs.release_type }}
+        run: |
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin "$TAG"
+
+          cat > release-notes.md <<EOF
+          Source PR: #$SOURCE_PR $SOURCE_PR_URL
+          Release type: $RELEASE_TYPE
+          EOF
+
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes-file release-notes.md
       - name: Publish to PyPI
+        if: steps.prepare.outputs.publish_needed == 'true'
         uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # release/v1
+      - name: Verify published package from PyPI
+        if: steps.prepare.outputs.publish_needed == 'true'
+        run: |
+          python -m venv /tmp/spindlex-pypi-check
+          /tmp/spindlex-pypi-check/bin/python -m pip install --upgrade pip
+          for attempt in 1 2 3 4 5; do
+            if /tmp/spindlex-pypi-check/bin/python -m pip install --no-cache-dir "spindlex==${{ needs.plan.outputs.next_version }}"; then
+              /tmp/spindlex-pypi-check/bin/python -c "import spindlex; assert spindlex.__version__ == '${{ needs.plan.outputs.next_version }}', spindlex.__version__"
+              exit 0
+            fi
+            sleep 30
+          done
+          exit 1
