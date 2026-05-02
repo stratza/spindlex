@@ -910,7 +910,10 @@ class RSAKey(PKey):
                     DeprecationWarning,
                     stacklevel=2,
                 )
-                hash_algo = hashes.SHA1()  # nosec
+                # Legacy ssh-rsa compatibility is gated by allow_sha1=True.
+                hash_algo = (
+                    hashes.SHA1()  # nosemgrep: python.cryptography.security.insecure-hash-algorithms.insecure-hash-algorithm-sha1  # nosec
+                )
 
             # Sign data with PKCS1v15 padding
             signature = self._key.sign(data, padding.PKCS1v15(), hash_algo)
@@ -1004,7 +1007,10 @@ class RSAKey(PKey):
                     DeprecationWarning,
                     stacklevel=2,
                 )
-                hash_algo = hashes.SHA1()  # nosec
+                # Legacy ssh-rsa compatibility is gated by allow_sha1=True.
+                hash_algo = (
+                    hashes.SHA1()  # nosemgrep: python.cryptography.security.insecure-hash-algorithms.insecure-hash-algorithm-sha1  # nosec
+                )
             else:
                 return False
 

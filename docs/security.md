@@ -1,6 +1,62 @@
 # Security Guide
 
-This guide provides security best practices for using SpindleX and information about our security policy.
+This guide explains SpindleX security expectations, trust boundaries, and
+security best practices. It is documentation for using the library safely; it is
+not a claim that every SSH feature or deployment environment is risk-free.
+
+## Security Status
+
+SpindleX is still pre-`1.0.0` beta software. Treat it as a library under active
+stabilization:
+
+* Pin exact versions in production-facing automation.
+* Review changelog entries before upgrading.
+* Run your own integration tests against the SSH servers you operate.
+* Keep host key verification enabled.
+
+## Threat Model
+
+SpindleX is designed to help applications establish SSH and SFTP sessions,
+authenticate users, verify server identity, and transfer data over encrypted
+transport channels.
+
+### In Scope
+
+* Passive network observers.
+* Active network attackers attempting man-in-the-middle interception.
+* Malformed SSH/SFTP protocol messages from remote peers.
+* Accidental leakage of secrets through common logs.
+* Vulnerable runtime dependencies.
+
+### Out of Scope
+
+* Compromised client or server hosts.
+* Stolen private keys, passwords, or tokens.
+* Malicious commands intentionally executed by the application.
+* Weak host key policies chosen by the caller.
+* Bugs in operating-system networking, OpenSSL, or Python runtime components.
+
+SpindleX protects against MITM attacks only when host key verification is
+correctly configured. If an application accepts unknown host keys without
+verification, the SSH transport can be encrypted but the server identity is not
+trusted.
+
+## Cryptography Dependency Model
+
+SpindleX does not implement low-level cryptographic primitives directly. It uses
+the Python `cryptography` package for supported primitives and key operations.
+SpindleX is responsible for SSH protocol framing, algorithm negotiation, host key
+policy behavior, authentication flow, SFTP behavior, and safe defaults around
+those features.
+
+Security-sensitive changes should therefore consider both layers:
+
+* `cryptography` version and vulnerability status.
+* SpindleX protocol handling, algorithm selection, and verification logic.
+
+Do not treat this project as a replacement for a cryptographic review of your
+deployment. For high-assurance environments, review the exact algorithms,
+configuration, dependencies, and server compatibility used in your system.
 
 ## Security Best Practices for Users
 
@@ -18,7 +74,7 @@ Always prefer public key authentication over password authentication.
 
 Host key verification is critical to prevent man-in-the-middle (MITM) attacks.
 
-*   **Avoid `AutoAddPolicy` in Production**: While convenient for testing, `AutoAddPolicy` automatically accepts any host key, making you vulnerable to MITM attacks.
+*   **Avoid `AutoAddPolicy` in Production**: `AutoAddPolicy` is for disposable tests and controlled development environments only. It trusts first-seen host keys and can hide MITM attacks.
 *   **Use `RejectPolicy` (Default)**: Use the default `RejectPolicy` and manage your `known_hosts` file or `HostKeyStorage` securely.
 *   **Verify Host Keys**: Always verify the server's host key fingerprint before connecting for the first time.
 
@@ -74,6 +130,40 @@ SpindleX prioritizes modern, secure cryptographic algorithms and disables legacy
 ## Security Policy
 
 For information on how to report vulnerabilities or our disclosure policy, please see our [Responsible Disclosure Policy](https://github.com/stratza/spindlex/blob/main/meta/SECURITY.md).
+
+## Security Scanning and Blocker Policy
+
+The repository uses layered automated checks:
+
+* CodeQL for Python static analysis.
+* Semgrep CE for Python and security-audit rules.
+* Bandit for Python security patterns.
+* `pip-audit` for runtime dependency vulnerabilities.
+* Gitleaks for secret detection.
+* Trivy for filesystem, dependency, secret, and config scanning.
+* OpenSSF Scorecard for repository supply-chain posture.
+
+PR gates block high-confidence fast findings such as Bandit failures, Semgrep
+`ERROR` findings, vulnerable runtime dependencies, and committed secrets. The
+full security workflow runs on `main`, on schedule, and on demand. Supported
+tools upload SARIF to GitHub code scanning.
+
+### Release-Blocking Findings
+
+These findings block releases until fixed or explicitly accepted by a maintainer:
+
+* Confirmed secret exposure.
+* High or critical vulnerable runtime dependency with a practical exploit path.
+* High-confidence CodeQL, Semgrep, Bandit, or Trivy finding in runtime code.
+* Host key verification bypass or unsafe default behavior.
+* Supply-chain finding that weakens release integrity.
+
+### False Positives
+
+Suppressions must be narrow and documented near the relevant configuration or
+code. A suppression is acceptable only when the finding is understood, not
+exploitable in the project context, and cheaper to document than to restructure.
+Broad scanner disables are not acceptable for runtime code.
 
 ### Supported Versions
 
