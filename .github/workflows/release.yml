@@ -187,7 +187,6 @@ jobs:
 
           git add pyproject.toml spindlex/_version.py
           git commit -m "chore(release): $TAG [skip release]"
-          git push origin HEAD:main
 
           echo "publish_needed=true" >> "$GITHUB_OUTPUT"
       - name: Build and validate distributions
@@ -202,7 +201,51 @@ jobs:
           /tmp/spindlex-release-check/bin/python -m pip install --upgrade pip
           /tmp/spindlex-release-check/bin/python -m pip install dist/*.whl
           /tmp/spindlex-release-check/bin/python -c "import spindlex; assert spindlex.__version__ == '${{ needs.plan.outputs.next_version }}', spindlex.__version__"
-      - name: Create tag and GitHub Release
+      - id: pypi
+        name: Check PyPI version availability
+        if: steps.prepare.outputs.publish_needed == 'true'
+        env:
+          NEXT_VERSION: ${{ needs.plan.outputs.next_version }}
+        run: |
+          python - <<'PY'
+          import os
+          import urllib.error
+          import urllib.request
+
+          version = os.environ["NEXT_VERSION"]
+          url = f"https://pypi.org/pypi/spindlex/{version}/json"
+
+          try:
+              with urllib.request.urlopen(url, timeout=30):
+                  exists = "true"
+          except urllib.error.HTTPError as exc:
+              if exc.code == 404:
+                  exists = "false"
+              else:
+                  raise
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"exists={exists}\n")
+          print(f"PyPI version {version} exists: {exists}")
+          PY
+      - name: Publish to PyPI
+        if: steps.prepare.outputs.publish_needed == 'true' && steps.pypi.outputs.exists != 'true'
+        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # release/v1
+      - name: Verify published package from PyPI
+        if: steps.prepare.outputs.publish_needed == 'true'
+        run: |
+          python -m venv /tmp/spindlex-pypi-check
+          /tmp/spindlex-pypi-check/bin/python -m pip install --upgrade pip
+          for attempt in 1 2 3 4 5; do
+            echo "PyPI install attempt $attempt"
+            if /tmp/spindlex-pypi-check/bin/python -m pip install --no-cache-dir "spindlex==${{ needs.plan.outputs.next_version }}"; then
+              /tmp/spindlex-pypi-check/bin/python -c "import spindlex; assert spindlex.__version__ == '${{ needs.plan.outputs.next_version }}', spindlex.__version__"
+              exit 0
+            fi
+            sleep 30
+          done
+          exit 1
+      - name: Push release commit, tag, and GitHub Release
         if: steps.prepare.outputs.publish_needed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -211,6 +254,8 @@ jobs:
           SOURCE_PR_URL: ${{ needs.plan.outputs.source_pr_url }}
           RELEASE_TYPE: ${{ needs.plan.outputs.release_type }}
         run: |
+          git push origin HEAD:main
+
           git tag -a "$TAG" -m "Release $TAG"
           git push origin "$TAG"
 
@@ -222,19 +267,3 @@ jobs:
           gh release create "$TAG" \
             --title "$TAG" \
             --notes-file release-notes.md
-      - name: Publish to PyPI
-        if: steps.prepare.outputs.publish_needed == 'true'
-        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # release/v1
-      - name: Verify published package from PyPI
-        if: steps.prepare.outputs.publish_needed == 'true'
-        run: |
-          python -m venv /tmp/spindlex-pypi-check
-          /tmp/spindlex-pypi-check/bin/python -m pip install --upgrade pip
-          for attempt in 1 2 3 4 5; do
-            if /tmp/spindlex-pypi-check/bin/python -m pip install --no-cache-dir "spindlex==${{ needs.plan.outputs.next_version }}"; then
-              /tmp/spindlex-pypi-check/bin/python -c "import spindlex; assert spindlex.__version__ == '${{ needs.plan.outputs.next_version }}', spindlex.__version__"
-              exit 0
-            fi
-            sleep 30
-          done
-          exit 1
