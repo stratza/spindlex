@@ -9,7 +9,7 @@ echo "Building Spindle distributions..."
 rm -rf dist/ build/ *.egg-info/
 
 # Install build dependencies
-python -m pip install --upgrade build twine
+python -m pip install --upgrade build==1.4.4 twine==6.2.0
 
 # Build wheel and source distribution
 python -m build
