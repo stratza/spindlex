@@ -23,9 +23,9 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: astral-sh/setup-uv@8d55fbecc275b1c35dbe060458839f8d30439ccf # v3
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.11"
       - run: uv pip install --system "setuptools<81" "semgrep>=1.136.0"
@@ -41,7 +41,7 @@ jobs:
             spindlex
       - name: Upload Semgrep SARIF
         if: always() && hashFiles('semgrep.sarif') != ''
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@53e96ec3b35fce51c141c0d6f0e31028a448722d # v3
         with:
           sarif_file: semgrep.sarif
 
@@ -49,9 +49,9 @@ jobs:
     name: Dependency Audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: astral-sh/setup-uv@8d55fbecc275b1c35dbe060458839f8d30439ccf # v3
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.11"
       - run: uv pip install --system pip-audit
@@ -65,7 +65,7 @@ jobs:
             --output pip-audit.json
       - name: Upload pip-audit report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: pip-audit-report
           path: pip-audit.json
@@ -78,12 +78,12 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Run Gitleaks
         run: |
           docker run --rm \
             -v "$PWD:/repo" \
-            ghcr.io/gitleaks/gitleaks:latest \
+            ghcr.io/gitleaks/gitleaks:v8.30.1 \
             detect \
               --source /repo \
               --config /repo/.gitleaks.toml \
@@ -94,7 +94,7 @@ jobs:
               --exit-code 1
       - name: Upload Gitleaks SARIF
         if: always() && hashFiles('gitleaks.sarif') != ''
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@53e96ec3b35fce51c141c0d6f0e31028a448722d # v3
         with:
           sarif_file: gitleaks.sarif
 
@@ -105,9 +105,9 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Run Trivy filesystem scan
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -119,7 +119,7 @@ jobs:
           exit-code: "1"
       - name: Upload Trivy SARIF
         if: always() && hashFiles('trivy-results.sarif') != ''
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@53e96ec3b35fce51c141c0d6f0e31028a448722d # v3
         with:
           sarif_file: trivy-results.sarif
 
@@ -133,17 +133,17 @@ jobs:
       security-events: write
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           persist-credentials: false
       - name: Run Scorecard
-        uses: ossf/scorecard-action@v2.4.0
+        uses: ossf/scorecard-action@ff5dd8929f96a8a4dc67d13f32b8c75057829621 # v2.4.0
         with:
           results_file: scorecard.sarif
           results_format: sarif
           publish_results: true
       - name: Upload Scorecard SARIF
         if: always() && hashFiles('scorecard.sarif') != ''
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@53e96ec3b35fce51c141c0d6f0e31028a448722d # v3
         with:
           sarif_file: scorecard.sarif
