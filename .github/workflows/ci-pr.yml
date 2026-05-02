@@ -1,0 +1,143 @@
+name: PR Gate
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ci-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  pr-validate:
+    name: pr-validate
+    runs-on: ubuntu-latest
+    outputs:
+      change_type: ${{ steps.validate.outputs.change_type }}
+      release_needed: ${{ steps.validate.outputs.release_needed }}
+      release_type: ${{ steps.validate.outputs.release_type }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - id: validate
+        run: python scripts/validate_pr_body.py --event-path "$GITHUB_EVENT_PATH"
+
+  ruff:
+    name: ruff
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: uv pip install --system ruff
+      - run: ruff check spindlex tests
+      - run: ruff format --check spindlex tests
+
+  mypy:
+    name: mypy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: uv pip install --system ".[dev]"
+      - run: mypy spindlex
+
+  unit-tests:
+    name: unit-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: uv pip install --system -e ".[test]"
+      - run: pytest tests -m "not integration and not real_server and not slow and not performance"
+
+  docs-build:
+    name: docs-build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v3
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: uv pip install --system ".[docs]"
+      - run: mkdocs build --strict
+
+  security-fast:
+    name: security-fast
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: uv pip install --system ".[dev]" pip-audit
+      - run: bandit -r spindlex -c pyproject.toml
+      - run: python scripts/export_runtime_requirements.py --output runtime-requirements.txt
+      - run: pip-audit -r runtime-requirements.txt --cache-dir .pip-audit-cache
+      - run: |
+          docker run --rm \
+            -v "$PWD:/repo" \
+            ghcr.io/gitleaks/gitleaks:latest \
+            detect --source /repo --config /repo/.gitleaks.toml --no-git --redact --exit-code 1
+
+  workflow-lint:
+    name: workflow-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: raven-actions/actionlint@v2
+
+  script-lint:
+    name: script-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m py_compile scripts/*.py
+
+  quality-gate:
+    name: quality-gate
+    if: always()
+    needs:
+      - pr-validate
+      - ruff
+      - mypy
+      - unit-tests
+      - docs-build
+      - security-fast
+      - workflow-lint
+      - script-lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Result
+        run: |
+          if [ "${{ needs.pr-validate.result }}" != "success" ]; then exit 1; fi
+          if [ "${{ needs.ruff.result }}" != "success" ]; then exit 1; fi
+          if [ "${{ needs.mypy.result }}" != "success" ]; then exit 1; fi
+          if [ "${{ needs.unit-tests.result }}" != "success" ]; then exit 1; fi
+          if [ "${{ needs.docs-build.result }}" != "success" ]; then exit 1; fi
+          if [ "${{ needs.security-fast.result }}" != "success" ]; then exit 1; fi
+          if [ "${{ needs.workflow-lint.result }}" != "success" ]; then exit 1; fi
+          if [ "${{ needs.script-lint.result }}" != "success" ]; then exit 1; fi
+          echo "PR gate passed."

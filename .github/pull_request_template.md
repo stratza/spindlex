@@ -1,19 +1,21 @@
-## 📝 Description
+## Description
 
 <!-- Please include a summary of the change and which issue is fixed. -->
 
 Fixes # (issue)
 
-## 🧪 Type of Change
+## Type of Change
 
-- [ ] 🐛 Bug fix (non-breaking change which fixes an issue)
-- [ ] ✨ New feature (non-breaking change which adds functionality)
-- [ ] 💥 Breaking change (fix or feature that would cause existing functionality to not work as expected)
-- [ ] 📝 Documentation update
-- [ ] 🎨 Style/Refactoring (non-functional changes)
-- [ ] ✅ Testing (adding/updating tests)
+Select exactly one option. These stable tokens are parsed by CI and release automation.
 
-## 🛠️ How Has This Been Tested?
+- [ ] bug - Bug fix; creates a patch release.
+- [ ] feature - New feature; creates a minor release.
+- [ ] breaking - Breaking change; creates a major release.
+- [ ] docs - Documentation-only change; no release.
+- [ ] refactor - Non-functional cleanup or refactor; no release.
+- [ ] test - Test-only change; no release.
+
+## How Has This Been Tested?
 
 <!-- Please describe the tests that you ran to verify your changes. -->
 
@@ -21,7 +23,7 @@ Fixes # (issue)
 - [ ] **Integration Tests**: `pytest -m integration`
 - [ ] **Manual Test**: (Please describe)
 
-## ✅ Checklist
+## Checklist
 
 - [ ] My code follows the style guidelines of this project
 - [ ] I have performed a self-review of my own code
