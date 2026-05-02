@@ -143,6 +143,7 @@ asyncio_default_fixture_loop_scope = "function"
 markers = [
     "unit: Unit tests",
     "integration: Integration tests requiring external services",
+    "real_server: Tests requiring a live SSH server",
     "performance: Performance and benchmark tests",
     "security: Security-focused tests",
     "slow: Tests that take a long time to run",

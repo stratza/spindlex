@@ -1,0 +1,64 @@
+name: Integration
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "spindlex/**"
+      - "tests/**"
+      - "scripts/**"
+      - "pyproject.toml"
+      - ".github/workflows/ci-matrix.yml"
+      - ".github/workflows/integration.yml"
+      - ".github/workflows/release.yml"
+  push:
+    branches: [main]
+    paths:
+      - "spindlex/**"
+      - "tests/**"
+      - "scripts/**"
+      - "pyproject.toml"
+      - ".github/workflows/ci-matrix.yml"
+      - ".github/workflows/integration.yml"
+      - ".github/workflows/release.yml"
+  schedule:
+    - cron: "47 3 * * *"
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integration-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docker-protocol:
+    name: Docker OpenSSH and Dropbear
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: uv pip install --system -e ".[test]" pytest-docker pytest-timeout
+      - name: Run Docker integration suite
+        run: |
+          pytest tests/integration/ tests/real_server/ tests/misc/test_functional_integration.py \
+            -m "integration or real_server" \
+            --tb=short \
+            --timeout=120 \
+            --timeout-method=thread \
+            --cov=spindlex \
+            --cov-report=xml
+      - name: Upload integration coverage
+        if: github.event_name != 'workflow_call'
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.xml
+          flags: integration
+          token: ${{ secrets.CODECOV_TOKEN }}
