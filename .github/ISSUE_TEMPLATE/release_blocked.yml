@@ -1,0 +1,53 @@
+name: Release Blocked
+description: Track a release gate failure or partial publish state.
+title: "[Release] "
+labels: ["release-blocked", "ci", "triage"]
+body:
+  - type: input
+    id: source_pr
+    attributes:
+      label: Source PR
+  - type: input
+    id: source_sha
+    attributes:
+      label: Source SHA
+    validations:
+      required: true
+  - type: input
+    id: release_type
+    attributes:
+      label: Release type
+    validations:
+      required: true
+  - type: input
+    id: planned_version
+    attributes:
+      label: Planned version
+    validations:
+      required: true
+  - type: input
+    id: failed_stage
+    attributes:
+      label: Failed stage
+    validations:
+      required: true
+  - type: input
+    id: run_url
+    attributes:
+      label: Run URL
+    validations:
+      required: true
+  - type: input
+    id: artifact_state
+    attributes:
+      label: Artifact state
+  - type: input
+    id: pypi_state
+    attributes:
+      label: PyPI state
+  - type: textarea
+    id: required_action
+    attributes:
+      label: Required action
+    validations:
+      required: true

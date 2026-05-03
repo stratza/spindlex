@@ -1,0 +1,71 @@
+name: CI Failure
+description: Track a post-merge CI failure that needs maintainer triage.
+title: "[CI] "
+labels: ["ci", "triage"]
+body:
+  - type: input
+    id: workflow
+    attributes:
+      label: Workflow name
+    validations:
+      required: true
+  - type: input
+    id: job
+    attributes:
+      label: Job name
+    validations:
+      required: true
+  - type: input
+    id: run_url
+    attributes:
+      label: Run URL
+    validations:
+      required: true
+  - type: input
+    id: sha
+    attributes:
+      label: Commit SHA
+    validations:
+      required: true
+  - type: input
+    id: branch
+    attributes:
+      label: Branch
+    validations:
+      required: true
+  - type: dropdown
+    id: failure_class
+    attributes:
+      label: Failure class
+      options:
+        - pr-failure
+        - infra-flake
+        - ci-flake
+        - release-blocked
+        - security-blocker
+        - publish-partial
+        - code-regression
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: Failure summary
+    validations:
+      required: true
+  - type: input
+    id: first_seen
+    attributes:
+      label: First seen
+  - type: input
+    id: latest_seen
+    attributes:
+      label: Latest seen
+  - type: input
+    id: rerun_result
+    attributes:
+      label: Rerun result
+  - type: input
+    id: owner
+    attributes:
+      label: Suspected owner

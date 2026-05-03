@@ -8,6 +8,7 @@ on:
       - "spindlex/**"
       - "tests/**"
       - "scripts/**"
+      - ".github/ISSUE_TEMPLATE/**"
       - "pyproject.toml"
       - ".github/workflows/ci-matrix.yml"
       - ".github/workflows/integration.yml"
@@ -26,6 +27,12 @@ on:
     - cron: "23 3 * * 1"
   workflow_dispatch:
   workflow_call:
+    inputs:
+      track_failures:
+        description: "Track standalone matrix failures with deduplicated issues."
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -65,3 +72,38 @@ jobs:
           files: ./coverage.xml
           flags: unit
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  failure-tracking:
+    name: Matrix failure tracking
+    needs: unit-matrix
+    if: >
+      always() &&
+      github.event_name != 'pull_request' &&
+      (github.event_name != 'workflow_call' || inputs.track_failures) &&
+      needs.unit-matrix.result == 'failure'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11"
+      - name: Track repeated compatibility failures
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python scripts/track_workflow_failure.py ci \
+            --repository "${{ github.repository }}" \
+            --token "$GITHUB_TOKEN" \
+            --workflow-name "${{ github.workflow }}" \
+            --workflow-file "ci-matrix.yml" \
+            --run-id "${{ github.run_id }}" \
+            --run-url "$RUN_URL" \
+            --branch "${{ github.ref_name }}" \
+            --source-sha "${{ github.sha }}" \
+            --event-name "${{ github.event_name }}" \
+            --failed-stage "unit-matrix"
