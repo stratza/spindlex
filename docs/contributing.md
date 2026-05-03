@@ -399,11 +399,10 @@ def benchmark_key_generation():
 pip install -e .[docs]
 
 # Build documentation
-cd docs
-make html
+mkdocs build --strict
 
 # View documentation
-open _build/html/index.html
+open site/index.html
 ```
 
 ### Writing Documentation

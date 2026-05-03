@@ -6,7 +6,9 @@
 
 <br/>
 
-[![CI Status](https://img.shields.io/github/actions/workflow/status/stratza/spindlex/ci.yml?branch=main&style=for-the-badge&logo=github&labelColor=1a1a1a)](https://github.com/stratza/spindlex/actions)
+[![PR Gate](https://img.shields.io/github/actions/workflow/status/stratza/spindlex/ci-pr.yml?branch=main&style=for-the-badge&logo=github&label=PR%20Gate&labelColor=1a1a1a)](https://github.com/stratza/spindlex/actions/workflows/ci-pr.yml)
+[![Compatibility](https://img.shields.io/github/actions/workflow/status/stratza/spindlex/ci-matrix.yml?branch=main&style=for-the-badge&logo=github&label=Compatibility&labelColor=1a1a1a)](https://github.com/stratza/spindlex/actions/workflows/ci-matrix.yml)
+[![Security](https://img.shields.io/github/actions/workflow/status/stratza/spindlex/security.yml?branch=main&style=for-the-badge&logo=github&label=Security&labelColor=1a1a1a)](https://github.com/stratza/spindlex/actions/workflows/security.yml)
 [![Coverage](https://img.shields.io/codecov/c/github/stratza/spindlex?style=for-the-badge&logo=codecov&labelColor=1a1a1a)](https://codecov.io/gh/stratza/spindlex)
 [![PyPI Version](https://img.shields.io/pypi/v/spindlex?style=for-the-badge&logo=pypi&logoColor=white&labelColor=1a1a1a)](https://pypi.org/project/spindlex/)
 [![License](https://img.shields.io/pypi/l/spindlex?style=for-the-badge&color=bb86fc&labelColor=1a1a1a)](https://github.com/stratza/spindlex/blob/main/LICENSE)
