@@ -1,0 +1,58 @@
+name: Flaky Pipeline
+description: Track a repeated CI flake until the stability threshold is met.
+title: "[Flake] "
+labels: ["flake", "ci", "triage"]
+body:
+  - type: input
+    id: workflow
+    attributes:
+      label: Workflow
+    validations:
+      required: true
+  - type: input
+    id: job
+    attributes:
+      label: Job
+    validations:
+      required: true
+  - type: input
+    id: runner
+    attributes:
+      label: Runner
+  - type: input
+    id: python_version
+    attributes:
+      label: Python version
+  - type: textarea
+    id: signature
+    attributes:
+      label: Failure signature
+    validations:
+      required: true
+  - type: input
+    id: frequency
+    attributes:
+      label: Frequency
+    validations:
+      required: true
+  - type: input
+    id: first_seen
+    attributes:
+      label: First seen
+  - type: input
+    id: last_seen
+    attributes:
+      label: Last seen
+  - type: input
+    id: last_successful_run
+    attributes:
+      label: Last successful run
+  - type: input
+    id: suspected_cause
+    attributes:
+      label: Suspected cause
+  - type: textarea
+    id: close_condition
+    attributes:
+      label: Close condition
+      value: Close after 3 consecutive scheduled/main runs pass.
