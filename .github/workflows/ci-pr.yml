@@ -66,6 +66,20 @@ jobs:
       - run: uv pip install --system -e ".[test]"
       - run: pytest tests -m "not integration and not real_server and not slow and not performance"
 
+  changelog-check:
+    name: changelog-check
+    needs: pr-validate
+    if: needs.pr-validate.outputs.release_needed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11"
+      - run: python scripts/check_changelog_updated.py --event-path "$GITHUB_EVENT_PATH"
+
   docs-build:
     name: docs-build
     runs-on: ubuntu-latest
@@ -125,6 +139,7 @@ jobs:
       - ruff
       - mypy
       - unit-tests
+      - changelog-check
       - docs-build
       - security-fast
       - workflow-lint
@@ -137,6 +152,7 @@ jobs:
           if [ "${{ needs.ruff.result }}" != "success" ]; then exit 1; fi
           if [ "${{ needs.mypy.result }}" != "success" ]; then exit 1; fi
           if [ "${{ needs.unit-tests.result }}" != "success" ]; then exit 1; fi
+          if [ "${{ needs.changelog-check.result }}" != "success" ] && [ "${{ needs.changelog-check.result }}" != "skipped" ]; then exit 1; fi
           if [ "${{ needs.docs-build.result }}" != "success" ]; then exit 1; fi
           if [ "${{ needs.security-fast.result }}" != "success" ]; then exit 1; fi
           if [ "${{ needs.workflow-lint.result }}" != "success" ]; then exit 1; fi
