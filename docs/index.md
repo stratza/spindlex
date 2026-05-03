@@ -2,7 +2,9 @@
 
 Welcome to SpindleX's documentation! SpindleX is a modern, high-performance SSHv2 and SFTP client/server library.
 
-[![CI Status](https://img.shields.io/github/actions/workflow/status/stratza/spindlex/ci.yml?branch=main&style=flat-square)](https://github.com/stratza/spindlex/actions)
+[![PR Gate](https://img.shields.io/github/actions/workflow/status/stratza/spindlex/ci-pr.yml?branch=main&style=flat-square&label=PR%20Gate)](https://github.com/stratza/spindlex/actions/workflows/ci-pr.yml)
+[![Compatibility](https://img.shields.io/github/actions/workflow/status/stratza/spindlex/ci-matrix.yml?branch=main&style=flat-square&label=Compatibility)](https://github.com/stratza/spindlex/actions/workflows/ci-matrix.yml)
+[![Security](https://img.shields.io/github/actions/workflow/status/stratza/spindlex/security.yml?branch=main&style=flat-square&label=Security)](https://github.com/stratza/spindlex/actions/workflows/security.yml)
 [![Coverage](https://img.shields.io/codecov/c/github/stratza/spindlex?style=flat-square)](https://codecov.io/gh/stratza/spindlex)
 [![PyPI Version](https://img.shields.io/pypi/v/spindlex?style=flat-square)](https://pypi.org/project/spindlex/)
 [![Python Support](https://img.shields.io/pypi/pyversions/spindlex?style=flat-square)](https://pypi.org/project/spindlex/)

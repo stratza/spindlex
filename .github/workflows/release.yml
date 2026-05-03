@@ -89,6 +89,10 @@ jobs:
     name: Release compatibility matrix
     needs: plan
     if: needs.plan.outputs.release_needed == 'true'
+    permissions:
+      actions: read
+      contents: read
+      issues: write
     uses: ./.github/workflows/ci-matrix.yml
     secrets: inherit
 
@@ -96,6 +100,10 @@ jobs:
     name: Release integration
     needs: plan
     if: needs.plan.outputs.release_needed == 'true'
+    permissions:
+      actions: read
+      contents: read
+      issues: write
     uses: ./.github/workflows/integration.yml
     secrets: inherit
 

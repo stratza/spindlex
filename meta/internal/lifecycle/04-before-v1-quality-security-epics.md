@@ -136,8 +136,8 @@ Known drift to fix:
 - README says Python `3.8+`; package requires `>=3.9`.
 - `pyproject.toml` has unsupported Python classifiers without official CI support.
 - `.readthedocs.yaml` references missing `async` extra.
-- `scripts/Makefile` uses stale lint/docs commands while repo uses Ruff and MkDocs.
-- `scripts/release.py` describes manual PyPI jobs that do not exist.
+- Legacy script-level development and release helpers can drift from GitHub Actions.
+- Manual release helpers can describe PyPI jobs that do not exist.
 - Contributing docs still describe older Black/isort/flake8/tox-first flow.
 - stale CLI command names appear in examples instead of actual entry points.
 - Deployment docs imply Dockerized use but no official product image exists yet.

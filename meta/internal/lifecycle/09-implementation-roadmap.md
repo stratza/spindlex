@@ -18,8 +18,8 @@ Tasks:
 - Fix README Python version claim.
 - Remove or validate unsupported Python classifiers.
 - Fix `.readthedocs.yaml` missing `async` extra.
-- Fix `scripts/Makefile` to use Ruff and MkDocs.
-- Retire or rewrite `scripts/release.py`.
+- Replace legacy script-level development commands with canonical root commands.
+- Retire the legacy manual release helper.
 - Replace stale CLI command names with actual entry points.
 - Update contributing docs with canonical local commands.
 

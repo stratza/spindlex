@@ -73,14 +73,35 @@ jobs:
           flags: unit
           token: ${{ secrets.CODECOV_TOKEN }}
 
+  cross-platform-smoke:
+    name: ${{ matrix.os }} Python 3.11
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ["windows-latest", "macos-latest"]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11"
+      - run: uv pip install --system -e ".[test]"
+      - name: Run cross-platform unit smoke suite
+        run: |
+          pytest tests/ -m "not integration and not real_server and not slow and not performance" --timeout=120 --timeout-method=thread
+
   failure-tracking:
     name: Matrix failure tracking
-    needs: unit-matrix
+    needs:
+      - unit-matrix
+      - cross-platform-smoke
     if: >
       always() &&
       github.event_name != 'pull_request' &&
       (github.event_name != 'workflow_call' || inputs.track_failures) &&
-      needs.unit-matrix.result == 'failure'
+      (needs.unit-matrix.result == 'failure' || needs.cross-platform-smoke.result == 'failure')
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -106,4 +127,4 @@ jobs:
             --branch "${{ github.ref_name }}" \
             --source-sha "${{ github.sha }}" \
             --event-name "${{ github.event_name }}" \
-            --failed-stage "unit-matrix"
+            --failed-stage "compatibility-matrix"
