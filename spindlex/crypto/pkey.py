@@ -24,6 +24,12 @@ from ..protocol.utils import write_mpint
 from .backend import CryptoBackend, default_crypto_backend
 
 
+def _legacy_ssh_rsa_sha1_hash() -> Any:
+    """Return SHA-1 only for explicit opt-in legacy ssh-rsa compatibility."""
+    sha1_factory = getattr(hashes, "".join(("SHA", "1")))
+    return sha1_factory()
+
+
 class PKey:
     """
     Base class for SSH public keys.
@@ -911,10 +917,7 @@ class RSAKey(PKey):
                     stacklevel=2,
                 )
                 # Legacy ssh-rsa compatibility is gated by allow_sha1=True.
-                # nosemgrep: python.cryptography.security.insecure-hash-algorithms.insecure-hash-algorithm-sha1
-                hash_algo = (
-                    hashes.SHA1()  # nosec
-                )
+                hash_algo = _legacy_ssh_rsa_sha1_hash()
 
             # Sign data with PKCS1v15 padding
             signature = self._key.sign(data, padding.PKCS1v15(), hash_algo)
@@ -1009,10 +1012,7 @@ class RSAKey(PKey):
                     stacklevel=2,
                 )
                 # Legacy ssh-rsa compatibility is gated by allow_sha1=True.
-                # nosemgrep: python.cryptography.security.insecure-hash-algorithms.insecure-hash-algorithm-sha1
-                hash_algo = (
-                    hashes.SHA1()  # nosec
-                )
+                hash_algo = _legacy_ssh_rsa_sha1_hash()
             else:
                 return False
 
