@@ -63,12 +63,30 @@ jobs:
             --cache-dir .pip-audit-cache \
             --format json \
             --output pip-audit.json
+      - name: Run runtime license audit
+        run: |
+          python -m venv .license-audit-venv
+          .license-audit-venv/bin/python -m pip install --upgrade pip
+          .license-audit-venv/bin/python -m pip install -r runtime-requirements.txt
+          .license-audit-venv/bin/python scripts/check_dependency_licenses.py \
+            --exclude pip \
+            --exclude setuptools \
+            --exclude wheel \
+            --fail-on-unknown \
+            --output dependency-licenses.json
       - name: Upload pip-audit report
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: pip-audit-report
           path: pip-audit.json
+          if-no-files-found: ignore
+      - name: Upload dependency license report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: dependency-license-report
+          path: dependency-licenses.json
           if-no-files-found: ignore
 
   gitleaks:

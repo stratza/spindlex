@@ -11,6 +11,7 @@ on:
       - ".github/workflows/ci-matrix.yml"
       - ".github/workflows/integration.yml"
       - ".github/ISSUE_TEMPLATE/**"
+      - "scripts/extract_release_notes.py"
       - "scripts/plan_release.py"
       - "scripts/sync_project_version.py"
       - "scripts/track_workflow_failure.py"
@@ -279,10 +280,19 @@ jobs:
           git tag -a "$TAG" -m "Release $TAG"
           git push origin "$TAG"
 
-          cat > release-notes.md <<EOF
-          Source PR: #$SOURCE_PR $SOURCE_PR_URL
-          Release type: $RELEASE_TYPE
-          EOF
+          python scripts/extract_release_notes.py \
+            --version "${{ needs.plan.outputs.next_version }}" \
+            --output release-notes.md
+
+          {
+            echo ""
+            echo "---"
+            echo ""
+            echo "Source PR: #$SOURCE_PR $SOURCE_PR_URL"
+            echo "Release type: $RELEASE_TYPE"
+            echo ""
+            echo "**Full Changelog:** https://github.com/${{ github.repository }}/blob/main/docs/changelog.md"
+          } >> release-notes.md
 
           gh release create "$TAG" \
             --title "$TAG" \

@@ -4,6 +4,49 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.7] - 2026-05-05
+
+### Summary
+This release hardens the project lifecycle around release automation, PR gates, security scanning, and incident triage. It resolves the Scorecard/OSV dependency findings reported after v0.6.6, adds corporate-oriented runtime dependency license checks, and turns the CI/CD system into the main release safety surface for future patch releases.
+
+### Security
+*   Raised the minimum supported `cryptography` version to `>=46.0.6`, avoiding the vulnerable ranges reported by OSV/Scorecard for the runtime dependency.
+*   Raised documentation dependency floors for `pymdown-extensions>=10.16.1` and `pygments>=2.20.0` to avoid known vulnerable documentation-build dependency ranges.
+*   Added a runtime dependency license audit to the PR gate and scheduled security workflow. The audit fails on denied corporate-risk licenses such as GPL, LGPL, AGPL, SSPL, BUSL, and proprietary/commercial markers, and uploads a dependency license report from the full security workflow.
+*   Added a full scheduled security workflow covering Semgrep, pip-audit, Gitleaks, Trivy, CodeQL SARIF upload, and OpenSSF Scorecard.
+*   Documented project security policy and vulnerability reporting expectations in public and maintainer-facing security docs.
+*   Kept legacy `ssh-rsa` SHA-1 handling explicitly gated behind `allow_sha1=True` while adding scanner suppressions that document the intentional compatibility path.
+
+### CI/CD
+*   Added a fast PR gate with stable PR type parsing, ruff, mypy, unit tests, docs build, workflow linting, security checks, and an aggregate quality gate.
+*   Split compatibility and Docker-backed integration checks into reusable workflows used by both PR validation and release dry runs.
+*   Added Linux Python 3.9-3.13 coverage plus Windows and macOS smoke coverage for the compatibility matrix.
+*   Added full SHA pin dereferencing for GitHub Actions usage and tightened code-scanning-friendly workflow configuration.
+*   Updated Trivy action usage and fixed Scorecard workflow permissions.
+*   Removed legacy duplicated CI and release helper entry points in favor of the root `Makefile` and the dedicated reusable workflows.
+
+### Release Automation
+*   Added PR-driven release planning that maps PR type checkboxes to patch, minor, major, or no-release outcomes.
+*   Added release dry-run validation for PRs so release planning, version sync, build, and publish checks are exercised before merge.
+*   Added changelog enforcement for release-producing PRs so bug, feature, and breaking changes cannot merge without changelog updates.
+*   Added changelog-section extraction for GitHub Release notes so automated releases keep the same detailed release-note shape as previous manual releases.
+*   Added workflow failure tracking that opens or updates CI failure, flaky pipeline, and release-blocked incident issues with structured templates.
+*   Added release publish and partial-publish triage hooks to preserve release failure context for maintainers.
+
+### Documentation
+*   Moved internal lifecycle planning docs out of the public documentation site and into `meta/internal/lifecycle`.
+*   Added lifecycle epics, stage gates, release-process epics, quality/security epics, product-readiness epics, release-candidate planning, operations epics, failure-handling guidance, and implementation roadmap docs.
+*   Updated contributing docs and PR guidance to match the new stable PR type tokens and release automation.
+*   Refreshed badges and operational references after the workflow cleanup.
+
+### Tests
+*   Added tests for PR body validation, release planning/version sync, changelog enforcement, workflow failure tracking, and dependency license policy checks.
+*   Added `pytest-timeout` to the test tooling used by the split CI workflows.
+
+### Removed
+*   Removed the legacy `.github/workflows/ci.yml` workflow after the PR gate, matrix, integration, release, and security workflows took over its responsibilities.
+*   Removed obsolete `scripts/release.py`, `scripts/build.sh`, and `scripts/Makefile` helpers.
+
 ## [0.6.6] - 2026-05-01
 
 ### Summary
