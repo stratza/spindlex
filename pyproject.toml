@@ -40,7 +40,7 @@ classifiers = [
 ]
 requires-python = ">=3.9"
 dependencies = [
-    "cryptography>=41.0.0",
+    "cryptography>=46.0.6",
     "typing-extensions>=4.0.0; python_version<'3.10'",
 ]
 
@@ -72,8 +72,8 @@ docs = [
     "mkdocstrings[python]>=0.22.0",
     "mkdocs-minify-plugin>=0.6.0",
     "mkdocs-git-revision-date-localized-plugin>=1.2.0",
-    "pymdown-extensions>=10.0",
-    "pygments>=2.15.0",
+    "pymdown-extensions>=10.16.1",
+    "pygments>=2.20.0",
 ]
 test = [
     "pytest>=7.0.0",
