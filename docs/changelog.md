@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.8] - 2026-05-05
+
+### Summary
+This patch release closes the remaining code-scanning items that can be fixed in source control after the v0.6.7 security pipeline rollout.
+
+### Security
+*   Raised the minimum supported `cryptography` version to `>=46.0.7` to avoid the vulnerable range reported by OSV/Scorecard for GHSA-p423-j2cm-9vmq.
+*   Expanded the root `SECURITY.md` with reporting channels, expected report contents, disclosure timeline, practices, and threat model details so repository security policy scanners can evaluate the maintained policy directly.
+*   Moved direct workflow `python -m pip install` verification steps to `uv pip install --python ...` so Scorecard no longer reports un-hashed pip commands for the isolated release and license-audit virtual environments.
+*   Tightened Semgrep suppressions around the intentionally gated legacy `ssh-rsa` SHA-1 compatibility path.
+*   Added a repository `CODEOWNERS` file so branch protection can require code owner review.
+
 ## [0.6.7] - 2026-05-05
 
 ### Summary

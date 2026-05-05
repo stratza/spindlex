@@ -139,10 +139,8 @@ jobs:
           python -m twine check dist/*
       - name: Validate built wheel import
         run: |
-          python -m venv /tmp/spindlex-release-check
-          /tmp/spindlex-release-check/bin/python -m pip install --upgrade pip
-          /tmp/spindlex-release-check/bin/python -m pip install dist/*.whl
-          /tmp/spindlex-release-check/bin/python -c "import spindlex; assert spindlex.__version__ == '${{ needs.plan.outputs.next_version }}', spindlex.__version__"
+          uv run --with dist/*.whl \
+            python -c "import spindlex; assert spindlex.__version__ == '${{ needs.plan.outputs.next_version }}', spindlex.__version__"
       - name: Upload dry-run artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -217,10 +215,8 @@ jobs:
       - name: Validate built wheel import
         if: steps.prepare.outputs.publish_needed == 'true'
         run: |
-          python -m venv /tmp/spindlex-release-check
-          /tmp/spindlex-release-check/bin/python -m pip install --upgrade pip
-          /tmp/spindlex-release-check/bin/python -m pip install dist/*.whl
-          /tmp/spindlex-release-check/bin/python -c "import spindlex; assert spindlex.__version__ == '${{ needs.plan.outputs.next_version }}', spindlex.__version__"
+          uv run --with dist/*.whl \
+            python -c "import spindlex; assert spindlex.__version__ == '${{ needs.plan.outputs.next_version }}', spindlex.__version__"
       - id: pypi
         name: Check PyPI version availability
         if: steps.prepare.outputs.publish_needed == 'true'
@@ -254,12 +250,10 @@ jobs:
       - name: Verify published package from PyPI
         if: steps.prepare.outputs.publish_needed == 'true'
         run: |
-          python -m venv /tmp/spindlex-pypi-check
-          /tmp/spindlex-pypi-check/bin/python -m pip install --upgrade pip
           for attempt in 1 2 3 4 5; do
             echo "PyPI install attempt $attempt"
-            if /tmp/spindlex-pypi-check/bin/python -m pip install --no-cache-dir "spindlex==${{ needs.plan.outputs.next_version }}"; then
-              /tmp/spindlex-pypi-check/bin/python -c "import spindlex; assert spindlex.__version__ == '${{ needs.plan.outputs.next_version }}', spindlex.__version__"
+            if uv run --with "spindlex==${{ needs.plan.outputs.next_version }}" \
+              python -c "import spindlex; assert spindlex.__version__ == '${{ needs.plan.outputs.next_version }}', spindlex.__version__"; then
               exit 0
             fi
             sleep 30
