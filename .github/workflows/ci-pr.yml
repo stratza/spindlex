@@ -110,10 +110,8 @@ jobs:
       - run: pip-audit -r runtime-requirements.txt --cache-dir .pip-audit-cache
       - name: Runtime dependency license audit
         run: |
-          python -m venv .license-audit-venv
-          .license-audit-venv/bin/python -m pip install --upgrade pip
-          .license-audit-venv/bin/python -m pip install -r runtime-requirements.txt
-          .license-audit-venv/bin/python scripts/check_dependency_licenses.py \
+          uv run --with-requirements runtime-requirements.txt \
+            python scripts/check_dependency_licenses.py \
             --exclude pip \
             --exclude setuptools \
             --exclude wheel \
