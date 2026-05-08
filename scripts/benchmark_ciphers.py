@@ -243,7 +243,7 @@ def paramiko_open(
     cfg: dict[str, Any], disabled: dict[str, list[str]] | None = None
 ) -> paramiko.SSHClient:
     c = paramiko.SSHClient()
-    c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    c.set_missing_host_key_policy(paramiko.AutoAddPolicy())  # noqa: S507
     c.connect(
         hostname=cfg["host"],
         port=cfg["port"],
