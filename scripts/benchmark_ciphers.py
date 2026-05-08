@@ -57,12 +57,17 @@ CIPHER_PROFILES: list[dict[str, Any]] = [
 KEX_PROFILES: list[dict[str, Any]] = [
     {"label": "curve25519-sha256",   "kex": "curve25519-sha256",             "cipher": "aes256-ctr"},
     {"label": "ecdh-nistp256",       "kex": "ecdh-sha2-nistp256",            "cipher": "aes256-ctr"},
+    {"label": "ecdh-nistp384",       "kex": "ecdh-sha2-nistp384",            "cipher": "aes256-ctr"},
+    {"label": "ecdh-nistp521",       "kex": "ecdh-sha2-nistp521",            "cipher": "aes256-ctr"},
     {"label": "dh-group14-sha256",   "kex": "diffie-hellman-group14-sha256", "cipher": "aes256-ctr"},
 ]
 
 HOSTKEY_PROFILES: list[dict[str, Any]] = [
     {"label": "ed25519",      "hostkey": "ssh-ed25519",         "cipher": "aes256-ctr", "kex": "curve25519-sha256"},
     {"label": "ecdsa-p256",   "hostkey": "ecdsa-sha2-nistp256", "cipher": "aes256-ctr", "kex": "curve25519-sha256"},
+    {"label": "ecdsa-p384",   "hostkey": "ecdsa-sha2-nistp384", "cipher": "aes256-ctr", "kex": "curve25519-sha256"},
+    {"label": "ecdsa-p521",   "hostkey": "ecdsa-sha2-nistp521", "cipher": "aes256-ctr", "kex": "curve25519-sha256"},
+    {"label": "rsa-sha2-512", "hostkey": "rsa-sha2-512",        "cipher": "aes256-ctr", "kex": "curve25519-sha256"},
     {"label": "rsa-sha2-256", "hostkey": "rsa-sha2-256",        "cipher": "aes256-ctr", "kex": "curve25519-sha256"},
 ]
 

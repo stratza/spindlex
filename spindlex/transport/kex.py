@@ -870,8 +870,11 @@ class KeyExchange:
 
         # Choose hash algorithm based on KEX algorithm
         hash_alg = "sha256"
-        if self._kex_algorithm and "sha512" in self._kex_algorithm:
-            hash_alg = "sha512"
+        if self._kex_algorithm:
+            if "nistp384" in self._kex_algorithm:
+                hash_alg = "sha384"
+            elif "nistp521" in self._kex_algorithm or "sha512" in self._kex_algorithm:
+                hash_alg = "sha512"
 
         # Generate keys using SSH key derivation
         # A: IV client to server
