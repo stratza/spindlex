@@ -367,7 +367,9 @@ class KeyExchange:
                 curve = ec.SECP521R1()
                 hash_algo_name = "sha512"
             else:
-                raise CryptoException(f"Unsupported ECDH algorithm: {self._kex_algorithm}")
+                raise CryptoException(
+                    f"Unsupported ECDH algorithm: {self._kex_algorithm}"
+                )
 
             # Generate ECDH key pair
             self._ecdh_private_key = ec.generate_private_key(curve, default_backend())
@@ -615,7 +617,9 @@ class KeyExchange:
                 curve = ec.SECP521R1()
                 hash_algo_name = "sha512"
             else:
-                raise CryptoException(f"Unsupported ECDH algorithm: {self._kex_algorithm}")
+                raise CryptoException(
+                    f"Unsupported ECDH algorithm: {self._kex_algorithm}"
+                )
 
             # 1. Receive KEX_ECDH_INIT
             init_msg = self._transport._expect_message(MSG_KEX_ECDH_INIT)

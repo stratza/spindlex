@@ -249,7 +249,9 @@ class PerformanceMonitor:
             if self.connection_metrics:
                 print(f"\n{'Connection Statistics':^60}")
                 print("-" * 60)
-                print(f"{'Conn ID':<10} | {'Sent (pkts)':>12} | {'Recv (pkts)':>12} | {'Errors':>6}")
+                print(
+                    f"{'Conn ID':<10} | {'Sent (pkts)':>12} | {'Recv (pkts)':>12} | {'Errors':>6}"
+                )
                 print("-" * 60)
 
                 for conn_id, metrics in self.connection_metrics.items():

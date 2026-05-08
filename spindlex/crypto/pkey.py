@@ -238,7 +238,7 @@ class PKey:
         elif key_type == "rsa":
             return RSAKey.generate(bits=bits, **kwargs)
         elif key_type == "ecdsa":
-            return ECDSAKey.generate(**kwargs)
+            return ECDSAKey.generate(bits=bits, **kwargs)
         else:
             raise CryptoException(f"Unsupported key type for generation: {key_type}")
 
@@ -586,7 +586,9 @@ class ECDSAKey(PKey):
                 self.curve_name = "nistp521"
                 self.curve = self._key.curve
             else:
-                raise CryptoException(f"Unsupported ECDSA curve: {type(self._key.curve)}")
+                raise CryptoException(
+                    f"Unsupported ECDSA curve: {type(self._key.curve)}"
+                )
         except Exception as e:
             raise CryptoException(f"Failed to load ECDSA private key: {e}") from e
 
