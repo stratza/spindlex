@@ -228,6 +228,17 @@ class Transport:
         self._strict_kex = False
         self._stop_event = threading.Event()
 
+        # Bug #24 Fix: Support SPINDLEX_BUFFER_SIZE for high-latency connections
+        import os
+
+        self._buffer_size = 32768
+        env_buffer_size = os.environ.get("SPINDLEX_BUFFER_SIZE")
+        if env_buffer_size:
+            try:
+                self._buffer_size = max(4096, int(env_buffer_size))
+            except (ValueError, TypeError):
+                pass
+
     def get_timeout(self) -> Optional[float]:
         """
         Get transport timeout.
@@ -1108,7 +1119,7 @@ class Transport:
         want_reply, offset = read_boolean(data, offset)
 
         request_type = request_type_bytes.decode(SSH_STRING_ENCODING)
-        request_data = data[offset:] if offset < len(data) else b""
+        request_data = bytes(data[offset:]) if offset < len(data) else b""
 
         channel = None
         with self._lock:
@@ -1325,7 +1336,7 @@ class Transport:
 
             request_name_bytes, offset = read_string(data, offset)
             want_reply, offset = read_boolean(data, offset)
-            request_data = data[offset:] if offset < len(data) else b""
+            request_data = bytes(data[offset:]) if offset < len(data) else b""
 
             request_name = request_name_bytes.decode(SSH_STRING_ENCODING)
 
@@ -2315,12 +2326,12 @@ class Transport:
                         return data
                     short_by = length - len(self._packet_buffer)
 
-                # Read at least 32KB to leverage buffering. The blocking
+                # Read at least _buffer_size to leverage buffering. The blocking
                 # ``recv`` happens with ``_read_lock`` held but ``self._lock``
                 # released, so other threads can both send messages and serve
                 # themselves from the existing buffer.
                 try:
-                    to_read = max(32768, short_by)
+                    to_read = max(self._buffer_size, short_by)
                     chunk = self._socket.recv(to_read)
                 except socket.timeout:
                     raise TransportException("Timeout receiving data")
@@ -2406,7 +2417,7 @@ class Transport:
         username = ""
         try:
             # Unpack request
-            auth_req = UserAuthRequestMessage._unpack_data(msg._data)
+            auth_req = UserAuthRequestMessage._unpack_data(bytes(msg._data))
             username = auth_req.username
             method = auth_req.method
 

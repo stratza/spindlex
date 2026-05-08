@@ -6,7 +6,7 @@ This guide covers performance optimization techniques, benchmarking, and the int
 
 SpindleX is engineered for speed, security, and protocol efficiency. Key performance features include:
 
-*   **:zap: Internal Read Buffering**: 32KB read buffering architecture that minimizes syscall overhead by chunking protocol data.
+*   **:zap: Internal Read Buffering**: Configurable read buffering architecture (via `SPINDLEX_BUFFER_SIZE`) that minimizes syscall overhead by chunking protocol data.
 *   **:rocket: Low Latency I/O**: Native management of `TCP_NODELAY` to bypass Nagle's algorithm, reducing latency for small packets.
 *   **:package: Lean Design**: Optimized protocol layer leveraging the industry-standard `cryptography` library.
 *   **:link: Streamlined Handshake**: Efficient version exchange and key negotiation logic.
@@ -32,6 +32,8 @@ When benchmarking SpindleX, focus on these metrics:
 
 SpindleX uses an internal buffering strategy for I/O operations. By reading data in larger chunks (default 32KB), it reduces the number of `socket.recv()` calls, which is often a bottleneck in high-throughput network applications.
 
+You can tune this buffer size using the `SPINDLEX_BUFFER_SIZE` environment variable (e.g., `export SPINDLEX_BUFFER_SIZE=65536` for high-latency connections).
+
 ### TCP_NODELAY
 
 By default, SpindleX enables `TCP_NODELAY` on the underlying transport socket. This ensures that packets are sent immediately without waiting for the buffer to fill up, which is critical for interactive shells and low-latency command execution.
@@ -49,9 +51,8 @@ from spindlex.logging.monitoring import get_performance_monitor
 
 monitor = get_performance_monitor()
 
-# The monitor automatically tracks internal operations if logging is enabled.
 # You can also manually track custom operations:
-with monitor.track("my_bulk_transfer"):
+with monitor.time_operation("my_bulk_transfer"):
     # Perform operations
     pass
 
@@ -69,9 +70,9 @@ from spindlex.logging.monitoring import get_protocol_analyzer
 analyzer = get_protocol_analyzer()
 
 # Get statistics about packet distribution
-stats = analyzer.get_stats()
-print(f"Total packets: {stats['total_packets']}")
-print(f"Data throughput: {stats['total_bytes'] / 1024 / 1024:.2f} MB")
+stats = analyzer.get_message_stats()
+for msg_type, data in stats.items():
+    print(f"Message {msg_type}: {data['count']} packets, {data['total_bytes']} bytes")
 ```
 
 ## Best Practices Summary

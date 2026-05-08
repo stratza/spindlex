@@ -119,6 +119,8 @@ class SFTPMessage:
             SSH_FXP_RMDIR: SFTPRmdirMessage,
             SSH_FXP_REALPATH: SFTPRealPathMessage,
             SSH_FXP_RENAME: SFTPRenameMessage,
+            SSH_FXP_READLINK: SFTPReadLinkMessage,
+            SSH_FXP_SYMLINK: SFTPSymlinkMessage,
             SSH_FXP_LINK: SFTPLinkMessage,
             SSH_FXP_STATUS: SFTPStatusMessage,
             SSH_FXP_HANDLE: SFTPHandleMessage,
@@ -1091,6 +1093,67 @@ class SFTPRenameMessage(SFTPMessage):
         oldpath = oldpath_bytes.decode("utf-8")
         newpath = newpath_bytes.decode("utf-8")
         return cls(request_id, oldpath, newpath)
+
+
+class SFTPReadLinkMessage(SFTPMessage):
+    """SFTP readlink message (SSH_FXP_READLINK)."""
+
+    def __init__(self, request_id: int, path: str) -> None:
+        """
+        Initialize SFTP readlink message.
+
+        Args:
+            request_id: Request ID
+            path: Path to symbolic link
+        """
+        super().__init__(SSH_FXP_READLINK, request_id)
+        self.path = path
+
+        # Build message data
+        self.add_string(path)
+
+    @classmethod
+    def _unpack_data(cls, data: bytes) -> "SFTPReadLinkMessage":
+        """Unpack SFTP readlink message data."""
+        offset = 0
+        request_id, offset = read_uint32(data, offset)
+        path_bytes, offset = read_string(data, offset)
+
+        path = path_bytes.decode("utf-8")
+        return cls(request_id, path)
+
+
+class SFTPSymlinkMessage(SFTPMessage):
+    """SFTP symlink message (SSH_FXP_SYMLINK)."""
+
+    def __init__(self, request_id: int, targetpath: str, linkpath: str) -> None:
+        """
+        Initialize SFTP symlink message.
+
+        Args:
+            request_id: Request ID
+            targetpath: Target path for the link
+            linkpath: Path where link should be created
+        """
+        super().__init__(SSH_FXP_SYMLINK, request_id)
+        self.targetpath = targetpath
+        self.linkpath = linkpath
+
+        # Build message data (Note: SFTPv3 order is target, then link)
+        self.add_string(targetpath)
+        self.add_string(linkpath)
+
+    @classmethod
+    def _unpack_data(cls, data: bytes) -> "SFTPSymlinkMessage":
+        """Unpack SFTP symlink message data."""
+        offset = 0
+        request_id, offset = read_uint32(data, offset)
+        targetpath_bytes, offset = read_string(data, offset)
+        linkpath_bytes, offset = read_string(data, offset)
+
+        targetpath = targetpath_bytes.decode("utf-8")
+        linkpath = linkpath_bytes.decode("utf-8")
+        return cls(request_id, targetpath, linkpath)
 
 
 class SFTPLinkMessage(SFTPMessage):

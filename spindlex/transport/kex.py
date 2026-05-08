@@ -20,6 +20,8 @@ from ..protocol.constants import (
     KEX_CURVE25519_SHA256,
     KEX_DH_GROUP14_SHA256,
     KEX_ECDH_SHA2_NISTP256,
+    KEX_ECDH_SHA2_NISTP384,
+    KEX_ECDH_SHA2_NISTP521,
     MSG_KEX_ECDH_INIT,
     MSG_KEX_ECDH_REPLY,
     MSG_KEXDH_INIT,
@@ -147,6 +149,11 @@ class KeyExchange:
             self._perform_curve25519_sha256()
         elif self._kex_algorithm == KEX_ECDH_SHA2_NISTP256:
             self._perform_ecdh_sha2_nistp256()
+        elif self._kex_algorithm in [
+            KEX_ECDH_SHA2_NISTP384,
+            KEX_ECDH_SHA2_NISTP521,
+        ]:
+            self._perform_ecdh()
         elif self._kex_algorithm == KEX_DH_GROUP14_SHA256:
             self._perform_dh_group14_sha256()
         else:
@@ -161,6 +168,11 @@ class KeyExchange:
             self._perform_curve25519_sha256_server()
         elif self._kex_algorithm == KEX_ECDH_SHA2_NISTP256:
             self._perform_ecdh_sha2_nistp256_server()
+        elif self._kex_algorithm in [
+            KEX_ECDH_SHA2_NISTP384,
+            KEX_ECDH_SHA2_NISTP521,
+        ]:
+            self._perform_ecdh_server()
         elif self._kex_algorithm == KEX_DH_GROUP14_SHA256:
             self._perform_dh_group14_sha256_server()
         else:
@@ -338,18 +350,30 @@ class KeyExchange:
                 raise
             raise CryptoException(f"Failed to verify server signature: {e}") from e
 
-    def _perform_ecdh_sha2_nistp256(self) -> None:
-        """Perform ECDH NIST P-256 SHA256 key exchange."""
+    def _perform_ecdh(self) -> None:
+        """Perform client-side ECDH key exchange (Generic)."""
         try:
             from cryptography.hazmat.primitives.asymmetric import ec
 
+            # Select curve and hash based on algorithm
+            curve: ec.EllipticCurve
+            if self._kex_algorithm == KEX_ECDH_SHA2_NISTP256:
+                curve = ec.SECP256R1()
+                hash_algo_name = "sha256"
+            elif self._kex_algorithm == KEX_ECDH_SHA2_NISTP384:
+                curve = ec.SECP384R1()
+                hash_algo_name = "sha384"
+            elif self._kex_algorithm == KEX_ECDH_SHA2_NISTP521:
+                curve = ec.SECP521R1()
+                hash_algo_name = "sha512"
+            else:
+                raise CryptoException(f"Unsupported ECDH algorithm: {self._kex_algorithm}")
+
             # Generate ECDH key pair
-            self._ecdh_private_key = ec.generate_private_key(
-                ec.SECP256R1(), default_backend()
-            )
+            self._ecdh_private_key = ec.generate_private_key(curve, default_backend())
             public_key = self._ecdh_private_key.public_key()
 
-            # Get public key in uncompressed format (SSH requirement)
+            # Get public key in uncompressed format
             self._ecdh_public_key_bytes = public_key.public_bytes(
                 encoding=serialization.Encoding.X962,
                 format=serialization.PublicFormat.UncompressedPoint,
@@ -369,12 +393,12 @@ class KeyExchange:
             server_public_key_blob, offset = read_string(reply_msg._data, offset)
             signature_blob, offset = read_string(reply_msg._data, offset)
 
-            # Store server host key for verification
+            # Store server host key
             self._transport._server_host_key_blob = server_host_key_blob
 
             # Perform key exchange
             server_public_key = ec.EllipticCurvePublicKey.from_encoded_point(
-                ec.SECP256R1(), server_public_key_blob
+                curve, server_public_key_blob
             )
             shared_secret_bytes = self._ecdh_private_key.exchange(
                 ec.ECDH(), server_public_key
@@ -383,20 +407,27 @@ class KeyExchange:
                 int.from_bytes(shared_secret_bytes, "big")
             )
 
-            # Compute exchange hash using SHA256
+            # Compute exchange hash
             self._compute_ecdh_exchange_hash(
-                server_host_key_blob, server_public_key_blob, signature_blob
+                server_host_key_blob,
+                server_public_key_blob,
+                signature_blob,
+                hash_name=hash_algo_name,
             )
 
-            # Set session ID (first exchange hash)
             if self._session_id is None:
                 self._session_id = self._exchange_hash
 
             # Verify server signature
             self._verify_server_signature(server_host_key_blob, signature_blob)
 
-        except Exception:
-            raise
+        except Exception as e:
+            curve_label = "P-256"
+            if self._kex_algorithm == KEX_ECDH_SHA2_NISTP384:
+                curve_label = "P-384"
+            elif self._kex_algorithm == KEX_ECDH_SHA2_NISTP521:
+                curve_label = "P-521"
+            raise CryptoException(f"ECDH {curve_label} client KEX failed: {e}") from e
 
     def _compute_ecdh_exchange_hash(
         self,
@@ -404,6 +435,7 @@ class KeyExchange:
         server_public_key: bytes,
         signature: bytes,
         client_ecdh_public_key: Optional[bytes] = None,
+        hash_name: str = "sha256",
     ) -> None:
         """Compute the exchange hash H for ECDH.
 
@@ -451,9 +483,9 @@ class KeyExchange:
             raise CryptoException("Missing shared secret for ECDH exchange hash")
         hash_data.extend(self._shared_secret)
 
-        # Compute SHA256 hash
+        # Compute hash
         self._exchange_hash = default_crypto_backend.hash_data(
-            "sha256", bytes(hash_data)
+            hash_name, bytes(hash_data)
         )
 
     def _perform_curve25519_sha256_server(self) -> None:
@@ -566,19 +598,31 @@ class KeyExchange:
         except Exception as e:
             raise CryptoException(f"DH Group 14 server KEX failed: {e}") from e
 
-    def _perform_ecdh_sha2_nistp256_server(self) -> None:
-        """Perform server-side ECDH NIST P-256 SHA256 key exchange."""
+    def _perform_ecdh_server(self) -> None:
+        """Perform server-side ECDH key exchange (Generic)."""
         try:
             from cryptography.hazmat.primitives.asymmetric import ec
 
-            # 1. Receive KEX_ECDH_INIT with client's P-256 public key
+            # Select curve and hash based on algorithm
+            curve: ec.EllipticCurve
+            if self._kex_algorithm == KEX_ECDH_SHA2_NISTP256:
+                curve = ec.SECP256R1()
+                hash_algo_name = "sha256"
+            elif self._kex_algorithm == KEX_ECDH_SHA2_NISTP384:
+                curve = ec.SECP384R1()
+                hash_algo_name = "sha384"
+            elif self._kex_algorithm == KEX_ECDH_SHA2_NISTP521:
+                curve = ec.SECP521R1()
+                hash_algo_name = "sha512"
+            else:
+                raise CryptoException(f"Unsupported ECDH algorithm: {self._kex_algorithm}")
+
+            # 1. Receive KEX_ECDH_INIT
             init_msg = self._transport._expect_message(MSG_KEX_ECDH_INIT)
             client_public_key_blob, _ = read_string(init_msg._data, 0)
 
-            # 2. Generate server P-256 key pair
-            self._ecdh_private_key = ec.generate_private_key(
-                ec.SECP256R1(), default_backend()
-            )
+            # 2. Generate server ECDH key pair
+            self._ecdh_private_key = ec.generate_private_key(curve, default_backend())
             server_public_key = self._ecdh_private_key.public_key()
             self._ecdh_public_key_bytes = server_public_key.public_bytes(
                 encoding=serialization.Encoding.X962,
@@ -587,7 +631,7 @@ class KeyExchange:
 
             # 3. Compute shared secret
             client_public_key_obj = ec.EllipticCurvePublicKey.from_encoded_point(
-                ec.SECP256R1(), client_public_key_blob
+                curve, client_public_key_blob
             )
             shared_secret_bytes = self._ecdh_private_key.exchange(
                 ec.ECDH(), client_public_key_obj
@@ -600,16 +644,18 @@ class KeyExchange:
             server_host_key = self._transport._server_key
             server_host_key_blob = server_host_key.get_public_key_bytes()
 
-            # 5. Compute exchange hash — pass client key explicitly to avoid mutating state
+            # 5. Compute exchange hash
             self._compute_ecdh_exchange_hash(
                 server_host_key_blob,
-                self._ecdh_public_key_bytes,  # server's public key
+                self._ecdh_public_key_bytes,
                 b"",
                 client_ecdh_public_key=client_public_key_blob,
+                hash_name=hash_algo_name,
             )
 
             # 6. Sign exchange hash
-            signature_blob = self._sign_exchange_hash(self._exchange_hash)  # type: ignore[arg-type]
+            assert self._exchange_hash is not None
+            signature_blob = self._sign_exchange_hash(self._exchange_hash)
 
             # 7. Send KEX_ECDH_REPLY
             reply_msg = Message(MSG_KEX_ECDH_REPLY)
@@ -623,7 +669,23 @@ class KeyExchange:
                 self._session_id = self._exchange_hash
 
         except Exception as e:
-            raise CryptoException(f"ECDH P-256 server KEX failed: {e}") from e
+            curve_label = "P-256"
+            if self._kex_algorithm == KEX_ECDH_SHA2_NISTP384:
+                curve_label = "P-384"
+            elif self._kex_algorithm == KEX_ECDH_SHA2_NISTP521:
+                curve_label = "P-521"
+            raise CryptoException(f"ECDH {curve_label} server KEX failed: {e}") from e
+
+    # Backward compatibility for tests and internal callers
+    def _perform_ecdh_sha2_nistp256(self) -> None:
+        """Alias for _perform_ecdh with NIST P-256."""
+        self._kex_algorithm = KEX_ECDH_SHA2_NISTP256
+        self._perform_ecdh()
+
+    def _perform_ecdh_sha2_nistp256_server(self) -> None:
+        """Alias for _perform_ecdh_server with NIST P-256."""
+        self._kex_algorithm = KEX_ECDH_SHA2_NISTP256
+        self._perform_ecdh_server()
 
     def _sign_exchange_hash(self, exchange_hash: bytes) -> bytes:
         """Sign exchange hash using server private key."""

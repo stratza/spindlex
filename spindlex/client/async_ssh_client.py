@@ -657,6 +657,15 @@ class AsyncSSHClient:
         """
         return self._host_key_storage
 
+    def get_host_keys(self) -> HostKeyStorage:
+        """
+        Alias for get_host_key_storage().
+
+        Returns:
+            Current host key storage
+        """
+        return self.get_host_key_storage()
+
     async def close(self) -> None:
         """Close SSH connection and cleanup resources."""
         if self._transport:
