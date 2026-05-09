@@ -9,8 +9,9 @@ Fixes # (issue)
 Select exactly one option. These stable tokens are parsed by CI and release automation.
 
 - [ ] bug - Bug fix; creates a patch release.
-- [ ] feature - New feature; creates a minor release.
-- [ ] breaking - Breaking change; creates a major release.
+- [ ] feature - Feature or stabilization work intended for the current beta minor line; creates a patch release before 1.0.
+- [ ] feature-minor - Real feature intended to advance the beta minor line; creates a minor release before 1.0.
+- [ ] breaking - Breaking beta change; creates a minor release before 1.0.
 - [ ] docs - Documentation-only change; no release.
 - [ ] refactor - Non-functional cleanup or refactor; no release.
 - [ ] test - Test-only change; no release.

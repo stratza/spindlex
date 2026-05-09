@@ -15,6 +15,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Fixed
 *   **NIST Curve Key Derivation**: Fixed a critical bug in `KeyExchange` where the incorrect hash algorithm (SHA-256) was being used for NIST P-384 and P-521 curves, causing authentication failures.
+*   **Beta Release Planning**: Updated release metadata parsing so `feature` PRs remain patch releases during beta stabilization, `feature-minor` explicitly advances the beta minor line, and breaking beta changes map to minor releases until the stable `1.0.0` policy is enabled.
+*   **Release PR Detection**: Added retry and merge-message fallback behavior for push-triggered release planning so GitHub API association lag does not skip a release immediately after merge.
 *   **Type Safety & Linting**: Resolved over 35 type errors and linting issues identified by `mypy` and `ruff`, particularly around `bytes`/`bytearray` buffer handling.
 *   **Regression Repairs**: Fixed `KeyExchange` unit tests by implementing backward-compatibility aliases and normalizing error messages.
 

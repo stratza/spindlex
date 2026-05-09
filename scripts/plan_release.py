@@ -6,7 +6,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -70,37 +72,78 @@ def _github_api_json(path: str, token: str) -> Any:
         raise RuntimeError(f"GitHub API request failed: {exc.code} {body}") from exc
 
 
-def _associated_pull_requests(repository: str, sha: str, token: str) -> list[dict[str, Any]]:
+def _associated_pull_requests(
+    repository: str, sha: str, token: str
+) -> list[dict[str, Any]]:
     data = _github_api_json(f"/repos/{repository}/commits/{sha}/pulls", token)
     if not isinstance(data, list):
         raise RuntimeError("GitHub API returned an unexpected pull request payload.")
     return [item for item in data if isinstance(item, dict)]
 
 
-def _last_merged_pull_request(
-    repository: str, sha: str, token: str
+def _pull_request_by_number(
+    repository: str, number: int, token: str
 ) -> dict[str, Any] | None:
-    candidates = [
-        pr
-        for pr in _associated_pull_requests(repository, sha, token)
-        if pr.get("merged_at")
-    ]
-    if not candidates:
+    data = _github_api_json(f"/repos/{repository}/pulls/{number}", token)
+    return data if isinstance(data, dict) else None
+
+
+def _last_merged_pull_request(
+    repository: str, sha: str, token: str, *, attempts: int = 6, delay: float = 5.0
+) -> dict[str, Any] | None:
+    for attempt in range(1, attempts + 1):
+        candidates = [
+            pr
+            for pr in _associated_pull_requests(repository, sha, token)
+            if pr.get("merged_at")
+        ]
+        if candidates:
+            return sorted(
+                candidates,
+                key=lambda pr: (str(pr.get("merged_at")), int(pr.get("number") or 0)),
+            )[-1]
+        if attempt < attempts:
+            time.sleep(delay)
+    return None
+
+
+def _merge_message_pr_number(message: str) -> int | None:
+    first_line = message.splitlines()[0] if message else ""
+    match = re.search(r"\(#(?P<number>\d+)\)\s*$", first_line)
+    return int(match.group("number")) if match else None
+
+
+def _fallback_merged_pull_request_from_message(
+    *, repository: str, message: str, sha: str, token: str
+) -> dict[str, Any] | None:
+    number = _merge_message_pr_number(message)
+    if number is None:
         return None
-    return sorted(
-        candidates,
-        key=lambda pr: (str(pr.get("merged_at")), int(pr.get("number") or 0)),
-    )[-1]
+    pr = _pull_request_by_number(repository, number, token)
+    if not pr or not pr.get("merged_at"):
+        return None
+    if str(pr.get("merge_commit_sha") or "") != sha:
+        return None
+    return pr
 
 
 def _plan_from_release_type(
-    *, release_type: str, current_version: str, dry_run: bool, source_sha: str, reason: str
+    *,
+    release_type: str,
+    current_version: str,
+    dry_run: bool,
+    source_sha: str,
+    reason: str,
 ) -> ReleasePlan:
     if release_type not in DIRECT_RELEASE_TYPES:
         raise ValueError(f"Unsupported release type override: {release_type!r}")
 
     release_needed = release_type in RELEASE_BUMPS
-    next_version = bump_version(current_version, release_type) if release_needed else current_version
+    next_version = (
+        bump_version(current_version, release_type)
+        if release_needed
+        else current_version
+    )
     return ReleasePlan(
         release_needed=str(release_needed).lower(),
         release_type=release_type if release_needed else "none",
@@ -163,7 +206,9 @@ def create_plan(event_path: Path) -> ReleasePlan:
     current_version = read_pyproject_version()
 
     if event_name == "workflow_dispatch":
-        inputs = payload.get("inputs") if isinstance(payload.get("inputs"), dict) else {}
+        inputs = (
+            payload.get("inputs") if isinstance(payload.get("inputs"), dict) else {}
+        )
         release_type = str(inputs.get("release_type") or "patch")
         dry_run = str(inputs.get("dry_run", "true")).lower() != "false"
         if not dry_run:
@@ -179,7 +224,9 @@ def create_plan(event_path: Path) -> ReleasePlan:
     if event_name == "pull_request":
         pr = payload.get("pull_request")
         if not isinstance(pr, dict):
-            raise ValueError("pull_request event does not include a pull_request object.")
+            raise ValueError(
+                "pull_request event does not include a pull_request object."
+            )
         return _plan_from_pr_body(
             body=str(pr.get("body") or ""),
             current_version=current_version,
@@ -206,9 +253,18 @@ def create_plan(event_path: Path) -> ReleasePlan:
         repository = os.environ.get("GITHUB_REPOSITORY", "")
         token = os.environ.get("GITHUB_TOKEN", "")
         if not repository or not token or not source_sha:
-            raise ValueError("GITHUB_REPOSITORY, GITHUB_TOKEN, and GITHUB_SHA are required.")
+            raise ValueError(
+                "GITHUB_REPOSITORY, GITHUB_TOKEN, and GITHUB_SHA are required."
+            )
 
         pr = _last_merged_pull_request(repository, source_sha, token)
+        if pr is None:
+            pr = _fallback_merged_pull_request_from_message(
+                repository=repository,
+                message=message,
+                sha=source_sha,
+                token=token,
+            )
         if pr is None:
             return _plan_from_release_type(
                 release_type="none",

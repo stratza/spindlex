@@ -40,8 +40,9 @@ Acceptance criteria:
 
 - A docs-only merged PR exits with no release.
 - A bug PR plans a patch release.
-- A feature PR plans a minor release.
-- A breaking PR plans a major release.
+- A feature PR plans a patch release during beta stabilization.
+- A feature-minor PR plans a minor release during beta stabilization.
+- A breaking PR plans a minor release during beta stabilization.
 - A `[skip release]` release-bump commit does not trigger a second release.
 
 Dependencies:

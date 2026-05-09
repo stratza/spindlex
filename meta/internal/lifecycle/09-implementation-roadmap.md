@@ -128,8 +128,9 @@ Tasks:
 Done when:
 
 - Bug PR creates patch release.
-- Feature PR creates minor release.
-- Breaking PR creates major release.
+- Feature PR creates patch release during beta stabilization.
+- Feature-minor PR creates minor release during beta stabilization.
+- Breaking PR creates minor release during beta stabilization.
 - Docs/refactor/test PRs do not release.
 - Rerun does not duplicate tag/release.
 

@@ -89,8 +89,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     print(
-        f"{args.changelog.as_posix()} must be updated for bug, feature, "
-        "and breaking-change PRs.",
+        f"{args.changelog.as_posix()} must be updated for release-impacting "
+        "PRs: bug, feature, feature-minor, and breaking.",
         file=sys.stderr,
     )
     return 1

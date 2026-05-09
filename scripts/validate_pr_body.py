@@ -11,11 +11,20 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-VALID_TYPES = ("bug", "feature", "breaking", "docs", "refactor", "test")
+VALID_TYPES = (
+    "bug",
+    "feature",
+    "feature-minor",
+    "breaking",
+    "docs",
+    "refactor",
+    "test",
+)
 RELEASE_TYPES = {
     "bug": ("true", "patch"),
-    "feature": ("true", "minor"),
-    "breaking": ("true", "major"),
+    "feature": ("true", "patch"),
+    "feature-minor": ("true", "minor"),
+    "breaking": ("true", "minor"),
     "docs": ("false", "none"),
     "refactor": ("false", "none"),
     "test": ("false", "none"),
@@ -117,7 +126,12 @@ def validate_body(body: str) -> ValidationResult:
             "PR description is empty or still contains only placeholder text."
         )
 
-    if change_type in {"bug", "feature", "breaking"} and not _has_test_evidence(body):
+    if change_type in {
+        "bug",
+        "feature",
+        "feature-minor",
+        "breaking",
+    } and not _has_test_evidence(body):
         errors.append(
             f"Type '{change_type}' requires test evidence in "
             "'How Has This Been Tested?'."

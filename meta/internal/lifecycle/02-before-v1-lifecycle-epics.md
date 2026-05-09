@@ -66,6 +66,7 @@ Implementation tasks:
 
   - [ ] bug
   - [ ] feature
+  - [ ] feature-minor
   - [ ] breaking
   - [ ] docs
   - [ ] refactor
@@ -77,7 +78,7 @@ Implementation tasks:
 - Fail validation if zero type boxes are selected.
 - Fail validation if more than one type box is selected.
 - Fail validation if description is empty or still placeholder-only.
-- For `bug`, `feature`, and `breaking`, require test evidence.
+- For `bug`, `feature`, `feature-minor`, and `breaking`, require test evidence.
 - Output parsed values:
   - `change_type`
   - `release_needed`
