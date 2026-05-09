@@ -243,6 +243,68 @@ class TestAsyncSFTPClientStat:
 
 
 # ---------------------------------------------------------------------------
+# AsyncSFTPClient.lstat
+# ---------------------------------------------------------------------------
+
+
+class TestAsyncSFTPClientLstat:
+    async def test_lstat_success(self):
+        client = _make_async_client()
+        client._wait_for_response.return_value = _make_attrs_msg()
+        result = await client.lstat("/some/link.txt")
+        assert isinstance(result, SFTPAttributes)
+
+    async def test_lstat_status_error_raises(self):
+        client = _make_async_client()
+        client._wait_for_response.return_value = _make_err_status(
+            code=SSH_FX_PERMISSION_DENIED, msg="Fail"
+        )
+        with pytest.raises(SFTPError, match="Lstat failed: Fail"):
+            await client.lstat("/forbidden")
+
+    async def test_lstat_unexpected_response_raises(self):
+        client = _make_async_client()
+        client._wait_for_response.return_value = _make_handle_msg()
+        with pytest.raises(SFTPError, match="Unexpected"):
+            await client.lstat("/some/file.txt")
+
+
+# ---------------------------------------------------------------------------
+# AsyncSFTPClient.symlink / readlink
+# ---------------------------------------------------------------------------
+
+
+class TestAsyncSFTPClientSymlinkReadlink:
+    async def test_symlink_success(self):
+        client = _make_async_client()
+        client._wait_for_response.return_value = _make_ok_status()
+        await client.symlink("/target", "/link")
+
+    async def test_symlink_error_raises(self):
+        client = _make_async_client()
+        client._wait_for_response.return_value = _make_err_status(
+            code=SSH_FX_FAILURE, msg="Fail"
+        )
+        with pytest.raises(SFTPError, match="Symlink failed: Fail"):
+            await client.symlink("/target", "/link")
+
+    async def test_readlink_success(self):
+        client = _make_async_client()
+        client._wait_for_response.return_value = _make_name_msg(
+            names=[("target", "target", SFTPAttributes())]
+        )
+        assert await client.readlink("/link") == "target"
+
+    async def test_readlink_error_raises(self):
+        client = _make_async_client()
+        client._wait_for_response.return_value = _make_err_status(
+            code=SSH_FX_FAILURE, msg="Fail"
+        )
+        with pytest.raises(SFTPError, match="Readlink failed: Fail"):
+            await client.readlink("/link")
+
+
+# ---------------------------------------------------------------------------
 # AsyncSFTPClient.mkdir / rmdir
 # ---------------------------------------------------------------------------
 

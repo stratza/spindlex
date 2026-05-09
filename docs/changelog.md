@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.10] - 2026-05-08
+
+### Added
+*   **Modern NIST Curve Support**: Added full support for `ecdh-sha2-nistp384` and `ecdh-sha2-nistp521` key exchange algorithms, and `ecdsa-sha2-nistp384` and `ecdsa-sha2-nistp521` host key algorithms.
+*   **RSA-SHA2-512 Support**: Added support for the `rsa-sha2-512` host key algorithm.
+*   **SFTP API Parity**: Implemented `lstat`, `symlink`, and `readlink` in both `SFTPClient` (sync) and `AsyncSFTPClient` (async) to ensure interface consistency.
+*   **Enhanced Configuration**: Integrated `SPINDLEX_LOG_LEVEL` and `SPINDLEX_BUFFER_SIZE` environment variables for better external control over library behavior.
+*   **Benchmarking Suite**: Updated `scripts/benchmark_compare.py` and `scripts/benchmark_ciphers.py` to cover all newly added algorithms and modern cryptographic configurations.
+
+### Fixed
+*   **NIST Curve Key Derivation**: Fixed a critical bug in `KeyExchange` where the incorrect hash algorithm (SHA-256) was being used for NIST P-384 and P-521 curves, causing authentication failures.
+*   **Type Safety & Linting**: Resolved over 35 type errors and linting issues identified by `mypy` and `ruff`, particularly around `bytes`/`bytearray` buffer handling.
+*   **Regression Repairs**: Fixed `KeyExchange` unit tests by implementing backward-compatibility aliases and normalizing error messages.
+
 ## [0.6.9] - 2026-05-05
 
 ### Fixed

@@ -217,6 +217,51 @@ class PerformanceMonitor:
                 self.connection_metrics.clear()
                 self.operation_stats.clear()
 
+    def print_summary(self) -> None:
+        """Print a human-readable summary of all recorded performance metrics."""
+        with self._lock:
+            print("\n" + "=" * 60)
+            print(f"{'SpindleX Performance Summary':^60}")
+            print("=" * 60)
+
+            if not self.operation_stats and not self.connection_metrics:
+                print(f"{'No metrics recorded yet':^60}")
+                print("=" * 60 + "\n")
+                return
+
+            if self.operation_stats:
+                print(f"\n{'Operation Statistics':^60}")
+                print("-" * 60)
+                print(
+                    f"{'Operation':<20} | {'Count':>6} | {'Mean (ms)':>10} | {'p95 (ms)':>10}"
+                )
+                print("-" * 60)
+
+                for op in sorted(self.operation_stats.keys()):
+                    stats = self.get_operation_stats(op)
+                    if stats:
+                        mean_ms = stats["mean"] * 1000
+                        p95_ms = stats["p95"] * 1000
+                        print(
+                            f"{op:<20} | {stats['count']:>6} | {mean_ms:>10.2f} | {p95_ms:>10.2f}"
+                        )
+
+            if self.connection_metrics:
+                print(f"\n{'Connection Statistics':^60}")
+                print("-" * 60)
+                print(
+                    f"{'Conn ID':<10} | {'Sent (pkts)':>12} | {'Recv (pkts)':>12} | {'Errors':>6}"
+                )
+                print("-" * 60)
+
+                for conn_id, metrics in self.connection_metrics.items():
+                    print(
+                        f"{conn_id[:10]:<10} | {metrics.packets_sent:>12} | "
+                        f"{metrics.packets_received:>12} | {metrics.errors:>6}"
+                    )
+
+            print("=" * 60 + "\n")
+
 
 # Global performance monitor instance
 _performance_monitor = PerformanceMonitor()

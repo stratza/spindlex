@@ -974,7 +974,79 @@ class SFTPClient:
         except Exception as e:
             if isinstance(e, SFTPError):
                 raise
-            raise SFTPError(f"Path normalization failed: {e}", filename=path)
+            raise SFTPError(f"Path normalization failed: {e}", filename=path) from e
+
+    def symlink(self, targetpath: str, linkpath: str) -> None:
+        """
+        Create symbolic link.
+
+        Args:
+            targetpath: Target path for the link
+            linkpath: Path where link should be created
+
+        Raises:
+            SFTPError: If symlink creation fails
+        """
+        try:
+            request_id = self._get_next_request_id()
+            from ..protocol.sftp_messages import SFTPSymlinkMessage
+
+            symlink_msg = SFTPSymlinkMessage(request_id, targetpath, linkpath)
+
+            response = self._send_request_and_wait_response(symlink_msg)
+
+            if isinstance(response, SFTPStatusMessage):
+                if response.status_code != SSH_FX_OK:
+                    raise SFTPError.from_status(response.status_code, response.message)
+            else:
+                raise SFTPError("Unexpected response to symlink request")
+
+        except Exception as e:
+            if isinstance(e, SFTPError):
+                raise
+            raise SFTPError(f"Symlink creation failed: {e}") from e
+
+    def readlink(self, path: str) -> str:
+        """
+        Read symbolic link.
+
+        Args:
+            path: Path to symbolic link
+
+        Returns:
+            Target path of the link
+
+        Raises:
+            SFTPError: If operation fails
+        """
+        try:
+            request_id = self._get_next_request_id()
+            from ..protocol.sftp_messages import SFTPReadLinkMessage
+
+            readlink_msg = SFTPReadLinkMessage(request_id, path)
+
+            response = self._send_request_and_wait_response(readlink_msg)
+
+            if isinstance(response, SFTPStatusMessage):
+                if response.status_code != SSH_FX_OK:
+                    raise SFTPError.from_status(response.status_code, response.message)
+                else:
+                    raise SFTPError("Unexpected status response to readlink request")
+            else:
+                from ..protocol.sftp_messages import SFTPNameMessage
+
+                if isinstance(response, SFTPNameMessage):
+                    if response.names:
+                        return response.names[0][0]  # Target path
+                    else:
+                        raise SFTPError("Empty response to readlink request")
+                else:
+                    raise SFTPError("Unexpected response to readlink request")
+
+        except Exception as e:
+            if isinstance(e, SFTPError):
+                raise
+            raise SFTPError(f"Readlink failed: {e}", filename=path) from e
 
     def open(self, filename: str, mode: str = "r") -> "SFTPFile":
         """

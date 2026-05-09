@@ -2,7 +2,7 @@
 """
 SSH performance benchmark tool.
 
-A tool for benchmarking SSH operations and comparing performance (part of Spindle).
+A tool for benchmarking SSH operations and comparing performance (part of SpindleX).
 """
 
 import argparse
@@ -149,9 +149,9 @@ def main() -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  spindle-benchmark --crypto-only
-  spindle-benchmark -H example.com -u user -p password
-  spindle-benchmark -H example.com -u user -k ~/.ssh/id_rsa --iterations 20
+  spindlex-benchmark --crypto-only
+  spindlex-benchmark -H example.com -u user -p password
+  spindlex-benchmark -H example.com -u user -k ~/.ssh/id_rsa --iterations 20
         """,
     )
 

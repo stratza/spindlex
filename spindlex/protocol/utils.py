@@ -20,7 +20,7 @@ from .constants import (
 )
 
 
-def read_byte(data: bytes, offset: int) -> tuple[int, int]:
+def read_byte(data: Union[bytes, bytearray], offset: int) -> tuple[int, int]:
     """
     Read single byte from data.
 
@@ -40,7 +40,7 @@ def read_byte(data: bytes, offset: int) -> tuple[int, int]:
     return data[offset], offset + 1
 
 
-def read_boolean(data: bytes, offset: int) -> tuple[bool, int]:
+def read_boolean(data: Union[bytes, bytearray], offset: int) -> tuple[bool, int]:
     """
     Read boolean from data.
 
@@ -58,7 +58,7 @@ def read_boolean(data: bytes, offset: int) -> tuple[bool, int]:
     return bool(value), new_offset
 
 
-def read_uint32(data: bytes, offset: int) -> tuple[int, int]:
+def read_uint32(data: Union[bytes, bytearray], offset: int) -> tuple[int, int]:
     """
     Read 32-bit unsigned integer from data.
 
@@ -79,7 +79,7 @@ def read_uint32(data: bytes, offset: int) -> tuple[int, int]:
     return value, offset + 4
 
 
-def read_uint64(data: bytes, offset: int) -> tuple[int, int]:
+def read_uint64(data: Union[bytes, bytearray], offset: int) -> tuple[int, int]:
     """
     Read 64-bit unsigned integer from data.
 
@@ -101,7 +101,7 @@ def read_uint64(data: bytes, offset: int) -> tuple[int, int]:
 
 
 def read_string(
-    data: bytes, offset: int, max_size: int = MAX_PACKET_SIZE
+    data: Union[bytes, bytearray], offset: int, max_size: int = MAX_PACKET_SIZE
 ) -> tuple[bytes, int]:
     """
     Read string from data.
@@ -130,7 +130,7 @@ def read_string(
     return string_data, new_offset + length
 
 
-def read_mpint(data: bytes, offset: int) -> tuple[int, int]:
+def read_mpint(data: Union[bytes, bytearray], offset: int) -> tuple[int, int]:
     """
     Read multiple precision integer from data.
 

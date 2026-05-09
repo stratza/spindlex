@@ -2,7 +2,7 @@
 """
 SSH key generation tool.
 
-A simple command-line tool for generating SSH key pairs (part of Spindle).
+A simple command-line tool for generating SSH key pairs (part of SpindleX).
 """
 
 import argparse
@@ -23,7 +23,7 @@ def generate_key(
     if key_type == "ed25519":
         key = Ed25519Key.generate()
     elif key_type == "ecdsa":
-        key = ECDSAKey.generate()
+        key = ECDSAKey.generate(bits=bits or 256)
     elif key_type == "rsa":
         key_size = bits or 2048
         if key_size < 2048:
@@ -65,9 +65,9 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  spindle-keygen -t ed25519 -f ~/.ssh/id_ed25519
-  spindle-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -C "user@example.com"
-  spindle-keygen -t ecdsa -f ~/.ssh/id_ecdsa
+  spindlex-keygen -t ed25519 -f ~/.ssh/id_ed25519
+  spindlex-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -C "user@example.com"
+  spindlex-keygen -t ecdsa -b 384 -f ~/.ssh/id_ecdsa
         """,
     )
 
@@ -80,7 +80,10 @@ Examples:
     )
 
     parser.add_argument(
-        "-b", "--bits", type=int, help="Number of bits for RSA keys (minimum 2048)"
+        "-b",
+        "--bits",
+        type=int,
+        help="Number of bits for RSA keys (min 2048) or ECDSA keys (256, 384, 521)",
     )
 
     parser.add_argument(

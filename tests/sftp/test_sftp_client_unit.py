@@ -599,9 +599,9 @@ class TestSFTPClientStat:
     def test_lstat_error_raises(self):
         client = self._client()
         client._send_request_and_wait_response.return_value = _make_err_status(
-            code=SSH_FX_PERMISSION_DENIED
+            code=SSH_FX_PERMISSION_DENIED, msg="Fail"
         )
-        with pytest.raises(SFTPError):
+        with pytest.raises(SFTPError, match=r"\[3\] Fail"):
             client.lstat("/forbidden")
 
     def test_lstat_ok_status_raises(self):
@@ -615,6 +615,46 @@ class TestSFTPClientStat:
         client._send_request_and_wait_response.return_value = _make_handle_msg()
         with pytest.raises(SFTPError, match="Unexpected"):
             client.lstat("/some/file.txt")
+
+
+# ---------------------------------------------------------------------------
+# SFTPClient.symlink / readlink
+# ---------------------------------------------------------------------------
+
+
+class TestSFTPClientSymlinkReadlink:
+    def _client(self):
+        client, _ = _make_sftp_client()
+        client._send_request_and_wait_response = MagicMock()
+        return client
+
+    def test_symlink_success(self):
+        client = self._client()
+        client._send_request_and_wait_response.return_value = _make_ok_status()
+        client.symlink("/target", "/link")
+
+    def test_symlink_error_raises(self):
+        client = self._client()
+        client._send_request_and_wait_response.return_value = _make_err_status(
+            code=SSH_FX_FAILURE, msg="Fail"
+        )
+        with pytest.raises(SFTPError, match=r"\[4\] Fail"):
+            client.symlink("/target", "/link")
+
+    def test_readlink_success(self):
+        client = self._client()
+        client._send_request_and_wait_response.return_value = _make_name_msg(
+            names=[("target", "target", SFTPAttributes())]
+        )
+        assert client.readlink("/link") == "target"
+
+    def test_readlink_error_raises(self):
+        client = self._client()
+        client._send_request_and_wait_response.return_value = _make_err_status(
+            code=SSH_FX_FAILURE, msg="Fail"
+        )
+        with pytest.raises(SFTPError, match=r"\[4\] Fail"):
+            client.readlink("/link")
 
 
 # ---------------------------------------------------------------------------

@@ -15,6 +15,8 @@ from spindlex.protocol.constants import (
     KEX_CURVE25519_SHA256,
     KEX_DH_GROUP14_SHA256,
     KEX_ECDH_SHA2_NISTP256,
+    KEX_ECDH_SHA2_NISTP384,
+    KEX_ECDH_SHA2_NISTP521,
     MSG_NEWKEYS,
 )
 from spindlex.transport.kex import KeyExchange
@@ -29,6 +31,7 @@ def make_kex() -> tuple[KeyExchange, MagicMock]:
     transport = MagicMock()
     transport._send_message = MagicMock()
     transport._expect_message = MagicMock()
+    transport.session_id = b"\x00" * 32  # Added for unit2 compatibility
     transport._session_id = None
     transport._client_version = "SSH-2.0-SpindleX_Test"
     transport._server_version = "SSH-2.0-MockServer"
@@ -55,6 +58,34 @@ def _make_peer_kexinit():
     return peer
 
 
+def _make_reply_msg(server_host_key: bytes, server_pub: bytes, sig: bytes) -> MagicMock:
+    """Build a fake reply Message whose ._data encodes three strings."""
+    from spindlex.protocol.utils import write_string
+
+    data = write_string(server_host_key) + write_string(server_pub) + write_string(sig)
+    msg = MagicMock()
+    msg._data = data
+    return msg
+
+
+def _make_dh_reply_msg(
+    server_host_key: bytes, server_f_int: int, sig: bytes
+) -> MagicMock:
+    """Build a fake KEXDH_REPLY whose ._data encodes host_key, mpint(f), sig."""
+    from spindlex.protocol.utils import write_mpint, write_string
+
+    data = write_string(server_host_key) + write_mpint(server_f_int) + write_string(sig)
+    msg = MagicMock()
+    msg._data = data
+    return msg
+
+
+def _kex_with_kexinit_blobs(kex: KeyExchange) -> None:
+    """Populate KEXINIT blobs so exchange-hash methods don't fail."""
+    kex._client_kexinit = b"\x01" * 16
+    kex._server_kexinit = b"\x02" * 16
+
+
 # ---------------------------------------------------------------------------
 # __init__
 # ---------------------------------------------------------------------------
@@ -64,6 +95,37 @@ class TestKeyExchangeInit:
     def test_init_stores_transport(self):
         kex, transport = make_kex()
         assert kex._transport is transport
+
+
+class TestKeyExchangeHashSelection:
+    def test_kex_hash_selection(self):
+        kex, _ = make_kex()
+
+        # Mock state for _generate_session_keys
+        kex._encryption_algorithm_c2s = "aes256-ctr"
+        kex._encryption_algorithm_s2c = "aes256-ctr"
+        kex._mac_algorithm_c2s = "hmac-sha2-256"
+        kex._mac_algorithm_s2c = "hmac-sha2-256"
+        kex._cipher_suite = MagicMock()
+        kex._cipher_suite.get_cipher_info.return_value = {"key_len": 32, "iv_len": 16}
+        kex._cipher_suite.get_mac_info.return_value = {"key_len": 32}
+        kex._shared_secret = b"secret"
+        kex._exchange_hash = b"hash"
+
+        with patch(
+            "spindlex.crypto.backend.default_crypto_backend.derive_key"
+        ) as mock_derive:
+            # P-384 -> SHA384
+            kex._kex_algorithm = KEX_ECDH_SHA2_NISTP384
+            kex._generate_session_keys()
+            assert mock_derive.call_args_list[0][0][0] == "sha384"
+
+            mock_derive.reset_mock()
+
+            # P-521 -> SHA512
+            kex._kex_algorithm = KEX_ECDH_SHA2_NISTP521
+            kex._generate_session_keys()
+            assert mock_derive.call_args_list[0][0][0] == "sha512"
 
     def test_algorithm_initially_none(self):
         kex, _ = make_kex()
@@ -481,3 +543,250 @@ class TestStartKex:
         ):
             with pytest.raises(CryptoException, match="crypto err"):
                 kex.start_kex()
+
+
+# ---------------------------------------------------------------------------
+# Merged tests from test_kex_unit2.py
+# ---------------------------------------------------------------------------
+
+
+class TestDhGroup14Sha256Client:
+    """Mock out the cryptography.hazmat.primitives.asymmetric.dh calls."""
+
+    def _build_mock_dh(self, pub_y: int = 0x1234ABCD):
+        """Return a mock DH private key that reports pub_y as its public number."""
+        from unittest.mock import MagicMock
+
+        mock_priv = MagicMock()
+        mock_pub_numbers = MagicMock()
+        mock_pub_numbers.y = pub_y
+        mock_pub = MagicMock()
+        mock_pub.public_numbers.return_value = mock_pub_numbers
+        mock_priv.public_key.return_value = mock_pub
+
+        # exchange() must return bytes
+        mock_priv.exchange.return_value = (42).to_bytes(32, "big")
+        return mock_priv
+
+    def test_dh_group14_sends_kexdh_init(self):
+        kex, transport = make_kex()
+        _kex_with_kexinit_blobs(kex)
+
+        mock_priv = self._build_mock_dh()
+        # server_f must be > 1 and < P-1; use G (= 2) which satisfies > 1
+        server_f = KeyExchange.DH_GROUP14_P - 2
+        reply = _make_dh_reply_msg(b"hostkey", server_f, b"sig")
+        transport._expect_message.return_value = reply
+
+        with (
+            patch("spindlex.transport.kex.dh") as mock_dh_module,
+            patch("spindlex.transport.kex.default_backend"),
+            patch.object(kex, "_verify_server_signature"),
+        ):
+            mock_params = MagicMock()
+            mock_params.generate_private_key.return_value = mock_priv
+            mock_params.parameter_numbers.return_value = MagicMock()
+            mock_dh_module.DHParameterNumbers.return_value.parameters.return_value = (
+                mock_params
+            )
+            mock_dh_module.DHPublicNumbers.return_value.public_key.return_value = (
+                MagicMock()
+            )
+            kex._perform_dh_group14_sha256()
+
+        transport._send_message.assert_called_once()
+
+    def test_dh_group14_sets_shared_secret(self):
+        kex, transport = make_kex()
+        _kex_with_kexinit_blobs(kex)
+        mock_priv = self._build_mock_dh()
+        server_f = KeyExchange.DH_GROUP14_P - 2
+        reply = _make_dh_reply_msg(b"hostkey", server_f, b"sig")
+        transport._expect_message.return_value = reply
+
+        with (
+            patch("spindlex.transport.kex.dh") as mock_dh_module,
+            patch("spindlex.transport.kex.default_backend"),
+            patch.object(kex, "_verify_server_signature"),
+        ):
+            mock_params = MagicMock()
+            mock_params.generate_private_key.return_value = mock_priv
+            mock_params.parameter_numbers.return_value = MagicMock()
+            mock_dh_module.DHParameterNumbers.return_value.parameters.return_value = (
+                mock_params
+            )
+            mock_dh_module.DHPublicNumbers.return_value.public_key.return_value = (
+                MagicMock()
+            )
+            kex._perform_dh_group14_sha256()
+
+        assert kex._shared_secret is not None
+
+    def test_dh_group14_sets_session_id_first_time(self):
+        kex, transport = make_kex()
+        _kex_with_kexinit_blobs(kex)
+        mock_priv = self._build_mock_dh()
+        server_f = KeyExchange.DH_GROUP14_P - 2
+        reply = _make_dh_reply_msg(b"hostkey", server_f, b"sig")
+        transport._expect_message.return_value = reply
+
+        with (
+            patch("spindlex.transport.kex.dh") as mock_dh_module,
+            patch("spindlex.transport.kex.default_backend"),
+            patch.object(kex, "_verify_server_signature"),
+        ):
+            mock_params = MagicMock()
+            mock_params.generate_private_key.return_value = mock_priv
+            mock_params.parameter_numbers.return_value = MagicMock()
+            mock_dh_module.DHParameterNumbers.return_value.parameters.return_value = (
+                mock_params
+            )
+            mock_dh_module.DHPublicNumbers.return_value.public_key.return_value = (
+                MagicMock()
+            )
+            kex._perform_dh_group14_sha256()
+
+        assert kex._session_id is not None
+
+    def test_dh_group14_does_not_override_existing_session_id(self):
+        kex, transport = make_kex()
+        _kex_with_kexinit_blobs(kex)
+        existing_sid = b"\xfe" * 32
+        kex._session_id = existing_sid
+        mock_priv = self._build_mock_dh()
+        server_f = KeyExchange.DH_GROUP14_P - 2
+        reply = _make_dh_reply_msg(b"hostkey", server_f, b"sig")
+        transport._expect_message.return_value = reply
+
+        with (
+            patch("spindlex.transport.kex.dh") as mock_dh_module,
+            patch("spindlex.transport.kex.default_backend"),
+            patch.object(kex, "_verify_server_signature"),
+        ):
+            mock_params = MagicMock()
+            mock_params.generate_private_key.return_value = mock_priv
+            mock_params.parameter_numbers.return_value = MagicMock()
+            mock_dh_module.DHParameterNumbers.return_value.parameters.return_value = (
+                mock_params
+            )
+            mock_dh_module.DHPublicNumbers.return_value.public_key.return_value = (
+                MagicMock()
+            )
+            kex._perform_dh_group14_sha256()
+
+        assert kex._session_id == existing_sid
+
+    def test_dh_group14_invalid_server_key_raises(self):
+        """server_public_int == 1 should raise CryptoException."""
+        kex, transport = make_kex()
+        _kex_with_kexinit_blobs(kex)
+        mock_priv = self._build_mock_dh()
+        reply = _make_dh_reply_msg(b"hostkey", 1, b"sig")
+        transport._expect_message.return_value = reply
+
+        with (
+            patch("spindlex.transport.kex.dh") as mock_dh_module,
+            patch("spindlex.transport.kex.default_backend"),
+        ):
+            mock_params = MagicMock()
+            mock_params.generate_private_key.return_value = mock_priv
+            mock_params.parameter_numbers.return_value = MagicMock()
+            mock_dh_module.DHParameterNumbers.return_value.parameters.return_value = (
+                mock_params
+            )
+            with pytest.raises(CryptoException):
+                kex._perform_dh_group14_sha256()
+
+
+class TestEcdhNistp256Client:
+    def _build_mock_ec(self):
+        from unittest.mock import MagicMock
+
+        mock_priv = MagicMock()
+        # 65-byte uncompressed point: 0x04 + 32 bytes x + 32 bytes y
+        mock_priv.public_key.return_value.public_bytes.return_value = (
+            b"\x04" + b"\xaa" * 64
+        )
+        # exchange() returns 32 bytes
+        mock_priv.exchange.return_value = b"\xbb" * 32
+        return mock_priv
+
+    def test_ecdh_nistp256_sends_init(self):
+        kex, transport = make_kex()
+        _kex_with_kexinit_blobs(kex)
+
+        server_pub_bytes = b"\x04" + b"\xcc" * 64
+        reply = _make_reply_msg(b"hostkey", server_pub_bytes, b"sig")
+        transport._expect_message.return_value = reply
+
+        mock_priv = self._build_mock_ec()
+
+        with (
+            patch("cryptography.hazmat.primitives.asymmetric.ec") as mock_ec_module,
+            patch("spindlex.transport.kex.default_backend"),
+            patch("spindlex.transport.kex.serialization"),
+            patch.object(kex, "_verify_server_signature"),
+        ):
+            mock_ec_module.generate_private_key.return_value = mock_priv
+            mock_ec_module.EllipticCurvePublicKey.from_encoded_point.return_value = (
+                MagicMock()
+            )
+            mock_ec_module.ECDH.return_value = MagicMock()
+            kex._perform_ecdh_sha2_nistp256()
+
+        transport._send_message.assert_called_once()
+
+    def test_ecdh_nistp256_sets_shared_secret(self):
+        kex, transport = make_kex()
+        _kex_with_kexinit_blobs(kex)
+
+        server_pub_bytes = b"\x04" + b"\xcc" * 64
+        reply = _make_reply_msg(b"hostkey", server_pub_bytes, b"sig")
+        transport._expect_message.return_value = reply
+
+        mock_priv = self._build_mock_ec()
+
+        with (
+            patch("cryptography.hazmat.primitives.asymmetric.ec") as mock_ec_module,
+            patch("spindlex.transport.kex.default_backend"),
+            patch("spindlex.transport.kex.serialization"),
+            patch.object(kex, "_verify_server_signature"),
+        ):
+            mock_ec_module.generate_private_key.return_value = mock_priv
+            mock_ec_module.EllipticCurvePublicKey.from_encoded_point.return_value = (
+                MagicMock()
+            )
+            mock_ec_module.ECDH.return_value = MagicMock()
+            kex._perform_ecdh_sha2_nistp256()
+
+        assert kex._shared_secret is not None
+
+
+class TestComputeEcdhExchangeHash:
+    def _setup_kex(self, kex: KeyExchange) -> None:
+        _kex_with_kexinit_blobs(kex)
+        kex._ecdh_public_key_bytes = b"\x04" + b"\xaa" * 64
+        from spindlex.protocol.utils import write_mpint
+
+        kex._shared_secret = write_mpint(12345)
+
+    def test_computes_exchange_hash(self):
+        kex, _ = make_kex()
+        self._setup_kex(kex)
+        kex._compute_ecdh_exchange_hash(b"hostkey", b"serverpub", b"sig")
+        assert isinstance(kex._exchange_hash, bytes)
+        assert len(kex._exchange_hash) > 0
+
+
+class TestComputeCurve25519ExchangeHash:
+    def test_computes_hash(self):
+        kex, _ = make_kex()
+        _kex_with_kexinit_blobs(kex)
+        from spindlex.protocol.utils import write_mpint
+
+        kex._shared_secret = write_mpint(99)
+        kex._compute_curve25519_exchange_hash(
+            b"host_key_blob", b"\xaa" * 32, b"\xbb" * 32
+        )
+        assert isinstance(kex._exchange_hash, bytes)
+        assert len(kex._exchange_hash) > 0

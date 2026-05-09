@@ -59,6 +59,22 @@ def test_ecdsa_sign_verify(ecdsa_key):
     assert not ecdsa_key.verify(signature, b"wrong data")
 
 
+def test_ecdsa_nist_curves():
+    # Test generation and signing for all supported NIST curves
+    for bits in [256, 384, 521]:
+        key = ECDSAKey.generate(bits=bits)
+        data = b"hello world"
+        sig = key.sign(data)
+        assert key.verify(sig, data) is True
+
+        # Test public key bytes round-trip
+        pub_bytes = key.get_public_key_bytes()
+        key_reloaded = ECDSAKey()
+        key_reloaded.load_public_key(pub_bytes)
+        assert key_reloaded.curve_name == key.curve_name
+        assert key_reloaded.verify(sig, data) is True
+
+
 def test_ed25519_key_properties(ed25519_key):
     assert ed25519_key.algorithm_name == "ssh-ed25519"
     blob = ed25519_key.get_public_key_bytes()

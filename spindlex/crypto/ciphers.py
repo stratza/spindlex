@@ -25,6 +25,8 @@ class CipherSuite:
     KEX_ALGORITHMS = [
         "curve25519-sha256",
         "ecdh-sha2-nistp256",
+        "ecdh-sha2-nistp384",
+        "ecdh-sha2-nistp521",
         "diffie-hellman-group14-sha256",
     ]
 
@@ -39,6 +41,9 @@ class CipherSuite:
     HOST_KEY_ALGORITHMS = [
         "ssh-ed25519",
         "ecdsa-sha2-nistp256",
+        "ecdsa-sha2-nistp384",
+        "ecdsa-sha2-nistp521",
+        "rsa-sha2-512",
         "rsa-sha2-256",
     ]
 

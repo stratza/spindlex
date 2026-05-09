@@ -30,12 +30,14 @@ from ..protocol.sftp_messages import (
     SFTPDataMessage,
     SFTPHandleMessage,
     SFTPInitMessage,
+    SFTPLStatMessage,
     SFTPMessage,
     SFTPMkdirMessage,
     SFTPNameMessage,
     SFTPOpenDirMessage,
     SFTPOpenMessage,
     SFTPReadDirMessage,
+    SFTPReadLinkMessage,
     SFTPReadMessage,
     SFTPRealPathMessage,
     SFTPRenameMessage,
@@ -43,6 +45,7 @@ from ..protocol.sftp_messages import (
     SFTPSetStatMessage,
     SFTPStatMessage,
     SFTPStatusMessage,
+    SFTPSymlinkMessage,
     SFTPVersionMessage,
     SFTPWriteMessage,
 )
@@ -441,6 +444,43 @@ class AsyncSFTPClient:
                 raise
             raise SFTPError(f"Stat operation failed: {e}") from e
 
+    async def lstat(self, path: str) -> Any:
+        """
+        Get file/directory attributes (without following symlinks) asynchronously.
+
+        Args:
+            path: File or directory path
+
+        Returns:
+            File attributes
+
+        Raises:
+            SFTPError: If lstat fails
+        """
+        try:
+            request_id = self._get_next_request_id()
+
+            # Send lstat request
+            lstat_msg = SFTPLStatMessage(request_id=request_id, path=path)
+            await self._send_message(lstat_msg)
+
+            # Wait for response
+            response = await self._wait_for_response(request_id)
+
+            if isinstance(response, SFTPAttrsMessage):
+                return response.attrs
+            elif isinstance(response, SFTPStatusMessage):
+                raise SFTPError(
+                    f"Lstat failed: {response.message}", response.status_code
+                )
+            else:
+                raise SFTPError("Unexpected response to lstat request")
+
+        except Exception as e:
+            if isinstance(e, SFTPError):
+                raise
+            raise SFTPError(f"Lstat operation failed: {e}") from e
+
     async def mkdir(self, path: str, mode: int = 0o755) -> None:
         """
         Create directory asynchronously.
@@ -578,6 +618,69 @@ class AsyncSFTPClient:
             if isinstance(e, SFTPError):
                 raise
             raise SFTPError(f"Rename failed: {e}") from e
+
+    async def symlink(self, targetpath: str, linkpath: str) -> None:
+        """
+        Create symbolic link asynchronously.
+
+        Args:
+            targetpath: Target path for the link
+            linkpath: Path where link should be created
+
+        Raises:
+            SFTPError: If symlink fails
+        """
+        try:
+            request_id = self._get_next_request_id()
+            symlink_msg = SFTPSymlinkMessage(
+                request_id=request_id, targetpath=targetpath, linkpath=linkpath
+            )
+            await self._send_message(symlink_msg)
+            response = await self._wait_for_response(request_id)
+            if isinstance(response, SFTPStatusMessage):
+                if response.status_code != SSH_FX_OK:
+                    raise SFTPError(
+                        f"Symlink failed: {response.message}", response.status_code
+                    )
+            else:
+                raise SFTPError("Unexpected response to symlink request")
+        except Exception as e:
+            if isinstance(e, SFTPError):
+                raise
+            raise SFTPError(f"Symlink failed: {e}") from e
+
+    async def readlink(self, path: str) -> str:
+        """
+        Read symbolic link asynchronously.
+
+        Args:
+            path: Path to symbolic link
+
+        Returns:
+            Target path of the link
+
+        Raises:
+            SFTPError: If readlink fails
+        """
+        try:
+            request_id = self._get_next_request_id()
+            readlink_msg = SFTPReadLinkMessage(request_id=request_id, path=path)
+            await self._send_message(readlink_msg)
+            response = await self._wait_for_response(request_id)
+            if isinstance(response, SFTPNameMessage):
+                if response.names:
+                    return response.names[0][0]
+                raise SFTPError("Empty response to readlink request")
+            elif isinstance(response, SFTPStatusMessage):
+                raise SFTPError(
+                    f"Readlink failed: {response.message}", response.status_code
+                )
+            else:
+                raise SFTPError("Unexpected response to readlink request")
+        except Exception as e:
+            if isinstance(e, SFTPError):
+                raise
+            raise SFTPError(f"Readlink failed: {e}") from e
 
     async def chmod(self, path: str, mode: int) -> None:
         """Change remote file permissions."""

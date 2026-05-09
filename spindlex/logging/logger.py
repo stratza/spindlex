@@ -176,6 +176,16 @@ def configure_logging(
     if isinstance(level, str):
         level = getattr(logging, level.upper())
 
+    # Check for environment variable override
+    import os
+
+    env_level = os.environ.get("SPINDLEX_LOG_LEVEL")
+    if env_level:
+        try:
+            level = getattr(logging, env_level.upper())
+        except (AttributeError, TypeError):
+            pass
+
     # Configure root SSH logger
     root_logger = logging.getLogger("spindlex")
     root_logger.setLevel(level)

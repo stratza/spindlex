@@ -238,7 +238,7 @@ class PKey:
         elif key_type == "rsa":
             return RSAKey.generate(bits=bits, **kwargs)
         elif key_type == "ecdsa":
-            return ECDSAKey.generate(**kwargs)
+            return ECDSAKey.generate(bits=bits, **kwargs)
         else:
             raise CryptoException(f"Unsupported key type for generation: {key_type}")
 
@@ -517,16 +517,38 @@ class ECDSAKey(PKey):
     Implements ecdsa-sha2-nistp256 key type using NIST P-256 curve.
     """
 
-    def __init__(self, crypto_backend: Optional[CryptoBackend] = None) -> None:
-        """Initialize ECDSA key with P-256 curve."""
+    def __init__(
+        self,
+        crypto_backend: Optional[CryptoBackend] = None,
+        curve_name: str = "nistp256",
+    ) -> None:
+        """Initialize ECDSA key with specified curve."""
         super().__init__(crypto_backend)
-        self.curve = ec.SECP256R1()
-        self.curve_name = "nistp256"
+        self.curve_name = curve_name
+        self.curve: ec.EllipticCurve
+        if curve_name == "nistp256":
+            self.curve = ec.SECP256R1()
+        elif curve_name == "nistp384":
+            self.curve = ec.SECP384R1()
+        elif curve_name == "nistp521":
+            self.curve = ec.SECP521R1()
+        else:
+            raise CryptoException(f"Unsupported ECDSA curve: {curve_name}")
 
     @property
     def algorithm_name(self) -> str:
         """Get SSH algorithm name."""
-        return "ecdsa-sha2-nistp256"
+        return f"ecdsa-sha2-{self.curve_name}"
+
+    def _get_hash_algo(self) -> Any:
+        """Get appropriate hash algorithm for the curve."""
+        if self.curve_name == "nistp256":
+            return hashes.SHA256()
+        elif self.curve_name == "nistp384":
+            return hashes.SHA384()
+        elif self.curve_name == "nistp521":
+            return hashes.SHA512()
+        return hashes.SHA256()
 
     def load_private_key(
         self, key_data: bytes, password: Optional[bytes] = None
@@ -553,9 +575,20 @@ class ECDSAKey(PKey):
             if not isinstance(self._key, ec.EllipticCurvePrivateKey):
                 raise CryptoException("Key is not ECDSA private key")
 
-            # Verify curve type
-            if not isinstance(self._key.curve, ec.SECP256R1):
-                raise CryptoException("Key is not P-256 ECDSA key")
+            # Update curve based on loaded key
+            if isinstance(self._key.curve, ec.SECP256R1):
+                self.curve_name = "nistp256"
+                self.curve = self._key.curve
+            elif isinstance(self._key.curve, ec.SECP384R1):
+                self.curve_name = "nistp384"
+                self.curve = self._key.curve
+            elif isinstance(self._key.curve, ec.SECP521R1):
+                self.curve_name = "nistp521"
+                self.curve = self._key.curve
+            else:
+                raise CryptoException(
+                    f"Unsupported ECDSA curve: {type(self._key.curve)}"
+                )
         except Exception as e:
             raise CryptoException(f"Failed to load ECDSA private key: {e}") from e
 
@@ -579,8 +612,8 @@ class ECDSAKey(PKey):
             algorithm = key_data[offset : offset + algo_len].decode()
             offset += algo_len
 
-            if algorithm not in ["ecdsa-sha2-nistp256", "ecdsa"]:
-                raise CryptoException(f"Expected ecdsa-sha2-nistp256, got {algorithm}")
+            if not algorithm.startswith("ecdsa-sha2-") and algorithm != "ecdsa":
+                raise CryptoException(f"Expected ECDSA algorithm, got {algorithm}")
 
             # Read curve name
             curve_len = struct.unpack(">I", key_data[offset : offset + 4])[0]
@@ -588,8 +621,16 @@ class ECDSAKey(PKey):
             curve_name = key_data[offset : offset + curve_len].decode()
             offset += curve_len
 
-            if curve_name != "nistp256":
-                raise CryptoException(f"Expected nistp256 curve, got {curve_name}")
+            if curve_name not in ["nistp256", "nistp384", "nistp521"]:
+                raise CryptoException(f"Unsupported curve, got {curve_name}")
+
+            self.curve_name = curve_name
+            if curve_name == "nistp256":
+                self.curve = ec.SECP256R1()
+            elif curve_name == "nistp384":
+                self.curve = ec.SECP384R1()
+            elif curve_name == "nistp521":
+                self.curve = ec.SECP521R1()
 
             # Read public key point
             point_len = struct.unpack(">I", key_data[offset : offset + 4])[0]
@@ -630,8 +671,8 @@ class ECDSAKey(PKey):
             )
 
             # Format as SSH wire format
-            algorithm = b"ecdsa-sha2-nistp256"
-            curve_name = b"nistp256"
+            algorithm = self.algorithm_name.encode()
+            curve_name = self.curve_name.encode()
 
             result = struct.pack(">I", len(algorithm)) + algorithm
             result += struct.pack(">I", len(curve_name)) + curve_name
@@ -657,8 +698,9 @@ class ECDSAKey(PKey):
             if not isinstance(self._key, ec.EllipticCurvePrivateKey):
                 raise CryptoException("No ECDSA private key loaded")
 
-            # Sign data with SHA-256
-            signature = self._key.sign(data, ec.ECDSA(hashes.SHA256()))
+            # Sign data with appropriate hash
+            hash_algo = self._get_hash_algo()
+            signature = self._key.sign(data, ec.ECDSA(hash_algo))
 
             # Convert DER signature to SSH format (r, s values)
             r, s = decode_dss_signature(signature)
@@ -667,7 +709,7 @@ class ECDSAKey(PKey):
             sig_blob = write_mpint(r) + write_mpint(s)
 
             # Format as SSH signature
-            algorithm = b"ecdsa-sha2-nistp256"
+            algorithm = self.algorithm_name.encode()
             result = struct.pack(">I", len(algorithm)) + algorithm
             result += struct.pack(">I", len(sig_blob)) + sig_blob
             return result
@@ -678,8 +720,14 @@ class ECDSAKey(PKey):
     def generate(
         cls, key_type: str = "ecdsa", bits: int = 256, *args: Any, **kwargs: Any
     ) -> "ECDSAKey":
-        """Generate a new ECDSA key pair (P-256)."""
-        key = cls()
+        """Generate a new ECDSA key pair (default P-256)."""
+        curve_name = "nistp256"
+        if bits == 384:
+            curve_name = "nistp384"
+        elif bits == 521:
+            curve_name = "nistp521"
+
+        key = cls(curve_name=curve_name)
         key._key = ec.generate_private_key(key.curve, backend=default_backend())
         return key
 
@@ -734,7 +782,7 @@ class ECDSAKey(PKey):
             algorithm = signature[offset : offset + algo_len].decode()
             offset += algo_len
 
-            if algorithm != "ecdsa-sha2-nistp256":
+            if algorithm != self.algorithm_name:
                 return False
 
             sig_len = struct.unpack(">I", signature[offset : offset + 4])[0]
@@ -758,7 +806,8 @@ class ECDSAKey(PKey):
             der_signature = encode_dss_signature(r, s)
 
             # Verify signature
-            public_key.verify(der_signature, data, ec.ECDSA(hashes.SHA256()))
+            hash_algo = self._get_hash_algo()
+            public_key.verify(der_signature, data, ec.ECDSA(hash_algo))
             return True
         except Exception:
             return False
@@ -1047,7 +1096,7 @@ def load_key_from_file(filename: str, password: Optional[str] = None) -> PKey:
         # Try different key types
         for key_class in [Ed25519Key, ECDSAKey, RSAKey]:
             try:
-                key = key_class()
+                key: PKey = key_class()
                 key.load_private_key(key_data, password_bytes)
                 return key
             except Exception as e:
