@@ -142,8 +142,9 @@ reserved for emergency recovery by repository administrators.
    In the PR body, select one `Type of Change`:
 
    - `bug`: patch release after merge
-   - `feature`: minor release after merge
-   - `breaking`: major release after merge
+   - `feature`: feature or stabilization work for the current beta minor line; patch release before `1.0.0`
+   - `feature-minor`: intentional beta minor-line feature; minor release before `1.0.0`
+   - `breaking`: breaking beta change; minor release before `1.0.0`
    - `docs`: no release
    - `refactor`: no release
    - `test`: no release

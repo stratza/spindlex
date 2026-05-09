@@ -52,7 +52,19 @@ def test_feature_change_requires_test_evidence():
     assert "requires test evidence" in result.errors[0]
 
 
-def test_feature_change_maps_to_minor_release():
+def test_feature_minor_change_requires_test_evidence():
+    result = validate_pr_body.validate_body(
+        pr_body(
+            type_lines="- [x] feature-minor - Adds behavior",
+            tested="- [ ] Unit Tests: `pytest tests/test_...`",
+        )
+    )
+
+    assert not result.valid
+    assert "requires test evidence" in result.errors[0]
+
+
+def test_feature_change_maps_to_patch_release_during_beta():
     result = validate_pr_body.validate_body(
         pr_body(
             type_lines="- [x] feature - Adds behavior",
@@ -62,6 +74,34 @@ def test_feature_change_maps_to_minor_release():
 
     assert result.valid
     assert result.change_type == "feature"
+    assert result.release_needed == "true"
+    assert result.release_type == "patch"
+
+
+def test_feature_minor_change_maps_to_minor_release_during_beta():
+    result = validate_pr_body.validate_body(
+        pr_body(
+            type_lines="- [x] feature-minor - Intentional beta minor feature",
+            tested="- [x] Unit Tests: `pytest tests/unit`",
+        )
+    )
+
+    assert result.valid
+    assert result.change_type == "feature-minor"
+    assert result.release_needed == "true"
+    assert result.release_type == "minor"
+
+
+def test_breaking_change_maps_to_minor_release_during_beta():
+    result = validate_pr_body.validate_body(
+        pr_body(
+            type_lines="- [x] breaking - Breaking beta change",
+            tested="- [x] Unit Tests: `pytest tests/unit`",
+        )
+    )
+
+    assert result.valid
+    assert result.change_type == "breaking"
     assert result.release_needed == "true"
     assert result.release_type == "minor"
 

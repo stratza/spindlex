@@ -101,12 +101,18 @@ Release mapping:
 
 | PR type | Release |
 | --- | --- |
-| `breaking` | Major |
-| `feature` | Minor |
+| `breaking` | Minor before `1.0.0`; major only after stable policy is enabled |
+| `feature-minor` | Minor before `1.0.0` |
+| `feature` | Patch before `1.0.0` |
 | `bug` | Patch |
 | `docs` | No release |
 | `refactor` | No release |
 | `test` | No release |
+
+Before `1.0.0`, the beta line uses `feature` for stabilization features that
+should remain in the current beta minor line. Use `feature-minor` only when the
+PR intentionally advances the beta minor line. After `1.0.0`, the release
+mapping should be revised to strict semantic versioning.
 
 ## Version Source Of Truth
 

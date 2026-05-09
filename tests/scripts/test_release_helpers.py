@@ -49,7 +49,7 @@ def test_bump_version_by_release_type():
     assert plan_release.bump_version("1.2.3", "major") == "2.0.0"
 
 
-def test_pull_request_feature_plans_minor_release(monkeypatch, tmp_path):
+def test_pull_request_feature_plans_patch_release_during_beta(monkeypatch, tmp_path):
     monkeypatch.setenv("GITHUB_EVENT_NAME", "pull_request")
     monkeypatch.setenv("GITHUB_SHA", "abc123")
     event_path = write_event(
@@ -66,11 +66,57 @@ def test_pull_request_feature_plans_minor_release(monkeypatch, tmp_path):
     plan = plan_release.create_plan(event_path)
 
     assert plan.release_needed == "true"
-    assert plan.release_type == "minor"
+    assert plan.release_type == "patch"
     assert plan.dry_run == "true"
-    assert plan.next_version == plan_release.bump_version(plan.current_version, "minor")
+    assert plan.next_version == plan_release.bump_version(plan.current_version, "patch")
     assert plan.tag == f"v{plan.next_version}"
     assert plan.source_pr == "130"
+
+
+def test_pull_request_feature_minor_plans_minor_release_during_beta(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "pull_request")
+    monkeypatch.setenv("GITHUB_SHA", "abc123")
+    event_path = write_event(
+        tmp_path,
+        {
+            "pull_request": {
+                "number": 132,
+                "html_url": "https://github.com/stratza/spindlex/pull/132",
+                "body": pr_body("feature-minor"),
+            }
+        },
+    )
+
+    plan = plan_release.create_plan(event_path)
+
+    assert plan.release_needed == "true"
+    assert plan.release_type == "minor"
+    assert plan.change_type == "feature-minor"
+    assert plan.next_version == plan_release.bump_version(plan.current_version, "minor")
+
+
+def test_pull_request_breaking_plans_minor_release_during_beta(monkeypatch, tmp_path):
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "pull_request")
+    monkeypatch.setenv("GITHUB_SHA", "abc123")
+    event_path = write_event(
+        tmp_path,
+        {
+            "pull_request": {
+                "number": 133,
+                "html_url": "https://github.com/stratza/spindlex/pull/133",
+                "body": pr_body("breaking"),
+            }
+        },
+    )
+
+    plan = plan_release.create_plan(event_path)
+
+    assert plan.release_needed == "true"
+    assert plan.release_type == "minor"
+    assert plan.change_type == "breaking"
+    assert plan.next_version == plan_release.bump_version(plan.current_version, "minor")
 
 
 def test_pull_request_docs_plans_no_release(monkeypatch, tmp_path):
@@ -133,6 +179,62 @@ def test_push_skip_release_commit_plans_no_release(monkeypatch, tmp_path):
 
     assert plan.release_needed == "false"
     assert plan.reason == "head commit contains [skip release]"
+
+
+def test_push_falls_back_to_merge_commit_pr_number(monkeypatch, tmp_path):
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "push")
+    monkeypatch.setenv("GITHUB_SHA", "merge-sha")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "stratza/spindlex")
+    monkeypatch.setenv("GITHUB_TOKEN", "token")
+    monkeypatch.setattr(plan_release, "_last_merged_pull_request", lambda *a, **k: None)
+    monkeypatch.setattr(
+        plan_release,
+        "_pull_request_by_number",
+        lambda *a, **k: {
+            "number": 170,
+            "html_url": "https://github.com/stratza/spindlex/pull/170",
+            "merged_at": "2026-05-09T06:57:47Z",
+            "merge_commit_sha": "merge-sha",
+            "body": pr_body("feature"),
+        },
+    )
+    event_path = write_event(
+        tmp_path,
+        {"head_commit": {"message": "v0.6.10: Stabilization work (#170)"}},
+    )
+
+    plan = plan_release.create_plan(event_path)
+
+    assert plan.release_needed == "true"
+    assert plan.release_type == "patch"
+    assert plan.source_pr == "170"
+
+
+def test_push_fallback_rejects_wrong_merge_commit_sha(monkeypatch, tmp_path):
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "push")
+    monkeypatch.setenv("GITHUB_SHA", "merge-sha")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "stratza/spindlex")
+    monkeypatch.setenv("GITHUB_TOKEN", "token")
+    monkeypatch.setattr(plan_release, "_last_merged_pull_request", lambda *a, **k: None)
+    monkeypatch.setattr(
+        plan_release,
+        "_pull_request_by_number",
+        lambda *a, **k: {
+            "number": 170,
+            "merged_at": "2026-05-09T06:57:47Z",
+            "merge_commit_sha": "different-sha",
+            "body": pr_body("feature"),
+        },
+    )
+    event_path = write_event(
+        tmp_path,
+        {"head_commit": {"message": "v0.6.10: Stabilization work (#170)"}},
+    )
+
+    plan = plan_release.create_plan(event_path)
+
+    assert plan.release_needed == "false"
+    assert plan.reason == "no merged PR associated with push SHA"
 
 
 def test_render_version_file_matches_expected_shape():
