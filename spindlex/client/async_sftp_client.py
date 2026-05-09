@@ -85,21 +85,23 @@ class AsyncSFTPClient:
         # Start dispatcher task
         self._dispatch_task = asyncio.create_task(self._dispatch_loop())
 
-        # Send SFTP init message
-        init_msg = SFTPInitMessage(version=SFTP_VERSION)
-        await self._send_message(init_msg)
-
-        # Wait for version response (special case in dispatcher uses ID -2)
-        fut = asyncio.get_running_loop().create_future()
-        self._pending_requests[_SFTP_INIT_SENTINEL] = fut
-
         try:
+            # Send SFTP init message
+            init_msg = SFTPInitMessage(version=SFTP_VERSION)
+            await self._send_message(init_msg)
+
+            # Wait for version response (special case in dispatcher uses ID -2)
+            fut = asyncio.get_running_loop().create_future()
+            self._pending_requests[_SFTP_INIT_SENTINEL] = fut
+
             response = await fut
             if not isinstance(response, SFTPVersionMessage):
                 raise SFTPError("Expected SFTP version message")
             self._initialized = True
         except Exception as e:
             await self.close()
+            if isinstance(e, SFTPError):
+                raise
             raise SFTPError(f"SFTP initialization failed: {e}") from e
 
     async def _dispatch_loop(self) -> None:
