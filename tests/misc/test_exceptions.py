@@ -1,10 +1,14 @@
+from unittest.mock import MagicMock
+
 from spindlex.exceptions import (
     AuthenticationException,
     BadHostKeyException,
     CryptoException,
+    IncompatiblePeer,
     ProtocolException,
     SFTPError,
     SSHException,
+    TimeoutException,
     TransportException,
 )
 
@@ -52,3 +56,36 @@ def test_protocol_exception():
 def test_crypto_exception():
     e = CryptoException("failed", "aes")
     assert e.algorithm == "aes"
+
+
+def test_bad_host_key_with_fingerprints():
+    expected_key = MagicMock()
+    expected_key.get_fingerprint.return_value = "SHA256:abc"
+    key = MagicMock()
+    key.get_fingerprint.return_value = "SHA256:xyz"
+    e = BadHostKeyException("host.example.com", key, expected_key)
+    assert "SHA256:abc" in str(e)
+    assert "SHA256:xyz" in str(e)
+
+
+def test_bad_host_key_fingerprint_raises_fallback():
+    expected_key = MagicMock()
+    expected_key.get_fingerprint.side_effect = Exception("no fingerprint")
+    expected_key.get_name.return_value = "ssh-rsa"
+    key = MagicMock()
+    key.get_fingerprint.side_effect = Exception("no fingerprint")
+    key.get_name.return_value = "ssh-ed25519"
+    e = BadHostKeyException("host.example.com", key, expected_key)
+    assert "host.example.com" in str(e)
+
+
+def test_timeout_exception():
+    e = TimeoutException("timed out", timeout_value=30.0)
+    assert e.timeout_value == 30.0
+    assert "timed out" in str(e)
+
+
+def test_incompatible_peer():
+    e = IncompatiblePeer("incompatible peer", peer_version="SSH-1.99")
+    assert e.peer_version == "SSH-1.99"
+    assert "incompatible peer" in str(e)
