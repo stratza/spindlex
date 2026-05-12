@@ -57,7 +57,7 @@ class AsyncSSHClient:
         rekey_time_limit: int | None = None,
     ) -> None:
         """
-        Connect to SSH server asynchronously.
+        Connect to SSH server asynchronously with retry logic for transient errors.
 
         Args:
             hostname: Server hostname or IP address
@@ -88,66 +88,116 @@ class AsyncSSHClient:
         if not (0 < port <= 65535):
             raise SSHException(f"Invalid port number: {port}")
 
+        max_retries = 3
+
         try:
-            if sock is None:
-                # Create socket connection
-                sock, reader, writer = await self._create_connection(
-                    hostname, port, timeout
-                )
-            else:
-                # If sock is provided, we need to wrap it if it's a raw socket
-                # In asyncio, we usually need reader/writer.
-                # If it's a SpindleX Channel, it might need special handling.
-                if hasattr(sock, "makefile"):  # Likely a socket-like object
-                    reader, writer = await asyncio.open_connection(sock=sock)
-                else:
-                    # Assume it's already a pair or handled by transport
-                    reader, writer = None, None
+            for attempt in range(max_retries):
+                try:
+                    if sock is None:
+                        # Create socket connection
+                        current_sock, reader, writer = await self._create_connection(
+                            hostname, port, timeout
+                        )
+                    else:
+                        # If sock is provided, we need to wrap it if it's a raw socket
+                        # In asyncio, we usually need reader/writer.
+                        # If it's a SpindleX Channel, it might need special handling.
+                        current_sock = sock
+                        if hasattr(current_sock, "makefile"):  # Likely a socket-like object
+                            reader, writer = await asyncio.open_connection(
+                                sock=current_sock
+                            )
+                        else:
+                            # Assume it's already a pair or handled by transport
+                            reader, writer = None, None
 
-            # Create async transport
-            self._transport = AsyncTransport(
-                sock,
-                rekey_bytes_limit=rekey_bytes_limit,
-                rekey_time_limit=rekey_time_limit,
-            )
+                    # Create async transport
+                    self._transport = AsyncTransport(
+                        current_sock,
+                        rekey_bytes_limit=rekey_bytes_limit,
+                        rekey_time_limit=rekey_time_limit,
+                    )
 
-            # Use connect_existing helper to set reader/writer safely
-            if reader and writer:
-                await self._transport.connect_existing(reader, writer)
+                    # Use connect_existing helper to set reader/writer safely
+                    if reader and writer:
+                        await self._transport.connect_existing(reader, writer)
 
-            # Start client transport
-            await self._transport.start_client(timeout)
+                    # Start client transport
+                    await self._transport.start_client(timeout)
 
-            # Store connection info before host key verification so hostname is available
-            self._hostname = hostname
-            self._port = port
-            self._username = username
-            self._connected = True
+                    # Store connection info before host key verification so hostname is available
+                    self._hostname = hostname
+                    self._port = port
+                    self._username = username
+                    self._connected = True
 
-            # Verify host key
-            self._verify_host_key()
+                    # Verify host key
+                    self._verify_host_key()
 
-            # Perform authentication if credentials provided
-            if username:
-                await self._authenticate(
-                    username,
-                    password=password,
-                    pkey=pkey,
-                    key_filename=key_filename,
-                    key_password=key_password,
-                    gss_auth=gss_auth,
-                    gss_host=gss_host,
-                    gss_deleg_creds=gss_deleg_creds,
-                )
+                    # Perform authentication if credentials provided
+                    if username:
+                        await self._authenticate(
+                            username,
+                            password=password,
+                            pkey=pkey,
+                            key_filename=key_filename,
+                            key_password=key_password,
+                            gss_auth=gss_auth,
+                            gss_host=gss_host,
+                            gss_deleg_creds=gss_deleg_creds,
+                        )
 
+                    return  # Success
+
+                except (
+                    SSHException,
+                    ConnectionResetError,
+                    ConnectionRefusedError,
+                    OSError,
+                ) as e:
+                    # Cleanup failed attempt
+                    if self._transport:
+                        await self._transport.close()
+                        self._transport = None
+
+                    # Only retry on transient connection-level errors.
+                    # Avoid retrying on auth failure or host key mismatch.
+                    is_transient = isinstance(
+                        e, (ConnectionResetError, ConnectionRefusedError, socket.error)
+                    ) or (
+                        isinstance(e, SSHException)
+                        and any(
+                            kw in str(e)
+                            for kw in (
+                                "Connection reset",
+                                "Connection failed",
+                                "Client start failed",
+                                "Connection closed",
+                            )
+                        )
+                    )
+
+                    if not is_transient or attempt == max_retries - 1:
+                        if isinstance(
+                            e, (SSHException, AuthenticationException, BadHostKeyException)
+                        ):
+                            raise
+                        raise SSHException(f"Connection failed: {e}") from e
+
+                    # Exponential backoff with jitter: 0.2s, 0.4s, 0.8s...
+                    import random
+
+                    wait = (0.2 * (2**attempt)) + (random.random() * 0.1)  # noqa: S311 # nosec
+                    self._logger.debug(
+                        f"Connection attempt {attempt + 1} failed: {e}. Retrying in {wait:.2f}s..."
+                    )
+                    await asyncio.sleep(wait)
         except Exception as e:
             if self._transport:
                 await self._transport.close()
                 self._transport = None
 
-            if isinstance(
-                e, (SSHException, AuthenticationException, BadHostKeyException)
-            ):
+            if isinstance(e, (SSHException, AuthenticationException, BadHostKeyException)):
                 raise
             raise SSHException(f"Connection failed: {e}") from e
 

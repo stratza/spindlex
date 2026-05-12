@@ -11,8 +11,9 @@ import threading
 import time
 from typing import TYPE_CHECKING, Any, Union
 
+from .channel import Channel
+
 if TYPE_CHECKING:
-    from .channel import Channel
     from .transport import Transport
 
 from ..exceptions import SSHException

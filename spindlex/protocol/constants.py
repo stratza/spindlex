@@ -148,7 +148,7 @@ SUPPORTED_PROTOCOL_VERSIONS = [SSH_PROTOCOL_VERSION_2]
 
 # Maximum message and packet sizes
 MAX_PACKET_SIZE = 35000  # RFC 4253 section 6.1
-MAX_MESSAGE_SIZE = 262144  # 256KB
+MAX_MESSAGE_SIZE = 1048576  # 1MB
 
 # Timeout values (in seconds)
 DEFAULT_CONNECT_TIMEOUT = 30
@@ -190,7 +190,7 @@ MAX_QUEUE_SIZE = 1000
 
 # SFTP constants (will be used in later tasks)
 SFTP_VERSION = 3
-SFTP_MAX_PACKET_SIZE = 32768
+SFTP_MAX_PACKET_SIZE = 65536
 
 # Error message templates
 ERROR_PROTOCOL_MISMATCH = "Protocol version mismatch"

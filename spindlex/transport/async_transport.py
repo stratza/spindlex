@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any, Optional
 if TYPE_CHECKING:
     from .async_forwarding import AsyncPortForwardingManager
 
-from ..exceptions import ProtocolException, TransportException
+from ..exceptions import ProtocolException, SSHException, TransportException
 from ..protocol.constants import (
     AUTH_KEYBOARD_INTERACTIVE,
     DEFAULT_MAX_PACKET_SIZE,
@@ -124,7 +124,7 @@ class AsyncTransport(Transport):
 
         except Exception as e:
             await self.close()
-            if isinstance(e, (TransportException, ProtocolException)):
+            if isinstance(e, SSHException):
                 raise
             raise TransportException(f"Client start failed: {e}") from e
 

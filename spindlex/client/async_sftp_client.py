@@ -1037,35 +1037,46 @@ class AsyncSFTPFile:
             raise SFTPError("File is closed")
 
         try:
-            request_id = self._client._get_next_request_id()
-            # Calculate offset considering pipelined writes
-            send_offset = self._offset + sum(n for _, n in self._write_queue)
+            from ..protocol.sftp_constants import SFTP_MAX_PACKET_SIZE
 
-            # Send write request
-            write_msg = SFTPWriteMessage(
-                request_id=request_id,
-                handle=self._handle,
-                offset=send_offset,
-                data=data,
-            )
-            await self._client._send_message(write_msg)
+            # Chunk large writes to fit within server limits.
+            # 64 KB is generally safe for most servers.
+            _MAX_CHUNK = SFTP_MAX_PACKET_SIZE - 1024
+            offset = 0
+            while offset < len(data):
+                chunk = data[offset : offset + _MAX_CHUNK]
+                request_id = self._client._get_next_request_id()
+                # Calculate offset considering pipelined writes
+                send_offset = self._offset + sum(n for _, n in self._write_queue)
 
-            # Add to pipeline
-            self._write_queue.append((request_id, len(data)))
+                # Send write request
+                write_msg = SFTPWriteMessage(
+                    request_id=request_id,
+                    handle=self._handle,
+                    offset=send_offset,
+                    data=chunk,
+                )
+                await self._client._send_message(write_msg)
 
-            # Drain oldest if pipeline is full
-            if len(self._write_queue) >= self._PIPELINE_DEPTH:
-                rid, nbytes = self._write_queue.pop(0)
-                response = await self._client._wait_for_response(rid)
-                if isinstance(response, SFTPStatusMessage):
-                    if response.status_code == SSH_FX_OK:
-                        self._offset += nbytes
+                # Add to pipeline
+                self._write_queue.append((request_id, len(chunk)))
+
+                # Drain oldest if pipeline is full
+                if len(self._write_queue) >= self._PIPELINE_DEPTH:
+                    rid, nbytes = self._write_queue.pop(0)
+                    response = await self._client._wait_for_response(rid)
+                    if isinstance(response, SFTPStatusMessage):
+                        if response.status_code == SSH_FX_OK:
+                            self._offset += nbytes
+                        else:
+                            raise SFTPError(
+                                f"Write failed: {response.message}",
+                                response.status_code,
+                            )
                     else:
-                        raise SFTPError(
-                            f"Write failed: {response.message}", response.status_code
-                        )
-                else:
-                    raise SFTPError("Unexpected response to write request")
+                        raise SFTPError("Unexpected response to write request")
+
+                offset += len(chunk)
 
         except Exception as e:
             if isinstance(e, SFTPError):
