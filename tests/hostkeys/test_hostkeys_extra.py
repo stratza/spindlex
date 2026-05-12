@@ -53,12 +53,13 @@ def test_reject_policy():
 
 
 def test_warning_policy(temp_hosts):
+    """WarningPolicy logs a warning AND stores the key on first use (TOFU)."""
     policy = WarningPolicy()
     client = MagicMock()
     key = RSAKey.generate(1024)
     client._host_key_storage = HostKeyStorage(temp_hosts)
     policy.missing_host_key(client, "localhost", key)
-    assert client._host_key_storage.get("localhost") is None
+    assert client._host_key_storage.get("localhost") is not None
 
 
 def test_auto_add_policy_storage_failure():

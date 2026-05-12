@@ -9,10 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import socket
-from typing import TYPE_CHECKING, Any, Callable
-
-if TYPE_CHECKING:
-    pass
+from typing import Any, Callable
 
 from ..exceptions import AuthenticationException, BadHostKeyException, SSHException
 from ..hostkeys.policy import MissingHostKeyPolicy, RejectPolicy
@@ -48,6 +45,7 @@ class AsyncSSHClient:
         password: str | None = None,
         pkey: Any | None = None,
         key_filename: str | list[str] | None = None,
+        key_password: str | None = None,
         timeout: float | None = None,
         compress: bool = False,
         sock: Any | None = None,
@@ -68,6 +66,7 @@ class AsyncSSHClient:
             password: Password for authentication
             pkey: Private key for authentication
             key_filename: Path to private key file(s)
+            key_password: Password for encrypted private key file(s)
             timeout: Connection timeout in seconds
             compress: Enable compression
             sock: Optional existing socket or channel to use
@@ -135,6 +134,7 @@ class AsyncSSHClient:
                     password=password,
                     pkey=pkey,
                     key_filename=key_filename,
+                    key_password=key_password,
                     gss_auth=gss_auth,
                     gss_host=gss_host,
                     gss_deleg_creds=gss_deleg_creds,
@@ -461,6 +461,7 @@ class AsyncSSHClient:
         password: str | None = None,
         pkey: Any | None = None,
         key_filename: str | list[str] | None = None,
+        key_password: str | None = None,
         gss_auth: bool = False,
         gss_host: str | None = None,
         gss_deleg_creds: bool = False,
@@ -483,7 +484,10 @@ class AsyncSSHClient:
         if (pkey or key_filename) and not authenticated:
             try:
                 await self.auth_publickey(
-                    username, pkey=pkey, key_filename=key_filename, password=password
+                    username,
+                    pkey=pkey,
+                    key_filename=key_filename,
+                    password=key_password if key_password is not None else password,
                 )
                 authenticated = True
             except Exception as e:
@@ -496,14 +500,6 @@ class AsyncSSHClient:
                 authenticated = True
             except Exception as e:
                 self._logger.debug(f"Password authentication failed: {e}")
-
-        # Try Keyboard-Interactive if nothing else worked
-        if not authenticated:
-            try:
-                await self.auth_keyboard_interactive(username)
-                authenticated = True
-            except Exception as e:
-                self._logger.debug(f"Keyboard-interactive authentication failed: {e}")
 
         if not authenticated:
             raise AuthenticationException(f"Authentication failed for user {username}")

@@ -112,7 +112,6 @@ from ..protocol.utils import (
 from .channel import Channel
 from .kex import KeyExchange
 
-# Bug #9 Fixed: Move dictionary to module-level constant to avoid recreating it on every call.
 _CIPHER_BLOCK_SIZES = {
     "aes128-ctr": 16,
     "aes192-ctr": 16,
@@ -228,7 +227,6 @@ class Transport:
         self._strict_kex = False
         self._stop_event = threading.Event()
 
-        # Bug #24 Fix: Support SPINDLEX_BUFFER_SIZE for high-latency connections
         import os
 
         self._buffer_size = 32768
@@ -899,7 +897,6 @@ class Transport:
 
         # 2. Create channel
         with self._lock:
-            # Bug #2 Fixed: Enforce MAX_CHANNELS limit on server-side opens
             if len(self._channels) >= MAX_CHANNELS:
                 failure_msg = ChannelOpenFailureMessage(
                     sender_channel,
@@ -963,7 +960,6 @@ class Transport:
 
             # Create local channel
             with self._lock:
-                # Bug #2 Fixed: Enforce MAX_CHANNELS limit on server-side opens
                 if len(self._channels) >= MAX_CHANNELS:
                     failure_msg = ChannelOpenFailureMessage(
                         sender_channel,
@@ -1527,17 +1523,10 @@ class Transport:
                 )
             banner_lines += 1
 
-            # Bug #13 Fixed: Optimized reading of version/banner lines to avoid byte-by-byte recv() calls
-            # We read up to MAX_VERSION_LINE_LENGTH + a bit more, then split by lines.
-            # This is safe because _recv_bytes already uses a 32KB internal buffer.
-            # The byte-by-byte loop here was redundant and slow.
-
+            # _recv_bytes is internally buffered (32 KB reads), so this per-byte
+            # loop reads from memory on all but the first iteration.
             current_line = b""
             while True:
-                # Still read one byte at a time conceptually via _recv_bytes,
-                # but _recv_bytes is now buffered, so it's much faster.
-                # However, to be even more efficient, we could peek at the buffer.
-                # For now, just ensuring _recv_bytes buffering is leveraged.
                 char = self._recv_bytes(1)
                 if not char:
                     raise TransportException("Connection closed during banner read")
@@ -1733,8 +1722,6 @@ class Transport:
                     target=self._start_kex, name="RekeyingThread", daemon=True
                 )
                 kex_thread.start()
-                self._bytes_since_rekey = 0
-                self._last_rekey_time = time.time()
 
     def _send_message(self, message: Message) -> None:
         """
@@ -2002,7 +1989,7 @@ class Transport:
                 read_msg = self._read_message()
             except TransportException:
                 if not self._active:
-                    return None  # type: ignore[return-value]
+                    raise TransportException("Transport closed")
                 raise
 
             if read_msg is None:
@@ -2410,7 +2397,6 @@ class Transport:
     def _handle_userauth_request(self, msg: Message) -> None:
         """Handle user authentication request message (server mode)."""
         if not self._server_interface:
-            # Bug #5 Fixed: Send failure instead of silently dropping
             self._send_message(UserAuthFailureMessage(["password", "publickey"], False))
             return
 
@@ -2430,7 +2416,6 @@ class Transport:
                 password = password_bytes.decode(SSH_STRING_ENCODING)
                 result = self._server_interface.check_auth_password(username, password)
             elif method == AUTH_PUBLICKEY:
-                # Bug #1 Fixed: Verify signature for publickey auth
                 offset = 0
                 has_signature, offset = read_boolean(auth_req.method_data, offset)
                 algo_name_bytes, offset = read_string(auth_req.method_data, offset)

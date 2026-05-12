@@ -72,6 +72,7 @@ class AsyncSFTPClient:
         self._channel = channel
         self._request_id = 0
         self._pending_requests: dict[int, asyncio.Future] = {}
+        self._buffered_responses: dict[int, Any] = {}
         self._initialized = False
         self._dispatch_task: Optional[asyncio.Task] = None
         self._lock = asyncio.Lock()
@@ -119,10 +120,16 @@ class AsyncSFTPClient:
                     else:
                         request_id = getattr(response, "request_id", None)
 
-                    if request_id is not None and request_id in self._pending_requests:
-                        fut = self._pending_requests.pop(request_id)
-                        if not fut.done():
-                            fut.set_result(response)
+                    if request_id is not None:
+                        if request_id in self._pending_requests:
+                            fut = self._pending_requests.pop(request_id)
+                            if not fut.done():
+                                fut.set_result(response)
+                        else:
+                            # Response arrived before _wait_for_response registered a
+                            # future (race between send and future registration).
+                            # Buffer it so _wait_for_response can collect it synchronously.
+                            self._buffered_responses[request_id] = response
                 except asyncio.CancelledError:
                     break
                 except Exception as e:
@@ -346,8 +353,9 @@ class AsyncSFTPClient:
 
         try:
             await self.mkdir(remotepath)
-        except SFTPError:
-            pass  # Directory might already exist
+        except SFTPError as e:
+            if e.sftp_code != SFTPError.SSH_FX_FAILURE:
+                raise
 
         items = os.listdir(localpath)
         tasks = []
@@ -382,25 +390,25 @@ class AsyncSFTPClient:
 
             filenames = []
 
-            # Read directory entries
-            while True:
-                try:
-                    entries = await self._readdir(handle)
-                    if not entries:
-                        break
+            try:
+                # Read directory entries
+                while True:
+                    try:
+                        entries = await self._readdir(handle)
+                        if not entries:
+                            break
 
-                    for entry in entries:
-                        filename = entry[0]
-                        if filename not in (".", ".."):
-                            filenames.append(filename)
+                        for entry in entries:
+                            filename = entry[0]
+                            if filename not in (".", ".."):
+                                filenames.append(filename)
 
-                except SFTPError as e:
-                    if e.status_code == SSH_FX_EOF:
-                        break
-                    raise
-
-            # Close directory handle
-            await self._close(handle)
+                    except SFTPError as e:
+                        if e.status_code == SSH_FX_EOF:
+                            break
+                        raise
+            finally:
+                await self._close(handle)
 
             return filenames
 
@@ -746,6 +754,7 @@ class AsyncSFTPClient:
 
         self._initialized = False
         self._pending_requests.clear()
+        self._buffered_responses.clear()
 
     async def __aenter__(self) -> "AsyncSFTPClient":
         """Async context manager entry."""
@@ -795,12 +804,20 @@ class AsyncSFTPClient:
 
     async def _wait_for_response(self, request_id: int, timeout: float = 60.0) -> Any:
         """Wait for response to specific request using dispatcher."""
+        # Check if the response already arrived before this future was registered.
+        # No yield point between the check and future registration, so this is race-free
+        # in asyncio's single-threaded cooperative model.
+        if request_id in self._buffered_responses:
+            return self._buffered_responses.pop(request_id)
+
         fut = asyncio.get_running_loop().create_future()
         self._pending_requests[request_id] = fut
         try:
-            return await asyncio.wait_for(asyncio.shield(fut), timeout=timeout)
+            return await asyncio.wait_for(fut, timeout=timeout)
         except asyncio.TimeoutError:
             self._pending_requests.pop(request_id, None)
+            if not fut.done():
+                fut.cancel()
             raise SFTPError(f"Timeout waiting for response to request {request_id}")
 
     async def _opendir(self, path: str) -> bytes:

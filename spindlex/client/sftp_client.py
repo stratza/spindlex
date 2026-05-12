@@ -20,6 +20,7 @@ from ..protocol.sftp_constants import (
     SSH_FILEXFER_ATTR_SIZE,
     SSH_FX_EOF,
     SSH_FX_OK,
+    SSH_FXF_APPEND,
     SSH_FXF_CREAT,
     SSH_FXF_READ,
     SSH_FXF_TRUNC,
@@ -361,7 +362,8 @@ class SFTPClient:
             SFTPError: If request fails or response indicates error
         """
         self._send_message(request)
-        assert request.request_id is not None
+        if request.request_id is None:
+            raise SFTPError("Request has no ID assigned")
         return self._receive_message_for_id(request.request_id)
 
     def get(self, remotepath: str, localpath: str) -> None:
@@ -569,8 +571,9 @@ class SFTPClient:
 
         try:
             self.mkdir(remotepath)
-        except SFTPError:
-            pass  # Directory might already exist
+        except SFTPError as e:
+            if e.sftp_code != SFTPError.SSH_FX_FAILURE:
+                raise
 
         for item in os.listdir(localpath):
             local_item = os.path.join(localpath, item)
@@ -1090,7 +1093,7 @@ class SFTPClient:
         if "w" in mode:
             flags |= SSH_FXF_WRITE | SSH_FXF_CREAT | SSH_FXF_TRUNC
         if "a" in mode:
-            flags |= SSH_FXF_WRITE | SSH_FXF_CREAT
+            flags |= SSH_FXF_WRITE | SSH_FXF_CREAT | SSH_FXF_APPEND
         return flags
 
     def close(self) -> None:

@@ -133,7 +133,6 @@ class LocalPortForwarder:
 
             server_socket: Union[socket.socket, None] = None
             try:
-                # Bug #2.3 Fixed: Use getaddrinfo to support IPv6 and dual-stack
                 addr_info = socket.getaddrinfo(
                     local_host,
                     local_port,
@@ -546,7 +545,6 @@ class RemotePortForwarder:
 
         local_socket = None
         try:
-            # Bug #2.3 Fixed: Use getaddrinfo for local destination to support IPv6
             local_host, local_port = tunnel.local_addr
             addr_info = socket.getaddrinfo(
                 local_host, local_port, socket.AF_UNSPEC, socket.SOCK_STREAM

@@ -148,3 +148,22 @@ class SanitizingFilter(logging.Filter):
                     for a in record.args
                 )
         return True
+
+
+def configure_sanitizing_logging(logger_name: str = "") -> None:
+    """
+    Install SanitizingFilter on a logger so that all records it handles
+    (including those propagated from the ``spindlex`` logger) are sanitized.
+
+    Call once at application startup, typically with no arguments to install
+    the filter on the root logger:
+
+        import spindlex
+        spindlex.configure_sanitizing_logging()
+
+    Args:
+        logger_name: Logger to protect (default ``""`` = root logger).
+    """
+    target = logging.getLogger(logger_name)
+    if not any(isinstance(f, SanitizingFilter) for f in target.filters):
+        target.addFilter(SanitizingFilter())

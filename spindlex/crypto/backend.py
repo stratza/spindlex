@@ -355,23 +355,16 @@ class CryptographyBackend:
         """
         Decrypt only the length field for ciphers that encrypt it.
 
-        Args:
-            algorithm: Cipher algorithm name
-            key: Decryption key
-            iv: Initialization vector or nonce
-            data: Encrypted length field (4 bytes)
+        For AES-CTR (the only cipher currently supported), the full packet
+        including the length field is decrypted together, so this method is
+        not used. It is retained as a hook for future CBC-mode support where
+        the 4-byte length must be decrypted before knowing how much payload
+        to read from the socket.
 
         Returns:
-            Decrypted length field
-
-        Raises:
-            CryptoException: If decryption fails
+            ``data`` unchanged (passthrough for CTR-mode callers).
         """
-        try:
-            # Ciphers that don't encrypt the length just return it as is
-            return bytes(data)
-        except Exception as e:
-            raise CryptoException(f"Length decryption failed: {e}") from e
+        return bytes(data)
 
 
 # Default backend instance

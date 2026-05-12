@@ -485,10 +485,12 @@ class TestSFTPClientRecursive:
 
         client.mkdir.assert_called()
 
-    def test_put_recursive_mkdir_error_ignored(self):
-        """put_recursive ignores SFTPError from mkdir."""
+    def test_put_recursive_mkdir_failure_ignored(self):
+        """put_recursive ignores SSH_FX_FAILURE from mkdir (directory already exists)."""
         client, _ = _make_sftp_client()
-        client.mkdir = MagicMock(side_effect=SFTPError("exists"))
+        client.mkdir = MagicMock(
+            side_effect=SFTPError.from_status(SFTPError.SSH_FX_FAILURE, "exists")
+        )
         client.put = MagicMock()
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -497,6 +499,20 @@ class TestSFTPClientRecursive:
             client.put_recursive(tmp, "/remote/existing")
 
         client.put.assert_called()
+
+    def test_put_recursive_mkdir_permission_denied_raises(self):
+        """put_recursive re-raises non-FAILURE SFTPErrors like permission denied."""
+        client, _ = _make_sftp_client()
+        client.mkdir = MagicMock(
+            side_effect=SFTPError.from_status(SFTPError.SSH_FX_PERMISSION_DENIED)
+        )
+        client.put = MagicMock()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with open(os.path.join(tmp, "f.txt"), "w") as f:
+                f.write("x")
+            with pytest.raises(SFTPError):
+                client.put_recursive(tmp, "/remote/existing")
 
 
 # ---------------------------------------------------------------------------
