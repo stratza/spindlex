@@ -86,6 +86,7 @@ SFTP_CHUNK = 16 * 1024  # 16 KiB — stays under server packet limits
 
 # ── Run config ─────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class RunConfig:
     sequential_sessions: int = 50
@@ -106,6 +107,7 @@ def quick_config() -> RunConfig:
 
 
 # ── Result tracking ────────────────────────────────────────────────────────────
+
 
 @dataclass
 class Result:
@@ -143,6 +145,7 @@ def warned(label: str, detail: str = "") -> Result:
 
 # ── .env loader ────────────────────────────────────────────────────────────────
 
+
 def load_env() -> dict[str, Any]:
     env: dict[str, str] = {}
     env_path = REPO_ROOT / ".env"
@@ -162,6 +165,7 @@ def load_env() -> dict[str, Any]:
 
 
 # ── Connection helpers ─────────────────────────────────────────────────────────
+
 
 def spx_open(cfg: dict[str, Any]) -> SSHClient:
     c = SSHClient()
@@ -224,6 +228,7 @@ def section(n: int, title: str) -> None:
 # 1. SSH Protocol Correctness
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 def check_protocol_correctness(cfg: dict[str, Any]) -> None:
     section(1, "SSH Protocol Correctness")
 
@@ -246,7 +251,10 @@ def check_protocol_correctness(cfg: dict[str, Any]) -> None:
                 spx_open(cfg).close()
             passed(f"    hostkey  {hk}")
         except SSHException as e:
-            skipped(f"    hostkey  {hk}", f"{type(e).__name__}: server may not have this key type")
+            skipped(
+                f"    hostkey  {hk}",
+                f"{type(e).__name__}: server may not have this key type",
+            )
         except Exception as e:
             failed(f"    hostkey  {hk}", f"non-SSH exception: {type(e).__name__}: {e}")
 
@@ -268,21 +276,32 @@ def check_protocol_correctness(cfg: dict[str, Any]) -> None:
             failed(f"    cipher  {ciph}", f"non-SSH exception: {type(e).__name__}: {e}")
 
     print("  Silent-fallback detection (fake algorithms must be rejected):")
-    for kind, fake in [("kex", "nonexistent-kex-00"), ("hostkey", "nonexistent-hk-00"), ("cipher", "nonexistent-ciph-00")]:
+    for kind, fake in [
+        ("kex", "nonexistent-kex-00"),
+        ("hostkey", "nonexistent-hk-00"),
+        ("cipher", "nonexistent-ciph-00"),
+    ]:
         kwargs: dict[str, str] = {kind: fake}
         try:
             with _force_algos(**kwargs):
                 spx_open(cfg).close()
-            failed(f"    no-fallback  {kind}", "connection succeeded — silent fallback occurred")
+            failed(
+                f"    no-fallback  {kind}",
+                "connection succeeded — silent fallback occurred",
+            )
         except SSHException:
             passed(f"    no-fallback  {kind}", "correctly rejected with SSHException")
         except Exception as e:
-            warned(f"    no-fallback  {kind}", f"rejected but with non-SSH exception: {type(e).__name__}")
+            warned(
+                f"    no-fallback  {kind}",
+                f"rejected but with non-SSH exception: {type(e).__name__}",
+            )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 2. Session Lifecycle
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 def check_session_lifecycle(cfg: dict[str, Any], run_cfg: RunConfig) -> None:
     section(2, f"Session Lifecycle  ({run_cfg.sequential_sessions} sequential cycles)")
@@ -305,7 +324,10 @@ def check_session_lifecycle(cfg: dict[str, Any], run_cfg: RunConfig) -> None:
     if ok == n:
         passed("Sequential stability", f"{ok}/{n} sessions succeeded")
     else:
-        failed("Sequential stability", f"{ok}/{n} succeeded; first failure at iteration {first_fail}")
+        failed(
+            "Sequential stability",
+            f"{ok}/{n} succeeded; first failure at iteration {first_fail}",
+        )
 
     # Reconnect consistency: compare success rate in first half vs second half
     half = max(5, run_cfg.sequential_sessions // 2)
@@ -321,11 +343,20 @@ def check_session_lifecycle(cfg: dict[str, Any], run_cfg: RunConfig) -> None:
     rate1 = counts[1] / half
     drift = abs(rate1 - rate0)
     if drift < 0.05:
-        passed("Reconnect consistency (no drift)", f"batch1={rate0:.0%}  batch2={rate1:.0%}")
+        passed(
+            "Reconnect consistency (no drift)",
+            f"batch1={rate0:.0%}  batch2={rate1:.0%}",
+        )
     elif drift < 0.15:
-        warned("Reconnect consistency", f"rate drifted {drift:.0%}: batch1={rate0:.0%} batch2={rate1:.0%}")
+        warned(
+            "Reconnect consistency",
+            f"rate drifted {drift:.0%}: batch1={rate0:.0%} batch2={rate1:.0%}",
+        )
     else:
-        failed("Reconnect consistency", f"rate drifted {drift:.0%}: batch1={rate0:.0%} batch2={rate1:.0%}")
+        failed(
+            "Reconnect consistency",
+            f"rate drifted {drift:.0%}: batch1={rate0:.0%} batch2={rate1:.0%}",
+        )
 
     # Async task leak check
     async def _async_leak_check() -> int:
@@ -352,6 +383,7 @@ def check_session_lifecycle(cfg: dict[str, Any], run_cfg: RunConfig) -> None:
 # 3. Exec Reliability
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 def check_exec_reliability(cfg: dict[str, Any], run_cfg: RunConfig) -> None:
     section(3, "Exec Reliability")
 
@@ -371,10 +403,15 @@ def check_exec_reliability(cfg: dict[str, Any], run_cfg: RunConfig) -> None:
         med_data = stdout.read()
         expected_min = 130_000  # base64 of 100 KiB ~= 136 KB
         if len(med_data) >= expected_min:
-            passed("Medium exec (~100 KB output) — no truncation", f"{len(med_data):,} bytes")
+            passed(
+                "Medium exec (~100 KB output) — no truncation",
+                f"{len(med_data):,} bytes",
+            )
         else:
-            failed("Medium exec (~100 KB output) — no truncation",
-                   f"only {len(med_data):,} bytes (expected >= {expected_min:,})")
+            failed(
+                "Medium exec (~100 KB output) — no truncation",
+                f"only {len(med_data):,} bytes (expected >= {expected_min:,})",
+            )
 
         # Large output
         large_cmd = f"dd if=/dev/zero bs=1024 count={run_cfg.large_output_kb} 2>/dev/null | base64"
@@ -382,11 +419,15 @@ def check_exec_reliability(cfg: dict[str, Any], run_cfg: RunConfig) -> None:
         large_data = stdout.read()
         expected_large = int(run_cfg.large_output_kb * 1024 * 1.33)
         if len(large_data) >= expected_large:
-            passed(f"Large exec (~{run_cfg.large_output_kb} KB output) — no truncation",
-                   f"{len(large_data):,} bytes")
+            passed(
+                f"Large exec (~{run_cfg.large_output_kb} KB output) — no truncation",
+                f"{len(large_data):,} bytes",
+            )
         else:
-            failed(f"Large exec (~{run_cfg.large_output_kb} KB output) — no truncation",
-                   f"only {len(large_data):,} bytes (expected >= {expected_large:,})")
+            failed(
+                f"Large exec (~{run_cfg.large_output_kb} KB output) — no truncation",
+                f"only {len(large_data):,} bytes (expected >= {expected_large:,})",
+            )
 
         # Stdout/stderr separation — no deadlock
         _, stdout, stderr = c.exec_command(
@@ -425,8 +466,10 @@ def check_exec_reliability(cfg: dict[str, Any], run_cfg: RunConfig) -> None:
         if sync_out == async_out:
             passed("Sync vs async output consistency", repr(sync_out.decode()))
         else:
-            failed("Sync vs async output consistency",
-                   f"sync={sync_out!r} async={async_out!r}")
+            failed(
+                "Sync vs async output consistency",
+                f"sync={sync_out!r} async={async_out!r}",
+            )
     except Exception as e:
         failed("Sync vs async output consistency", f"{type(e).__name__}: {e}")
 
@@ -434,6 +477,7 @@ def check_exec_reliability(cfg: dict[str, Any], run_cfg: RunConfig) -> None:
 # ═══════════════════════════════════════════════════════════════════════════════
 # 4. SFTP Integrity
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 def check_sftp_integrity(cfg: dict[str, Any]) -> None:
     section(4, "SFTP Integrity")
@@ -462,10 +506,15 @@ def check_sftp_integrity(cfg: dict[str, Any]) -> None:
                 if ok:
                     passed(f"SFTP chunk={chunk_kb}KB SHA-256 round-trip")
                 else:
-                    failed(f"SFTP chunk={chunk_kb}KB SHA-256 round-trip",
-                           f"size {len(dl)} vs {len(payload)}, hash_match={_sha256(dl) == payload_hash}")
+                    failed(
+                        f"SFTP chunk={chunk_kb}KB SHA-256 round-trip",
+                        f"size {len(dl)} vs {len(payload)}, hash_match={_sha256(dl) == payload_hash}",
+                    )
             except Exception as e:
-                failed(f"SFTP chunk={chunk_kb}KB SHA-256 round-trip", f"{type(e).__name__}: {e}")
+                failed(
+                    f"SFTP chunk={chunk_kb}KB SHA-256 round-trip",
+                    f"{type(e).__name__}: {e}",
+                )
 
         # Large file (10 MB)
         large_payload = os.urandom(10 * 1024 * 1024)
@@ -481,7 +530,10 @@ def check_sftp_integrity(cfg: dict[str, Any]) -> None:
             if _sha256(dl) == large_hash:
                 passed("SFTP large file (10 MB) — integrity")
             else:
-                failed("SFTP large file (10 MB) — integrity", "hash mismatch after download")
+                failed(
+                    "SFTP large file (10 MB) — integrity",
+                    "hash mismatch after download",
+                )
         except Exception as e:
             failed("SFTP large file (10 MB) — integrity", f"{type(e).__name__}: {e}")
 
@@ -503,9 +555,14 @@ def check_sftp_integrity(cfg: dict[str, Any]) -> None:
             if rpt_ok == 5:
                 passed("SFTP repeated transfer consistency (5x)", "5/5 hashes match")
             else:
-                failed("SFTP repeated transfer consistency (5x)", f"only {rpt_ok}/5 hashes matched")
+                failed(
+                    "SFTP repeated transfer consistency (5x)",
+                    f"only {rpt_ok}/5 hashes matched",
+                )
         except Exception as e:
-            failed("SFTP repeated transfer consistency (5x)", f"{type(e).__name__}: {e}")
+            failed(
+                "SFTP repeated transfer consistency (5x)", f"{type(e).__name__}: {e}"
+            )
 
     finally:
         for path in cleanup:
@@ -521,11 +578,13 @@ def check_sftp_integrity(cfg: dict[str, Any]) -> None:
 # 5. Concurrency Correctness
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 def check_concurrency_correctness(cfg: dict[str, Any], run_cfg: RunConfig) -> None:
     section(5, "Concurrency Correctness")
 
     # Async: each session echoes its own unique marker and verifies it
     for n in run_cfg.concurrent_levels:
+
         async def _run(n: int = n) -> tuple[int, list[str]]:
             errors: list[str] = []
 
@@ -556,8 +615,10 @@ def check_concurrency_correctness(cfg: dict[str, Any], run_cfg: RunConfig) -> No
                 first_err = errs[0] if errs else "unknown"
                 failed(label, f"{correct}/{n} correct — {first_err}")
         except Exception as e:
-            failed(f"Async N={n} — per-session output identity",
-                   f"stage error: {type(e).__name__}: {e}")
+            failed(
+                f"Async N={n} — per-session output identity",
+                f"stage error: {type(e).__name__}: {e}",
+            )
 
     # Sync thread-pool: same per-thread identity test
     n_threads = run_cfg.concurrent_levels[0]
@@ -619,10 +680,9 @@ def check_concurrency_correctness(cfg: dict[str, Any], run_cfg: RunConfig) -> No
                 await sftp.close()
                 await ac.close()
 
-        tasks = (
-            [exec_task(i) for i in range(n_each)] +
-            [sftp_task(i) for i in range(n_each)]
-        )
+        tasks = [exec_task(i) for i in range(n_each)] + [
+            sftp_task(i) for i in range(n_each)
+        ]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         exec_ok = sum(1 for r in results[:n_each] if r is True)
         sftp_ok = sum(1 for r in results[n_each:] if r is True)
@@ -636,13 +696,16 @@ def check_concurrency_correctness(cfg: dict[str, Any], run_cfg: RunConfig) -> No
         else:
             failed(label, f"exec={exec_ok}/{n_each} sftp={sftp_ok}/{n_each}")
     except Exception as e:
-        failed(f"Mixed async workload ({n_each} exec + {n_each} sftp concurrent)",
-               f"{type(e).__name__}: {e}")
+        failed(
+            f"Mixed async workload ({n_each} exec + {n_each} sftp concurrent)",
+            f"{type(e).__name__}: {e}",
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 6. Failure Classification
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 def _catch(fn: Callable[[], None]) -> Exception | None:
     try:
@@ -703,7 +766,9 @@ def check_failure_classification(cfg: dict[str, Any]) -> None:
         elif isinstance(exc, AuthenticationException):
             passed(label)
         elif isinstance(exc, SSHException):
-            warned(label, f"got {type(exc).__name__} (expected AuthenticationException)")
+            warned(
+                label, f"got {type(exc).__name__} (expected AuthenticationException)"
+            )
         else:
             failed(label, f"non-SSH exception: {type(exc).__name__}")
 
@@ -712,8 +777,10 @@ def check_failure_classification(cfg: dict[str, Any]) -> None:
         if type(sync_auth_exc) is type(async_auth_exc):
             passed(label_cons, type(sync_auth_exc).__name__)
         else:
-            failed(label_cons,
-                   f"sync={_exc_label(sync_auth_exc)} async={_exc_label(async_auth_exc)}")
+            failed(
+                label_cons,
+                f"sync={_exc_label(sync_auth_exc)} async={_exc_label(async_auth_exc)}",
+            )
     else:
         skipped(label_cons, "one or both modes had no exception")
 
@@ -744,8 +811,10 @@ def check_failure_classification(cfg: dict[str, Any]) -> None:
         if type(sync_kex_exc) is type(async_kex_exc):
             passed(label_kex_cons, type(sync_kex_exc).__name__)
         else:
-            failed(label_kex_cons,
-                   f"sync={_exc_label(sync_kex_exc)} async={_exc_label(async_kex_exc)}")
+            failed(
+                label_kex_cons,
+                f"sync={_exc_label(sync_kex_exc)} async={_exc_label(async_kex_exc)}",
+            )
     else:
         skipped(label_kex_cons, "one or both modes had no exception")
 
@@ -768,14 +837,15 @@ def check_failure_classification(cfg: dict[str, Any]) -> None:
 # 7. Negotiation Determinism
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 def check_negotiation_determinism(cfg: dict[str, Any], run_cfg: RunConfig) -> None:
     section(7, f"Negotiation Determinism  ({run_cfg.negotiation_repeats} runs each)")
 
     profiles: list[tuple[str, dict[str, str]]] = [
-        ("kex=curve25519-sha256",   {"kex":    "curve25519-sha256"}),
-        ("kex=ecdh-sha2-nistp256",  {"kex":    "ecdh-sha2-nistp256"}),
-        ("cipher=aes256-ctr",       {"cipher": "aes256-ctr"}),
-        ("cipher=aes128-ctr",       {"cipher": "aes128-ctr"}),
+        ("kex=curve25519-sha256", {"kex": "curve25519-sha256"}),
+        ("kex=ecdh-sha2-nistp256", {"kex": "ecdh-sha2-nistp256"}),
+        ("cipher=aes256-ctr", {"cipher": "aes256-ctr"}),
+        ("cipher=aes128-ctr", {"cipher": "aes128-ctr"}),
     ]
 
     for label, kwargs in profiles:
@@ -795,21 +865,31 @@ def check_negotiation_determinism(cfg: dict[str, Any], run_cfg: RunConfig) -> No
         if len(unique) == 1:
             result = outcomes[0]
             if result == "OK":
-                passed(check_label, f"{run_cfg.negotiation_repeats}x consistent success")
+                passed(
+                    check_label, f"{run_cfg.negotiation_repeats}x consistent success"
+                )
             else:
                 # Consistently fails — deterministic, just unsupported
-                skipped(check_label, f"{run_cfg.negotiation_repeats}x consistently: {result}")
+                skipped(
+                    check_label,
+                    f"{run_cfg.negotiation_repeats}x consistently: {result}",
+                )
         else:
-            failed(check_label,
-                   f"flapping outcomes across {run_cfg.negotiation_repeats} runs: {outcomes}")
+            failed(
+                check_label,
+                f"flapping outcomes across {run_cfg.negotiation_repeats} runs: {outcomes}",
+            )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 8. Performance Stability
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 def check_performance_stability(cfg: dict[str, Any], run_cfg: RunConfig) -> None:
-    section(8, f"Performance Stability  ({run_cfg.stability_runs} sequential handshakes)")
+    section(
+        8, f"Performance Stability  ({run_cfg.stability_runs} sequential handshakes)"
+    )
 
     samples: list[float] = []
     errors = 0
@@ -823,7 +903,10 @@ def check_performance_stability(cfg: dict[str, Any], run_cfg: RunConfig) -> None
             errors += 1
 
     if len(samples) < 5:
-        failed("Performance stability", f"too few valid samples ({len(samples)}) to analyze")
+        failed(
+            "Performance stability",
+            f"too few valid samples ({len(samples)}) to analyze",
+        )
         return
 
     ms = [s * 1000 for s in samples]
@@ -835,7 +918,9 @@ def check_performance_stability(cfg: dict[str, Any], run_cfg: RunConfig) -> None
     p99 = srt[min(int(len(srt) * 0.99), len(srt) - 1)]
 
     print(f"    median={med:.1f}ms  mean={mean:.1f}ms  stdev={stdev:.1f}ms")
-    print(f"    p95={p95:.1f}ms  p99={p99:.1f}ms  errors={errors}/{run_cfg.stability_runs}")
+    print(
+        f"    p95={p95:.1f}ms  p99={p99:.1f}ms  errors={errors}/{run_cfg.stability_runs}"
+    )
 
     # Jitter: p99 should be < 5x median
     jitter = p99 / med if med > 0 else float("inf")
@@ -852,11 +937,18 @@ def check_performance_stability(cfg: dict[str, Any], run_cfg: RunConfig) -> None
     last_avg = statistics.fmean(ms[-q:])
     slowdown = last_avg / first_avg if first_avg > 0 else float("inf")
     if slowdown < 2.0:
-        passed("Cumulative slowdown  (last/first 10%)", f"{slowdown:.2f}x  (threshold: <2x)")
+        passed(
+            "Cumulative slowdown  (last/first 10%)",
+            f"{slowdown:.2f}x  (threshold: <2x)",
+        )
     elif slowdown < 3.0:
-        warned("Cumulative slowdown  (last/first 10%)", f"{slowdown:.2f}x  (warning: >2x)")
+        warned(
+            "Cumulative slowdown  (last/first 10%)", f"{slowdown:.2f}x  (warning: >2x)"
+        )
     else:
-        failed("Cumulative slowdown  (last/first 10%)", f"{slowdown:.2f}x  (critical: >3x)")
+        failed(
+            "Cumulative slowdown  (last/first 10%)", f"{slowdown:.2f}x  (critical: >3x)"
+        )
 
     # Error rate
     error_rate = errors / run_cfg.stability_runs
@@ -872,6 +964,7 @@ def check_performance_stability(cfg: dict[str, Any], run_cfg: RunConfig) -> None
 # Summary
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 def print_summary() -> None:
     counts: dict[str, int] = {"PASS": 0, "FAIL": 0, "WARN": 0, "SKIP": 0}
     for r in _results:
@@ -884,7 +977,9 @@ def print_summary() -> None:
     print(f"  PASS         : {counts['PASS']}")
     print(f"  WARN         : {counts['WARN']}")
     print(f"  FAIL         : {counts['FAIL']}")
-    print(f"  SKIP         : {counts['SKIP']}  (server may not support those algorithms)")
+    print(
+        f"  SKIP         : {counts['SKIP']}  (server may not support those algorithms)"
+    )
 
     if counts["FAIL"]:
         print("\n  Failed checks:")
@@ -915,6 +1010,7 @@ def print_summary() -> None:
 # Entry point
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="SpindleX Production Readiness Benchmark"
@@ -928,7 +1024,9 @@ def main() -> None:
 
     cfg = load_env()
     if not cfg["host"] or not cfg["user"] or not cfg["password"]:
-        print("ERROR: SSH_HOST / SSH_USER / SSH_PASSWORD not set in .env or environment")
+        print(
+            "ERROR: SSH_HOST / SSH_USER / SSH_PASSWORD not set in .env or environment"
+        )
         sys.exit(1)
 
     run_cfg = quick_config() if args.quick else RunConfig()

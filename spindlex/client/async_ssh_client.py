@@ -103,7 +103,9 @@ class AsyncSSHClient:
                         # In asyncio, we usually need reader/writer.
                         # If it's a SpindleX Channel, it might need special handling.
                         current_sock = sock
-                        if hasattr(current_sock, "makefile"):  # Likely a socket-like object
+                        if hasattr(
+                            current_sock, "makefile"
+                        ):  # Likely a socket-like object
                             reader, writer = await asyncio.open_connection(
                                 sock=current_sock
                             )
@@ -179,7 +181,12 @@ class AsyncSSHClient:
 
                     if not is_transient or attempt == max_retries - 1:
                         if isinstance(
-                            e, (SSHException, AuthenticationException, BadHostKeyException)
+                            e,
+                            (
+                                SSHException,
+                                AuthenticationException,
+                                BadHostKeyException,
+                            ),
                         ):
                             raise
                         raise SSHException(f"Connection failed: {e}") from e
@@ -197,7 +204,9 @@ class AsyncSSHClient:
                 await self._transport.close()
                 self._transport = None
 
-            if isinstance(e, (SSHException, AuthenticationException, BadHostKeyException)):
+            if isinstance(
+                e, (SSHException, AuthenticationException, BadHostKeyException)
+            ):
                 raise
             raise SSHException(f"Connection failed: {e}") from e
 

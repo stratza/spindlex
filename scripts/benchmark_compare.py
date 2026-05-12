@@ -96,9 +96,7 @@ def safe(label: str, sampler: Callable[[], list[float]]) -> dict[str, Any]:
     """
     try:
         return stats(sampler())
-    except (
-        BaseException
-    ) as e:  # noqa: BLE001 — keep going past KeyboardInterrupt subclasses too
+    except BaseException as e:  # noqa: BLE001 — keep going past KeyboardInterrupt subclasses too
         if isinstance(e, KeyboardInterrupt):
             raise
         tb = traceback.format_exception_only(type(e), e)[-1].strip()
@@ -540,9 +538,9 @@ def print_table(
         rel = s["median"] / fastest if fastest else float("inf")
         print(
             f"  {lib:<22} "
-            f"{s['median']*1000:>8.2f} {unit} "
-            f"{s['mean']*1000:>8.2f} {unit} "
-            f"{s['stdev']*1000:>8.2f} {unit}   "
+            f"{s['median'] * 1000:>8.2f} {unit} "
+            f"{s['mean'] * 1000:>8.2f} {unit} "
+            f"{s['stdev'] * 1000:>8.2f} {unit}   "
             f"{rel:>5.2f}x"
         )
     for lib, s in failed.items():
