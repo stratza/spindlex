@@ -62,18 +62,16 @@ class AsyncChannel(Channel):
         else:
             # Sync transport fallback.
             if not self._eof_sent:
-                self._send_eof()
-            if not self._close_sent:
-                self._send_close()
+                self.send_eof()
+            self._transport._close_channel(self._channel_id)
 
     async def _async_close_handshake(self) -> None:
         """Send EOF + CLOSE responses for an incoming channel-close message."""
         try:
             if not self._eof_sent:
                 await self._transport._send_channel_eof_async(self._channel_id)
-            if not self._close_sent:
-                await self._transport._send_channel_close_async(self._channel_id)
-        except Exception:
+            await self._transport._send_channel_close_async(self._channel_id)
+        except Exception:  # nosec B110
             pass  # Best-effort; connection may already be gone.
 
     def _handle_data(self, data: bytes) -> None:

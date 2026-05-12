@@ -55,7 +55,7 @@ from ..protocol.messages import (
     UserAuthRequestMessage,
 )
 from ..protocol.utils import write_string
-from .transport import HandledMessage, Transport
+from .transport import Transport
 
 # Only drain the asyncio write buffer when it exceeds this threshold.
 # This avoids a per-packet event-loop yield while still providing backpressure.
@@ -368,15 +368,9 @@ class AsyncTransport(Transport):
                     raise TransportException("Empty packet received")
 
                 msg = self._dispatch_packet(packet, single_pump=False)
-                if msg is not None:
+                if msg is not None and msg.msg_type != 0:
                     return msg
-                # None → handled internally; loop to read the next packet.
-
-    def _read_single_packet(self) -> Message | None:
-        """Read exactly one SSH packet and dispatch it if it is a channel message.
-        Returns the message if it needs to be queued, or None if it was dispatched internally.
-        """
-        return super()._read_message(single_pump=True)
+                # None / msg_type==0 sentinel → handled internally; loop for next packet.
 
     async def _pump_async(self) -> None:
         """
@@ -387,8 +381,8 @@ class AsyncTransport(Transport):
             packet = await self._recv_packet_async()
             msg = self._dispatch_packet(packet, single_pump=True)
 
-        # Queue protocol messages for _expect_message_async; skip HandledMessage sentinels.
-        if msg is not None and not isinstance(msg, HandledMessage):
+        # Queue protocol messages for _expect_message_async; skip msg_type==0 sentinels.
+        if msg is not None and msg.msg_type != 0:
             async with self._state_lock:
                 self._message_queue.append(msg)
 
