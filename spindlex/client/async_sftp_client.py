@@ -188,7 +188,7 @@ class AsyncSFTPClient:
             SFTPError: If download fails
         """
         _CHUNK = 32768
-        _WINDOW = 32
+        _WINDOW = 64
         try:
             remote_file = await self.open(remotepath, "rb")
             try:
@@ -251,7 +251,7 @@ class AsyncSFTPClient:
             SFTPError: If upload fails
         """
         _CHUNK = 32768
-        _WINDOW = 32
+        _WINDOW = 64
         try:
             remote_file = await self.open(remotepath, "wb")
             try:
@@ -914,7 +914,7 @@ class AsyncSFTPClient:
 class AsyncSFTPFile:
     """Async SFTP file object for remote file operations."""
 
-    _PIPELINE_DEPTH = 32
+    _PIPELINE_DEPTH = 64
 
     def __init__(self, client: AsyncSFTPClient, handle: bytes, mode: str) -> None:
         """

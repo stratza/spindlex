@@ -250,8 +250,15 @@ class AsyncSSHClient:
                 asyncio.open_connection(hostname, port), timeout=timeout
             )
 
-            # Get the underlying socket
+            # Get the underlying socket and tune it for throughput.
             sock = writer.get_extra_info("socket")
+            if sock is not None:
+                # Disable Nagle's algorithm so small control packets are sent
+                # immediately rather than coalesced (critical for handshake RTT).
+                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                # Larger kernel socket buffers reduce stalls on high-throughput transfers.
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 1 << 20)  # 1 MB
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 1 << 20)  # 1 MB
 
             return sock, reader, writer
 

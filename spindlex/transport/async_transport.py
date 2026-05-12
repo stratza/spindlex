@@ -7,6 +7,7 @@ Provides asynchronous SSH transport functionality for high-concurrency applicati
 from __future__ import annotations
 
 import asyncio
+import hmac
 import socket
 import struct
 import threading
@@ -20,6 +21,8 @@ from ..protocol.constants import (
     AUTH_KEYBOARD_INTERACTIVE,
     DEFAULT_MAX_PACKET_SIZE,
     DEFAULT_WINDOW_SIZE,
+    MAX_PACKET_SIZE,
+    MIN_PACKET_SIZE,
     MSG_CHANNEL_OPEN_CONFIRMATION,
     MSG_CHANNEL_OPEN_FAILURE,
     MSG_KEXDH_INIT,
@@ -29,6 +32,7 @@ from ..protocol.constants import (
     MSG_REQUEST_FAILURE,
     MSG_REQUEST_SUCCESS,
     MSG_SERVICE_ACCEPT,
+    PACKET_LENGTH_SIZE,
     SERVICE_CONNECTION,
     SERVICE_USERAUTH,
     SSH_OPEN_CONNECT_FAILED,
@@ -51,7 +55,11 @@ from ..protocol.messages import (
     UserAuthRequestMessage,
 )
 from ..protocol.utils import write_string
-from .transport import Transport
+from .transport import HandledMessage, Transport
+
+# Only drain the asyncio write buffer when it exceeds this threshold.
+# This avoids a per-packet event-loop yield while still providing backpressure.
+_DRAIN_THRESHOLD = 65536  # 64 KB
 
 
 class AsyncTransport(Transport):
@@ -243,7 +251,13 @@ class AsyncTransport(Transport):
                 raise TransportException("Transport not initialized with async streams")
 
             self._writer.write(packet)
-            await self._writer.drain()
+            # Only drain when the write buffer is large; avoids a per-packet
+            # event-loop yield that kills throughput on pipelined SFTP transfers.
+            try:
+                if self._writer.transport.get_write_buffer_size() > _DRAIN_THRESHOLD:
+                    await self._writer.drain()
+            except (AttributeError, TypeError):
+                pass  # Buffer size unavailable; no drain needed (e.g. test mocks).
 
             # Track bytes sent for rekeying
             if message.msg_type not in [
@@ -259,8 +273,87 @@ class AsyncTransport(Transport):
 
             self._sequence_number_out = (self._sequence_number_out + 1) & 0xFFFFFFFF
 
+    async def _recv_packet_async(self) -> bytes:
+        """
+        Read one complete SSH packet directly from the asyncio StreamReader.
+
+        This is the hot-path replacement for the thread-bridge that previously
+        called asyncio.to_thread(super()._read_message), eliminating two context
+        switches (event-loop → thread → event-loop) per received packet.
+        """
+        if not self._reader:
+            raise TransportException("Transport not initialised with async streams")
+
+        try:
+            if self._decryptor_instance:
+                # Read the encrypted packet-length field
+                enc_len = await self._reader.readexactly(PACKET_LENGTH_SIZE)
+                length_data = self._decryptor_instance.update(enc_len)
+                packet_length = struct.unpack(">I", length_data)[0]
+
+                if (
+                    packet_length < MIN_PACKET_SIZE - PACKET_LENGTH_SIZE
+                    or packet_length > MAX_PACKET_SIZE
+                ):
+                    raise ProtocolException(f"Invalid packet length: {packet_length}")
+
+                enc_payload = await self._reader.readexactly(packet_length)
+                packet_payload = self._decryptor_instance.update(enc_payload)
+
+                if self._mac_in_active and self._mac_key_in_active:
+                    mac_info = self._kex._cipher_suite.get_mac_info(self._mac_in_active)
+                    mac_len = mac_info["digest_len"]
+                    received_mac = await self._reader.readexactly(mac_len)
+                    mac_data = (
+                        struct.pack(">I", self._sequence_number_in & 0xFFFFFFFF)
+                        + length_data
+                        + packet_payload
+                    )
+                    expected_mac = self._crypto_backend.compute_mac(
+                        self._mac_in_active, self._mac_key_in_active, mac_data
+                    )
+                    if not hmac.compare_digest(received_mac, expected_mac):
+                        raise TransportException("MAC verification failed")
+
+                return bytes(length_data + packet_payload)
+
+            # Unencrypted path
+            length_data = await self._reader.readexactly(PACKET_LENGTH_SIZE)
+            packet_length = struct.unpack(">I", length_data)[0]
+
+            if packet_length < MIN_PACKET_SIZE - PACKET_LENGTH_SIZE:
+                raise ProtocolException(f"Invalid packet length: {packet_length}")
+            if packet_length > MAX_PACKET_SIZE - PACKET_LENGTH_SIZE:
+                raise ProtocolException(f"Packet too large: {packet_length}")
+
+            packet_data = await self._reader.readexactly(packet_length)
+
+            if self._mac_in_active and self._mac_key_in_active:
+                mac_info = self._kex._cipher_suite.get_mac_info(self._mac_in_active)
+                mac_len = mac_info["digest_len"]
+                received_mac = await self._reader.readexactly(mac_len)
+                mac_data = (
+                    struct.pack(">I", self._sequence_number_in & 0xFFFFFFFF)
+                    + length_data
+                    + packet_data
+                )
+                expected_mac = self._crypto_backend.compute_mac(
+                    self._mac_in_active, self._mac_key_in_active, mac_data
+                )
+                if not hmac.compare_digest(received_mac, expected_mac):
+                    raise TransportException("MAC verification failed")
+
+            return length_data + packet_data
+
+        except asyncio.IncompleteReadError as e:
+            if not self._active:
+                raise TransportException("Transport closed")
+            raise TransportException(
+                f"Connection closed while reading packet: {e}"
+            ) from e
+
     async def _recv_message_async(self, check_queue: bool = True) -> Message:
-        """Async version of _recv_message."""
+        """Async version of _recv_message — reads natively from StreamReader."""
         if check_queue:
             async with self._state_lock:
                 if self._message_queue:
@@ -268,12 +361,16 @@ class AsyncTransport(Transport):
 
         async with self._recv_lock:
             while True:
-                # We call the base _read_message which calls our overridden _recv_bytes
-                # to handle the actual reading from the asyncio reader.
-                # Base _read_message also handles dispatching to channels.
-                msg = await asyncio.to_thread(super()._read_message)
+                packet = await self._recv_packet_async()
+                if not packet:
+                    if not self._active:
+                        raise TransportException("Transport closed")
+                    raise TransportException("Empty packet received")
+
+                msg = self._dispatch_packet(packet, single_pump=False)
                 if msg is not None:
                     return msg
+                # None → handled internally; loop to read the next packet.
 
     def _read_single_packet(self) -> Message | None:
         """Read exactly one SSH packet and dispatch it if it is a channel message.
@@ -287,10 +384,11 @@ class AsyncTransport(Transport):
         Used by channels to wait for data/window adjustments.
         """
         async with self._recv_lock:
-            msg = await asyncio.to_thread(self._read_single_packet)
+            packet = await self._recv_packet_async()
+            msg = self._dispatch_packet(packet, single_pump=True)
 
-        if msg is not None:
-            # Non-channel message — queue it for _expect_message_async to pick up.
+        # Queue protocol messages for _expect_message_async; skip HandledMessage sentinels.
+        if msg is not None and not isinstance(msg, HandledMessage):
             async with self._state_lock:
                 self._message_queue.append(msg)
 

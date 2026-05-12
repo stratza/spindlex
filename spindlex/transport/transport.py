@@ -1780,6 +1780,75 @@ class Transport:
                 raise
             raise TransportException(f"Failed to send message: {e}") from e
 
+    def _dispatch_packet(
+        self, packet: bytes, single_pump: bool = False
+    ) -> Optional[Message]:
+        """
+        Parse a raw SSH packet and dispatch it.
+
+        Returns the message for the caller to consume, HandledMessage() if the
+        packet was handled internally and single_pump=True, or None if it was
+        handled internally and the caller should loop for the next packet.
+        """
+        payload = extract_message_from_packet(packet)
+
+        with self._lock:
+            msg = Message.unpack(payload)
+
+            # Track bytes received for rekeying (unless it's KEX)
+            if msg.msg_type not in [
+                MSG_KEXINIT,
+                MSG_NEWKEYS,
+            ] and not (MSG_KEXDH_INIT <= msg.msg_type <= MSG_KEXDH_REPLY):
+                self._bytes_since_rekey += len(packet)
+                self._check_rekey()
+
+            # ALWAYS increment sequence number for EVERY packet received
+            self._sequence_number_in = (self._sequence_number_in + 1) & 0xFFFFFFFF
+
+            # 7 = MSG_EXT_INFO (RFC 8308)
+            if msg.msg_type in [MSG_IGNORE, MSG_DEBUG, 7]:
+                return HandledMessage() if single_pump else None  # type: ignore[return-value]
+
+            if msg.msg_type == MSG_DISCONNECT:
+                try:
+                    d_msg = DisconnectMessage.unpack(payload)
+                    reason = getattr(d_msg, "description", "Unknown")
+                    code = getattr(d_msg, "reason_code", 0)
+                except (struct.error, ValueError, UnicodeDecodeError, IndexError):
+                    raise TransportException("Disconnected by peer")
+                raise TransportException(f"Disconnected: {reason} (code: {code})")
+
+            if msg.msg_type == MSG_NEWKEYS:
+                self._activate_inbound_encryption()
+
+            if msg.msg_type == MSG_KEXINIT and not self._kex_in_progress:
+                # Peer initiated rekeying — set flag, queue message, start KEX thread.
+                self._kex_in_progress = True
+                self._message_queue.append(msg)
+                self._kex_thread = threading.Thread(target=self._start_kex, daemon=True)
+                self._kex_thread.start()
+                return HandledMessage() if single_pump else None  # type: ignore[return-value]
+
+            if (
+                msg.msg_type == MSG_GLOBAL_REQUEST  # 80
+                or msg.msg_type == MSG_CHANNEL_OPEN  # 90
+                or (msg.msg_type >= 93 and msg.msg_type <= 100)
+            ):
+                self._handle_channel_message(msg)
+                return HandledMessage() if single_pump else None  # type: ignore[return-value]
+
+            # Server-side specific messages
+            if self._server_mode:
+                if msg.msg_type == MSG_SERVICE_REQUEST:
+                    self._handle_service_request(msg)
+                    return HandledMessage() if single_pump else None  # type: ignore[return-value]
+                if msg.msg_type == MSG_USERAUTH_REQUEST:
+                    self._handle_userauth_request(msg)
+                    return HandledMessage() if single_pump else None  # type: ignore[return-value]
+
+            return msg
+
     def _read_message(self, single_pump: bool = False) -> Optional[Message]:
         """
         Read next message from socket and dispatch if needed.
@@ -1798,8 +1867,8 @@ class Transport:
                     # as they have their own yielding loops, but for safety:
                     return None
 
-                # We need to hold the read_lock while reading from the socket to ensure
-                # only one thread reads a complete packet at a time.
+                # Hold _read_lock while reading a complete packet to prevent
+                # multiple threads from interleaving partial reads.
                 with self._read_lock:
                     packet = self._recv_packet()
                     if not packet:
@@ -1807,89 +1876,10 @@ class Transport:
                             return None
                         raise TransportException("Empty packet received")
 
-                    payload = extract_message_from_packet(packet)
-
-                    with self._lock:
-                        msg = Message.unpack(payload)
-
-                        # Track bytes received for rekeying (unless it's KEX)
-                        if msg.msg_type not in [
-                            MSG_KEXINIT,
-                            MSG_NEWKEYS,
-                        ] and not (MSG_KEXDH_INIT <= msg.msg_type <= MSG_KEXDH_REPLY):
-                            self._bytes_since_rekey += len(packet)
-                            self._check_rekey()
-
-                        # ALWAYS increment sequence number for EVERY packet received
-                        self._sequence_number_in = (
-                            self._sequence_number_in + 1
-                        ) & 0xFFFFFFFF
-
-                        # Handle internal messages and extensions
-                        # 7 = MSG_EXT_INFO (RFC 8308)
-                        if msg.msg_type in [MSG_IGNORE, MSG_DEBUG, 7]:
-                            if single_pump:
-                                return HandledMessage()  # type: ignore[return-value]
-                            continue
-
-                        if msg.msg_type == MSG_DISCONNECT:
-                            # Parse disconnect reason if possible
-                            try:
-                                d_msg = DisconnectMessage.unpack(payload)
-                                # Type ignore because we know d_msg is a DisconnectMessage here
-                                reason = getattr(d_msg, "description", "Unknown")
-                                code = getattr(d_msg, "reason_code", 0)
-                            except (
-                                struct.error,
-                                ValueError,
-                                UnicodeDecodeError,
-                                IndexError,
-                            ):
-                                raise TransportException("Disconnected by peer")
-                            raise TransportException(
-                                f"Disconnected: {reason} (code: {code})"
-                            )
-
-                        if msg.msg_type == MSG_NEWKEYS:
-                            self._activate_inbound_encryption()
-
-                        if msg.msg_type == MSG_KEXINIT and not self._kex_in_progress:
-                            # Peer initiated rekeying. Set flag immediately to prevent
-                            # multiple threads, then queue message and start KEX thread.
-                            self._kex_in_progress = True
-                            self._message_queue.append(msg)
-                            self._kex_thread = threading.Thread(
-                                target=self._start_kex, daemon=True
-                            )
-                            self._kex_thread.start()
-                            if single_pump:
-                                return HandledMessage()  # type: ignore[return-value]
-                            continue
-
-                        if (
-                            msg.msg_type == MSG_GLOBAL_REQUEST  # 80
-                            or msg.msg_type == MSG_CHANNEL_OPEN  # 90
-                            or (msg.msg_type >= 93 and msg.msg_type <= 100)
-                        ):
-                            self._handle_channel_message(msg)
-                            if single_pump:
-                                return HandledMessage()  # type: ignore[return-value]
-                            continue
-
-                        # Server-side specific messages
-                        if self._server_mode:
-                            if msg.msg_type == MSG_SERVICE_REQUEST:
-                                self._handle_service_request(msg)
-                                if single_pump:
-                                    return HandledMessage()  # type: ignore[return-value]
-                                continue
-                            if msg.msg_type == MSG_USERAUTH_REQUEST:
-                                self._handle_userauth_request(msg)
-                                if single_pump:
-                                    return HandledMessage()  # type: ignore[return-value]
-                                continue
-
+                    msg = self._dispatch_packet(packet, single_pump)
+                    if msg is not None:
                         return msg
+                    # None means handled internally — loop to read the next packet.
 
         except (OSError, struct.error, SSHException, ProtocolException) as e:
             if isinstance(e, (SSHException, ProtocolException)):

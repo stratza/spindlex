@@ -40,6 +40,42 @@ class AsyncChannel(Channel):
         self._stderr_buffer: bytes = b""
         self._buffer_lock = threading.Lock()
 
+    def _handle_close(self) -> None:
+        """Handle incoming channel-close message.
+
+        Overrides the base-class implementation to avoid calling _send_message()
+        synchronously when this method is invoked from the event-loop thread
+        (via the native async receive path).  Sends the EOF+CLOSE handshake as
+        a scheduled coroutine instead.
+        """
+        self._closed = True
+        self._closed_event.set()
+        loop = getattr(self._transport, "_loop", None)
+        if loop:
+            try:
+                asyncio.get_running_loop()
+                # On the event-loop thread — schedule as a fire-and-forget task.
+                asyncio.ensure_future(self._async_close_handshake())
+            except RuntimeError:
+                # Called from a worker thread — safe to use run_coroutine_threadsafe.
+                asyncio.run_coroutine_threadsafe(self._async_close_handshake(), loop)
+        else:
+            # Sync transport fallback.
+            if not self._eof_sent:
+                self._send_eof()
+            if not self._close_sent:
+                self._send_close()
+
+    async def _async_close_handshake(self) -> None:
+        """Send EOF + CLOSE responses for an incoming channel-close message."""
+        try:
+            if not self._eof_sent:
+                await self._transport._send_channel_eof_async(self._channel_id)
+            if not self._close_sent:
+                await self._transport._send_channel_close_async(self._channel_id)
+        except Exception:
+            pass  # Best-effort; connection may already be gone.
+
     def _handle_data(self, data: bytes) -> None:
         """Handle incoming channel data."""
         with self._buffer_lock:

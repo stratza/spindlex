@@ -87,7 +87,10 @@ class TestChannelFileReadAllWithTimeout:
     def test_read_all_timeout_with_partial_data(self):
         channel = MagicMock()
         # First chunk succeeds, second raises a timeout ChannelException
-        channel.recv.side_effect = [b"partial", ChannelException("Timeout receiving data")]
+        channel.recv.side_effect = [
+            b"partial",
+            ChannelException("Timeout receiving data"),
+        ]
         cf = ChannelFile(channel, "r")
         result = cf.read()
         assert result == b"partial"
