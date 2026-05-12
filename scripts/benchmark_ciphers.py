@@ -229,7 +229,7 @@ def load_env() -> dict[str, Any]:
 
 def spindlex_open(cfg: dict[str, Any]) -> SSHClient:
     c = SSHClient()
-    c.set_missing_host_key_policy(AutoAddPolicy())
+    c.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
     c.connect(
         hostname=cfg["host"],
         port=cfg["port"],

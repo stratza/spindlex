@@ -110,7 +110,7 @@ def safe(label: str, sampler: Callable[[], list[float]]) -> dict[str, Any]:
 
 def spindlex_handshake(cfg: dict[str, Any]) -> None:
     c = SSHClient()
-    c.set_missing_host_key_policy(AutoAddPolicy())
+    c.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
     c.connect(
         hostname=cfg["host"],
         port=cfg["port"],
@@ -127,7 +127,7 @@ def spindlex_exec(client: SSHClient, cmd: str) -> bytes:
 
 def spindlex_open(cfg: dict[str, Any]) -> SSHClient:
     c = SSHClient()
-    c.set_missing_host_key_policy(AutoAddPolicy())
+    c.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
     c.connect(
         hostname=cfg["host"],
         port=cfg["port"],
@@ -208,7 +208,7 @@ async def asyncssh_open(cfg: dict[str, Any]) -> asyncssh.SSHClientConnection:
 
 async def spindlex_async_handshake(cfg: dict[str, Any]) -> None:
     async with AsyncSSHClient() as c:
-        c.set_missing_host_key_policy(AutoAddPolicy())
+        c.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
         await c.connect(
             hostname=cfg["host"],
             port=cfg["port"],
@@ -219,7 +219,7 @@ async def spindlex_async_handshake(cfg: dict[str, Any]) -> None:
 
 async def spindlex_async_open(cfg: dict[str, Any]) -> AsyncSSHClient:
     c = AsyncSSHClient()
-    c.set_missing_host_key_policy(AutoAddPolicy())
+    c.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
     await c.connect(
         hostname=cfg["host"],
         port=cfg["port"],
