@@ -49,45 +49,93 @@ SFTP_CHUNK = 16 * 1024
 # ── Algorithm profiles ────────────────────────────────────────────────────────
 
 CIPHER_PROFILES: list[dict[str, Any]] = [
-    {"label": "aes256-ctr",        "cipher": "aes256-ctr"},
-    {"label": "aes192-ctr",        "cipher": "aes192-ctr"},
-    {"label": "aes128-ctr",        "cipher": "aes128-ctr"},
+    {"label": "aes256-ctr", "cipher": "aes256-ctr"},
+    {"label": "aes192-ctr", "cipher": "aes192-ctr"},
+    {"label": "aes128-ctr", "cipher": "aes128-ctr"},
 ]
 
 KEX_PROFILES: list[dict[str, Any]] = [
-    {"label": "curve25519-sha256",   "kex": "curve25519-sha256",             "cipher": "aes256-ctr"},
-    {"label": "ecdh-nistp256",       "kex": "ecdh-sha2-nistp256",            "cipher": "aes256-ctr"},
-    {"label": "ecdh-nistp384",       "kex": "ecdh-sha2-nistp384",            "cipher": "aes256-ctr"},
-    {"label": "ecdh-nistp521",       "kex": "ecdh-sha2-nistp521",            "cipher": "aes256-ctr"},
-    {"label": "dh-group14-sha256",   "kex": "diffie-hellman-group14-sha256", "cipher": "aes256-ctr"},
+    {"label": "curve25519-sha256", "kex": "curve25519-sha256", "cipher": "aes256-ctr"},
+    {"label": "ecdh-nistp256", "kex": "ecdh-sha2-nistp256", "cipher": "aes256-ctr"},
+    {"label": "ecdh-nistp384", "kex": "ecdh-sha2-nistp384", "cipher": "aes256-ctr"},
+    {"label": "ecdh-nistp521", "kex": "ecdh-sha2-nistp521", "cipher": "aes256-ctr"},
+    {
+        "label": "dh-group14-sha256",
+        "kex": "diffie-hellman-group14-sha256",
+        "cipher": "aes256-ctr",
+    },
 ]
 
 HOSTKEY_PROFILES: list[dict[str, Any]] = [
-    {"label": "ed25519",      "hostkey": "ssh-ed25519",         "cipher": "aes256-ctr", "kex": "curve25519-sha256"},
-    {"label": "ecdsa-p256",   "hostkey": "ecdsa-sha2-nistp256", "cipher": "aes256-ctr", "kex": "curve25519-sha256"},
-    {"label": "ecdsa-p384",   "hostkey": "ecdsa-sha2-nistp384", "cipher": "aes256-ctr", "kex": "curve25519-sha256"},
-    {"label": "ecdsa-p521",   "hostkey": "ecdsa-sha2-nistp521", "cipher": "aes256-ctr", "kex": "curve25519-sha256"},
-    {"label": "rsa-sha2-512", "hostkey": "rsa-sha2-512",        "cipher": "aes256-ctr", "kex": "curve25519-sha256"},
-    {"label": "rsa-sha2-256", "hostkey": "rsa-sha2-256",        "cipher": "aes256-ctr", "kex": "curve25519-sha256"},
+    {
+        "label": "ed25519",
+        "hostkey": "ssh-ed25519",
+        "cipher": "aes256-ctr",
+        "kex": "curve25519-sha256",
+    },
+    {
+        "label": "ecdsa-p256",
+        "hostkey": "ecdsa-sha2-nistp256",
+        "cipher": "aes256-ctr",
+        "kex": "curve25519-sha256",
+    },
+    {
+        "label": "ecdsa-p384",
+        "hostkey": "ecdsa-sha2-nistp384",
+        "cipher": "aes256-ctr",
+        "kex": "curve25519-sha256",
+    },
+    {
+        "label": "ecdsa-p521",
+        "hostkey": "ecdsa-sha2-nistp521",
+        "cipher": "aes256-ctr",
+        "kex": "curve25519-sha256",
+    },
+    {
+        "label": "rsa-sha2-512",
+        "hostkey": "rsa-sha2-512",
+        "cipher": "aes256-ctr",
+        "kex": "curve25519-sha256",
+    },
+    {
+        "label": "rsa-sha2-256",
+        "hostkey": "rsa-sha2-256",
+        "cipher": "aes256-ctr",
+        "kex": "curve25519-sha256",
+    },
 ]
 
 # ── Algorithm-forcing helpers ─────────────────────────────────────────────────
 
 # Complete known lists for paramiko disabled_algorithms computation.
 _ALL_PMK_CIPHERS = [
-    "aes128-ctr", "aes192-ctr", "aes256-ctr",
-    "aes128-cbc", "aes192-cbc", "aes256-cbc", "3des-cbc",
+    "aes128-ctr",
+    "aes192-ctr",
+    "aes256-ctr",
+    "aes128-cbc",
+    "aes192-cbc",
+    "aes256-cbc",
+    "3des-cbc",
 ]
 _ALL_PMK_KEX = [
-    "curve25519-sha256", "curve25519-sha256@libssh.org",
-    "ecdh-sha2-nistp256", "ecdh-sha2-nistp384", "ecdh-sha2-nistp521",
-    "diffie-hellman-group14-sha256", "diffie-hellman-group14-sha1",
-    "diffie-hellman-group-exchange-sha256", "diffie-hellman-group-exchange-sha1",
+    "curve25519-sha256",
+    "curve25519-sha256@libssh.org",
+    "ecdh-sha2-nistp256",
+    "ecdh-sha2-nistp384",
+    "ecdh-sha2-nistp521",
+    "diffie-hellman-group14-sha256",
+    "diffie-hellman-group14-sha1",
+    "diffie-hellman-group-exchange-sha256",
+    "diffie-hellman-group-exchange-sha1",
 ]
 _ALL_PMK_HOSTKEYS = [
     "ssh-ed25519",
-    "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521",
-    "rsa-sha2-256", "rsa-sha2-512", "ssh-rsa",
+    "ecdsa-sha2-nistp256",
+    "ecdsa-sha2-nistp384",
+    "ecdsa-sha2-nistp521",
+    "rsa-sha2-256",
+    "rsa-sha2-512",
+    "ssh-rsa",
 ]
 
 
@@ -126,7 +174,11 @@ def pmk_disabled(
         d["ciphers"] = [c for c in _ALL_PMK_CIPHERS if c != cipher]
     if kex:
         # curve25519 has two name aliases in paramiko's preference list
-        keep = {"curve25519-sha256", "curve25519-sha256@libssh.org"} if "curve25519" in kex else {kex}
+        keep = (
+            {"curve25519-sha256", "curve25519-sha256@libssh.org"}
+            if "curve25519" in kex
+            else {kex}
+        )
         d["kex"] = [k for k in _ALL_PMK_KEX if k not in keep]
     if hostkey:
         d["keys"] = [k for k in _ALL_PMK_HOSTKEYS if k != hostkey]
@@ -229,7 +281,7 @@ def load_env() -> dict[str, Any]:
 
 def spindlex_open(cfg: dict[str, Any]) -> SSHClient:
     c = SSHClient()
-    c.set_missing_host_key_policy(AutoAddPolicy())
+    c.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
     c.connect(
         hostname=cfg["host"],
         port=cfg["port"],
@@ -256,9 +308,7 @@ def paramiko_open(
     return c
 
 
-async def asyncssh_open(
-    cfg: dict[str, Any], **kw: Any
-) -> asyncssh.SSHClientConnection:
+async def asyncssh_open(cfg: dict[str, Any], **kw: Any) -> asyncssh.SSHClientConnection:
     return await asyncssh.connect(
         host=cfg["host"],
         port=cfg["port"],
@@ -271,12 +321,14 @@ async def asyncssh_open(
 # ── Benchmark workloads ───────────────────────────────────────────────────────
 
 
-def bench_handshake(cfg: dict[str, Any], profile: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    cipher  = profile.get("cipher")
-    kex     = profile.get("kex")
+def bench_handshake(
+    cfg: dict[str, Any], profile: dict[str, Any]
+) -> dict[str, dict[str, Any]]:
+    cipher = profile.get("cipher")
+    kex = profile.get("kex")
     hostkey = profile.get("hostkey")
     disabled = pmk_disabled(cipher=cipher, kex=kex, hostkey=hostkey)
-    akw      = asyncssh_kw(cipher=cipher, kex=kex, hostkey=hostkey)
+    akw = asyncssh_kw(cipher=cipher, kex=kex, hostkey=hostkey)
 
     def _spx() -> list[float]:
         with spindlex_profile(cipher=cipher, kex=kex, hostkey=hostkey):
@@ -295,8 +347,8 @@ def bench_handshake(cfg: dict[str, Any], profile: dict[str, Any]) -> dict[str, d
 
     return {
         "spindlex": safe("spindlex", _spx),
-        "paramiko":  safe("paramiko", _pmk),
-        "asyncssh":  safe("asyncssh", _assh),
+        "paramiko": safe("paramiko", _pmk),
+        "asyncssh": safe("asyncssh", _assh),
     }
 
 
@@ -306,17 +358,18 @@ def bench_sftp_upload(
     remote: str,
     profile: dict[str, Any],
 ) -> dict[str, dict[str, Any]]:
-    cipher  = profile.get("cipher")
-    kex     = profile.get("kex")
+    cipher = profile.get("cipher")
+    kex = profile.get("kex")
     hostkey = profile.get("hostkey")
     disabled = pmk_disabled(cipher=cipher, kex=kex, hostkey=hostkey)
-    akw      = asyncssh_kw(cipher=cipher, kex=kex, hostkey=hostkey)
+    akw = asyncssh_kw(cipher=cipher, kex=kex, hostkey=hostkey)
 
     def _spx() -> list[float]:
         with spindlex_profile(cipher=cipher, kex=kex, hostkey=hostkey):
             c = spindlex_open(cfg)
             sftp = c.open_sftp()
             try:
+
                 def _do() -> None:
                     with sftp.open(remote, "wb") as fh:
                         for off in range(0, len(payload), SFTP_CHUNK):
@@ -331,6 +384,7 @@ def bench_sftp_upload(
         p = paramiko_open(cfg, disabled)
         sftp_p = p.open_sftp()
         try:
+
             def _do_p() -> None:
                 with sftp_p.open(remote, "wb") as fh:
                     fh.write(payload)
@@ -364,8 +418,8 @@ def bench_sftp_upload(
 
     return {
         "spindlex": safe("spindlex", _spx),
-        "paramiko":  safe("paramiko", _pmk),
-        "asyncssh":  safe("asyncssh", lambda: asyncio.run(_assh_run())),
+        "paramiko": safe("paramiko", _pmk),
+        "asyncssh": safe("asyncssh", lambda: asyncio.run(_assh_run())),
     }
 
 
@@ -374,17 +428,18 @@ def bench_sftp_download(
     remote: str,
     profile: dict[str, Any],
 ) -> dict[str, dict[str, Any]]:
-    cipher  = profile.get("cipher")
-    kex     = profile.get("kex")
+    cipher = profile.get("cipher")
+    kex = profile.get("kex")
     hostkey = profile.get("hostkey")
     disabled = pmk_disabled(cipher=cipher, kex=kex, hostkey=hostkey)
-    akw      = asyncssh_kw(cipher=cipher, kex=kex, hostkey=hostkey)
+    akw = asyncssh_kw(cipher=cipher, kex=kex, hostkey=hostkey)
 
     def _spx() -> list[float]:
         with spindlex_profile(cipher=cipher, kex=kex, hostkey=hostkey):
             c = spindlex_open(cfg)
             sftp = c.open_sftp()
             try:
+
                 def _do() -> None:
                     with sftp.open(remote, "rb") as fh:
                         fh.read()
@@ -398,6 +453,7 @@ def bench_sftp_download(
         p = paramiko_open(cfg, disabled)
         sftp_p = p.open_sftp()
         try:
+
             def _do_p() -> None:
                 with sftp_p.open(remote, "rb") as fh:
                     fh.read()
@@ -431,8 +487,8 @@ def bench_sftp_download(
 
     return {
         "spindlex": safe("spindlex", _spx),
-        "paramiko":  safe("paramiko", _pmk),
-        "asyncssh":  safe("asyncssh", lambda: asyncio.run(_assh_run())),
+        "paramiko": safe("paramiko", _pmk),
+        "asyncssh": safe("asyncssh", lambda: asyncio.run(_assh_run())),
     }
 
 
@@ -469,9 +525,9 @@ def print_table(
 
 
 def section(label: str) -> None:
-    print(f"\n{'='*72}")
+    print(f"\n{'=' * 72}")
     print(f"  {label}")
-    print(f"{'='*72}")
+    print(f"{'=' * 72}")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -484,11 +540,15 @@ def main() -> None:
         sys.exit(1)
 
     print(f"\nTarget : {cfg['user']}@{cfg['host']}:{cfg['port']}")
-    print(f"Libs   : spindlex={spindlex.__version__}  paramiko={paramiko.__version__}  asyncssh={asyncssh.__version__}")
-    print(f"Config : {ITERATIONS} iterations (after {WARMUP} warmup)  |  payload={PAYLOAD_SIZE // 1024} KiB  |  chunk={SFTP_CHUNK // 1024} KiB")
+    print(
+        f"Libs   : spindlex={spindlex.__version__}  paramiko={paramiko.__version__}  asyncssh={asyncssh.__version__}"
+    )
+    print(
+        f"Config : {ITERATIONS} iterations (after {WARMUP} warmup)  |  payload={PAYLOAD_SIZE // 1024} KiB  |  chunk={SFTP_CHUNK // 1024} KiB"
+    )
 
     payload = os.urandom(PAYLOAD_SIZE)
-    remote  = f"/tmp/spx_algobench_{os.getpid()}.bin"
+    remote = f"/tmp/spx_algobench_{os.getpid()}.bin"
 
     # ── A. Cipher comparison ──────────────────────────────────────────────────
     section("A  CIPHER COMPARISON  (KEX=curve25519 default, hostkey=ed25519 default)")

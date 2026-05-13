@@ -11,8 +11,9 @@ import threading
 import time
 from typing import TYPE_CHECKING, Any, Union
 
+from .channel import Channel
+
 if TYPE_CHECKING:
-    from .channel import Channel
     from .transport import Transport
 
 from ..exceptions import SSHException
@@ -133,7 +134,6 @@ class LocalPortForwarder:
 
             server_socket: Union[socket.socket, None] = None
             try:
-                # Bug #2.3 Fixed: Use getaddrinfo to support IPv6 and dual-stack
                 addr_info = socket.getaddrinfo(
                     local_host,
                     local_port,
@@ -546,7 +546,6 @@ class RemotePortForwarder:
 
         local_socket = None
         try:
-            # Bug #2.3 Fixed: Use getaddrinfo for local destination to support IPv6
             local_host, local_port = tunnel.local_addr
             addr_info = socket.getaddrinfo(
                 local_host, local_port, socket.AF_UNSPEC, socket.SOCK_STREAM

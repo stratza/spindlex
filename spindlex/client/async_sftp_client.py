@@ -72,6 +72,7 @@ class AsyncSFTPClient:
         self._channel = channel
         self._request_id = 0
         self._pending_requests: dict[int, asyncio.Future] = {}
+        self._buffered_responses: dict[int, Any] = {}
         self._initialized = False
         self._dispatch_task: Optional[asyncio.Task] = None
         self._lock = asyncio.Lock()
@@ -119,10 +120,16 @@ class AsyncSFTPClient:
                     else:
                         request_id = getattr(response, "request_id", None)
 
-                    if request_id is not None and request_id in self._pending_requests:
-                        fut = self._pending_requests.pop(request_id)
-                        if not fut.done():
-                            fut.set_result(response)
+                    if request_id is not None:
+                        if request_id in self._pending_requests:
+                            fut = self._pending_requests.pop(request_id)
+                            if not fut.done():
+                                fut.set_result(response)
+                        else:
+                            # Response arrived before _wait_for_response registered a
+                            # future (race between send and future registration).
+                            # Buffer it so _wait_for_response can collect it synchronously.
+                            self._buffered_responses[request_id] = response
                 except asyncio.CancelledError:
                     break
                 except Exception as e:
@@ -181,7 +188,7 @@ class AsyncSFTPClient:
             SFTPError: If download fails
         """
         _CHUNK = 32768
-        _WINDOW = 32
+        _WINDOW = 64
         try:
             remote_file = await self.open(remotepath, "rb")
             try:
@@ -244,7 +251,7 @@ class AsyncSFTPClient:
             SFTPError: If upload fails
         """
         _CHUNK = 32768
-        _WINDOW = 32
+        _WINDOW = 64
         try:
             remote_file = await self.open(remotepath, "wb")
             try:
@@ -346,8 +353,9 @@ class AsyncSFTPClient:
 
         try:
             await self.mkdir(remotepath)
-        except SFTPError:
-            pass  # Directory might already exist
+        except SFTPError as e:
+            if e.sftp_code != SFTPError.SSH_FX_FAILURE:
+                raise
 
         items = os.listdir(localpath)
         tasks = []
@@ -382,25 +390,25 @@ class AsyncSFTPClient:
 
             filenames = []
 
-            # Read directory entries
-            while True:
-                try:
-                    entries = await self._readdir(handle)
-                    if not entries:
-                        break
+            try:
+                # Read directory entries
+                while True:
+                    try:
+                        entries = await self._readdir(handle)
+                        if not entries:
+                            break
 
-                    for entry in entries:
-                        filename = entry[0]
-                        if filename not in (".", ".."):
-                            filenames.append(filename)
+                        for entry in entries:
+                            filename = entry[0]
+                            if filename not in (".", ".."):
+                                filenames.append(filename)
 
-                except SFTPError as e:
-                    if e.status_code == SSH_FX_EOF:
-                        break
-                    raise
-
-            # Close directory handle
-            await self._close(handle)
+                    except SFTPError as e:
+                        if e.status_code == SSH_FX_EOF:
+                            break
+                        raise
+            finally:
+                await self._close(handle)
 
             return filenames
 
@@ -746,6 +754,7 @@ class AsyncSFTPClient:
 
         self._initialized = False
         self._pending_requests.clear()
+        self._buffered_responses.clear()
 
     async def __aenter__(self) -> "AsyncSFTPClient":
         """Async context manager entry."""
@@ -795,12 +804,20 @@ class AsyncSFTPClient:
 
     async def _wait_for_response(self, request_id: int, timeout: float = 60.0) -> Any:
         """Wait for response to specific request using dispatcher."""
+        # Check if the response already arrived before this future was registered.
+        # No yield point between the check and future registration, so this is race-free
+        # in asyncio's single-threaded cooperative model.
+        if request_id in self._buffered_responses:
+            return self._buffered_responses.pop(request_id)
+
         fut = asyncio.get_running_loop().create_future()
         self._pending_requests[request_id] = fut
         try:
-            return await asyncio.wait_for(asyncio.shield(fut), timeout=timeout)
+            return await asyncio.wait_for(fut, timeout=timeout)
         except asyncio.TimeoutError:
             self._pending_requests.pop(request_id, None)
+            if not fut.done():
+                fut.cancel()
             raise SFTPError(f"Timeout waiting for response to request {request_id}")
 
     async def _opendir(self, path: str) -> bytes:
@@ -897,7 +914,7 @@ class AsyncSFTPClient:
 class AsyncSFTPFile:
     """Async SFTP file object for remote file operations."""
 
-    _PIPELINE_DEPTH = 32
+    _PIPELINE_DEPTH = 64
 
     def __init__(self, client: AsyncSFTPClient, handle: bytes, mode: str) -> None:
         """
@@ -1020,35 +1037,46 @@ class AsyncSFTPFile:
             raise SFTPError("File is closed")
 
         try:
-            request_id = self._client._get_next_request_id()
-            # Calculate offset considering pipelined writes
-            send_offset = self._offset + sum(n for _, n in self._write_queue)
+            from ..protocol.sftp_constants import SFTP_MAX_PACKET_SIZE
 
-            # Send write request
-            write_msg = SFTPWriteMessage(
-                request_id=request_id,
-                handle=self._handle,
-                offset=send_offset,
-                data=data,
-            )
-            await self._client._send_message(write_msg)
+            # Chunk large writes to fit within server limits.
+            # 64 KB is generally safe for most servers.
+            _MAX_CHUNK = SFTP_MAX_PACKET_SIZE - 1024
+            offset = 0
+            while offset < len(data):
+                chunk = data[offset : offset + _MAX_CHUNK]
+                request_id = self._client._get_next_request_id()
+                # Calculate offset considering pipelined writes
+                send_offset = self._offset + sum(n for _, n in self._write_queue)
 
-            # Add to pipeline
-            self._write_queue.append((request_id, len(data)))
+                # Send write request
+                write_msg = SFTPWriteMessage(
+                    request_id=request_id,
+                    handle=self._handle,
+                    offset=send_offset,
+                    data=chunk,
+                )
+                await self._client._send_message(write_msg)
 
-            # Drain oldest if pipeline is full
-            if len(self._write_queue) >= self._PIPELINE_DEPTH:
-                rid, nbytes = self._write_queue.pop(0)
-                response = await self._client._wait_for_response(rid)
-                if isinstance(response, SFTPStatusMessage):
-                    if response.status_code == SSH_FX_OK:
-                        self._offset += nbytes
+                # Add to pipeline
+                self._write_queue.append((request_id, len(chunk)))
+
+                # Drain oldest if pipeline is full
+                if len(self._write_queue) >= self._PIPELINE_DEPTH:
+                    rid, nbytes = self._write_queue.pop(0)
+                    response = await self._client._wait_for_response(rid)
+                    if isinstance(response, SFTPStatusMessage):
+                        if response.status_code == SSH_FX_OK:
+                            self._offset += nbytes
+                        else:
+                            raise SFTPError(
+                                f"Write failed: {response.message}",
+                                response.status_code,
+                            )
                     else:
-                        raise SFTPError(
-                            f"Write failed: {response.message}", response.status_code
-                        )
-                else:
-                    raise SFTPError("Unexpected response to write request")
+                        raise SFTPError("Unexpected response to write request")
+
+                offset += len(chunk)
 
         except Exception as e:
             if isinstance(e, SFTPError):

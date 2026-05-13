@@ -703,25 +703,22 @@ class TestAuthenticate:
                 mock_pw.assert_awaited_once()
                 mock_ki.assert_not_awaited()
 
-    async def test_keyboard_interactive_as_fallback(self):
+    async def test_keyboard_interactive_not_automatic_fallback(self):
+        """keyboard-interactive must NOT be tried automatically; callers use auth_keyboard_interactive directly."""
         client = _connected_client()
         with patch.object(
             client, "auth_keyboard_interactive", new=AsyncMock()
         ) as mock_ki:
-            await client._authenticate("user")
-            mock_ki.assert_awaited_once()
+            with pytest.raises(AuthenticationException):
+                await client._authenticate("user")
+            mock_ki.assert_not_awaited()
 
     async def test_all_methods_fail_raises_authentication_exception(self):
         client = _connected_client()
-        with patch.object(
-            client,
-            "auth_keyboard_interactive",
-            new=AsyncMock(side_effect=AuthenticationException("ki fail")),
+        with pytest.raises(
+            AuthenticationException, match="Authentication failed for user"
         ):
-            with pytest.raises(
-                AuthenticationException, match="Authentication failed for user"
-            ):
-                await client._authenticate("user")
+            await client._authenticate("user")
 
     async def test_gss_fail_falls_through_to_password(self):
         client = _connected_client()

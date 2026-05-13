@@ -13,6 +13,7 @@ from typing import Any, Optional
 
 from ..exceptions import SFTPError
 from ..protocol.sftp_constants import (
+    SFTP_MAX_PACKET_SIZE,
     SFTP_MAX_READ_SIZE,
     SFTP_SUBSYSTEM,
     SFTP_VERSION,
@@ -20,6 +21,7 @@ from ..protocol.sftp_constants import (
     SSH_FILEXFER_ATTR_SIZE,
     SSH_FX_EOF,
     SSH_FX_OK,
+    SSH_FXF_APPEND,
     SSH_FXF_CREAT,
     SSH_FXF_READ,
     SSH_FXF_TRUNC,
@@ -142,24 +144,34 @@ class SFTPFile:
         if self._closed:
             raise SFTPError("File is closed")
 
-        request_id = self._client._get_next_request_id()
-        # Use current send offset (which may be ahead of committed offset in pipeline)
-        send_offset = self._offset + sum(n for _, n in self._write_queue)
-        write_msg = SFTPWriteMessage(request_id, self._handle, send_offset, data)
-        self._client._send_message(write_msg)
-        self._write_queue.append((request_id, len(data)))
+        # Chunk large writes to fit within SFTP_MAX_PACKET_SIZE.
+        # Account for SFTP write message overhead (header + handle + offset).
+        _MAX_CHUNK = SFTP_MAX_PACKET_SIZE - 1024
+        offset = 0
+        while offset < len(data):
+            chunk = data[offset : offset + _MAX_CHUNK]
+            request_id = self._client._get_next_request_id()
+            # Use current send offset (which may be ahead of committed offset in pipeline)
+            send_offset = self._offset + sum(n for _, n in self._write_queue)
+            write_msg = SFTPWriteMessage(request_id, self._handle, send_offset, chunk)
+            self._client._send_message(write_msg)
+            self._write_queue.append((request_id, len(chunk)))
 
-        # Collect the oldest pending ACK when the pipeline is full so we
-        # surface write errors promptly and keep memory usage bounded.
-        if len(self._write_queue) >= self._PIPELINE_DEPTH:
-            rid, nbytes = self._write_queue.pop(0)
-            response = self._client._receive_message_for_id(rid)
-            if isinstance(response, SFTPStatusMessage):
-                if response.status_code != SSH_FX_OK:
-                    raise SFTPError.from_status(response.status_code, response.message)
-                self._offset += nbytes
-            else:
-                raise SFTPError("Unexpected response to write request")
+            # Collect the oldest pending ACK when the pipeline is full so we
+            # surface write errors promptly and keep memory usage bounded.
+            if len(self._write_queue) >= self._PIPELINE_DEPTH:
+                rid, nbytes = self._write_queue.pop(0)
+                response = self._client._receive_message_for_id(rid)
+                if isinstance(response, SFTPStatusMessage):
+                    if response.status_code != SSH_FX_OK:
+                        raise SFTPError.from_status(
+                            response.status_code, response.message
+                        )
+                    self._offset += nbytes
+                else:
+                    raise SFTPError("Unexpected response to write request")
+
+            offset += len(chunk)
 
         return len(data)
 
@@ -361,7 +373,8 @@ class SFTPClient:
             SFTPError: If request fails or response indicates error
         """
         self._send_message(request)
-        assert request.request_id is not None
+        if request.request_id is None:
+            raise SFTPError("Request has no ID assigned")
         return self._receive_message_for_id(request.request_id)
 
     def get(self, remotepath: str, localpath: str) -> None:
@@ -569,8 +582,9 @@ class SFTPClient:
 
         try:
             self.mkdir(remotepath)
-        except SFTPError:
-            pass  # Directory might already exist
+        except SFTPError as e:
+            if e.sftp_code != SFTPError.SSH_FX_FAILURE:
+                raise
 
         for item in os.listdir(localpath):
             local_item = os.path.join(localpath, item)
@@ -1090,7 +1104,7 @@ class SFTPClient:
         if "w" in mode:
             flags |= SSH_FXF_WRITE | SSH_FXF_CREAT | SSH_FXF_TRUNC
         if "a" in mode:
-            flags |= SSH_FXF_WRITE | SSH_FXF_CREAT
+            flags |= SSH_FXF_WRITE | SSH_FXF_CREAT | SSH_FXF_APPEND
         return flags
 
     def close(self) -> None:

@@ -553,7 +553,6 @@ class SFTPServer:
                 )
 
                 with self._handle_lock:
-                    # Bug #12 Fixed: Enforce limit on open file handles
                     if len(self._handles) >= MAX_SFTP_HANDLES:
                         file_obj.close()
                         error_msg = SFTPStatusMessage(

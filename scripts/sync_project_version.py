@@ -85,7 +85,9 @@ def check_synced() -> bool:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--version", help="Optional version to write to pyproject.toml.")
+    parser.add_argument(
+        "--version", help="Optional version to write to pyproject.toml."
+    )
     parser.add_argument(
         "--check",
         action="store_true",

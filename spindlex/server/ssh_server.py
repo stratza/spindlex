@@ -631,7 +631,6 @@ class SSHServerManager:
                 raise TransportException("Server is already running")
 
             try:
-                # Bug #2.3 Fixed: Use getaddrinfo to support IPv6 and dual-stack
                 addr_info = socket.getaddrinfo(
                     self._bind_address,
                     self._port,

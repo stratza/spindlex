@@ -14,7 +14,12 @@ if TYPE_CHECKING:
 
 from ..auth.keyboard_interactive import console_handler
 from ..crypto.pkey import PKey
-from ..exceptions import AuthenticationException, BadHostKeyException, SSHException
+from ..exceptions import (
+    AuthenticationException,
+    BadHostKeyException,
+    ChannelException,
+    SSHException,
+)
 from ..hostkeys.policy import MissingHostKeyPolicy, RejectPolicy
 from ..hostkeys.storage import HostKeyStorage
 from ..transport.channel import Channel
@@ -73,12 +78,11 @@ class ChannelFile:
                     if not chunk:
                         break
                     result.extend(chunk)
-                except Exception as e:
-                    # If we have some data, return it. Otherwise, raise the exception.
-                    # Also return if the channel is closed.
-                    if ("Timeout" in str(e) or "closed" in str(e).lower()) and result:
+                except ChannelException as e:
+                    errmsg = str(e).lower()
+                    if ("timeout" in errmsg or "closed" in errmsg) and result:
                         return bytes(result)
-                    if "closed" in str(e).lower() and not result:
+                    if "closed" in errmsg:
                         return b""
                     raise
             return bytes(result)
@@ -196,9 +200,15 @@ class SSHClient:
         self._transport: Optional[Transport] = None
         self._hostname: Optional[str] = None
         self._port: int = 22
+        self._connected_username: Optional[str] = None
         self._host_key_policy: MissingHostKeyPolicy = RejectPolicy()
         self._host_key_storage = HostKeyStorage()
         self._logger = logging.getLogger(__name__)
+
+    @property
+    def username(self) -> Optional[str]:
+        """Return the username used to authenticate this connection, or None if not connected."""
+        return self._connected_username
 
     def set_missing_host_key_policy(self, policy: MissingHostKeyPolicy) -> None:
         """
@@ -319,6 +329,7 @@ class SSHClient:
 
         self._hostname = hostname
         self._port = port
+        self._connected_username = username
 
         # Validate port
         if not (0 < port <= 65535):

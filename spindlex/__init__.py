@@ -29,6 +29,7 @@ from .exceptions import (
 )
 from .logging.sanitizer import LogSanitizer as _LogSanitizer
 from .logging.sanitizer import SanitizingFilter as _SanitizingFilter
+from .logging.sanitizer import configure_sanitizing_logging
 from .server.sftp_server import SFTPServer
 from .server.ssh_server import SSHServer, SSHServerManager
 from .transport.transport import Transport
@@ -61,4 +62,5 @@ __all__ = [
     "TimeoutException",
     "ConfigurationException",
     "IncompatiblePeer",
+    "configure_sanitizing_logging",
 ]

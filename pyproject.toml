@@ -247,12 +247,8 @@ ignore = [
     "B904", # raise-without-from-inside-except
     "B023", # function-uses-loop-variable
     "S104", # hardcoded-bind-all-interfaces
-    "S105", # hardcoded-password-string
-    "S106", # hardcoded-password-func-arg
     "S108", # hardcoded-temp-file
     "S112", # try-except-continue
-    "S303", # suspicious-insecure-hash-usage
-    "S324", # hashlib-insecure-hash-function
 ]
 
 [tool.ruff.lint.per-file-ignores]

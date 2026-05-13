@@ -87,7 +87,6 @@ class AutoAddPolicy(MissingHostKeyPolicy):
                 f"{key.get_fingerprint()}"
             )
         except Exception as e:
-            # Bug #2.4 Fixed: Ensure persistence failure is raised as SSHException
             self._logger.error(f"Failed to add/save host key for {hostname}: {e}")
             from ..exceptions import SSHException
 
@@ -133,7 +132,7 @@ class WarningPolicy(MissingHostKeyPolicy):
 
     def missing_host_key(self, client: Any, hostname: str, key: Any) -> None:
         """
-        Log warning and accept unknown host key.
+        Log warning and accept unknown host key (TOFU — stores on first use).
 
         Args:
             client: SSH client instance
@@ -143,3 +142,7 @@ class WarningPolicy(MissingHostKeyPolicy):
         self._logger.warning(
             f"Unknown host key for {hostname}: {key.algorithm_name} {key.get_fingerprint()}"
         )
+        storage = getattr(client, "_host_key_storage", None)
+        if storage:
+            storage.add(hostname, key)
+            storage.save()

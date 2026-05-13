@@ -4,6 +4,42 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.11] - 2026-05-12
+
+### Performance
+*   **Async throughput overhaul**: SpindleX async SFTP now outperforms asyncssh on handshake, upload, and download benchmarks (LAN: ~42 ms handshake vs asyncssh ~65 ms; ~14 ms/MiB upload vs asyncssh ~15 ms/MiB; ~13 ms/MiB download vs asyncssh ~14 ms/MiB).
+*   **Native async packet receive**: Replaced `asyncio.to_thread(super()._read_message)` with `_recv_packet_async()`, which reads directly from the asyncio `StreamReader`. Eliminates two cross-thread context switches per received SSH packet.
+*   **Threshold-based write drain**: `_send_message_async()` no longer calls `drain()` after every packet. Drain fires only when the asyncio write buffer exceeds 64 KB, eliminating ~32 event-loop yields per 1 MiB SFTP upload window.
+*   **Doubled SFTP pipeline depth**: `_WINDOW` and `_PIPELINE_DEPTH` increased from 32 to 64, keeping up to 2 MiB of SFTP reads/writes in flight (was 1 MiB).
+*   **Larger channel window**: `DEFAULT_WINDOW_SIZE` raised from 2 MiB to 4 MiB so the server can push larger bursts before needing a window adjustment.
+*   **Socket tuning**: `TCP_NODELAY` enabled on async connections to suppress Nagle coalescing on control packets; `SO_SNDBUF`/`SO_RCVBUF` raised to 1 MiB each.
+*   **Optimized SFTP message limits**: Raised `MAX_MESSAGE_SIZE` to 1 MiB and `SFTP_MAX_PACKET_SIZE` to 64 KB, providing a 2x throughput improvement for SFTP data payloads while maintaining standard compatibility.
+
+### Fixed
+*   **SFTP large write protocol crash**: Implemented automatic 64 KB chunking in `SFTPClient` and `AsyncSFTPClient` to prevent `ProtocolException: String too long` and connection resets when sending large data buffers.
+*   **Async connection reliability**: Added a robust retry mechanism with exponential backoff and jitter to `AsyncSSHClient.connect()`, covering the entire handshake phase to mitigate transient server-side resets (`MaxStartups`).
+*   **SFTP pipelining integrity**: Fixed a potential data corruption bug where unhandled short reads during pipelined transfers could lead to offset drift.
+*   **Unified exception propagation**: Standardized `AsyncTransport` to preserve specific `SSHException` subclasses (like `CryptoException`) during initialization, ensuring parity with the synchronous transport's error reporting.
+*   **Append mode in SFTP**: `SFTPClient._mode_to_flags()` now correctly sets `SSH_FXF_APPEND` for `"a"` open mode (previously the flag was defined but never used).
+*   **`key_password` parameter**: `SSHClient.connect()` and `AsyncSSHClient.connect()` now accept a dedicated `key_password` argument for encrypted private keys, separate from the login `password`.
+*   **`SSHClient.username` property**: Added a read-only `username` property that returns the authenticated username after `connect()`, or `None` if not connected.
+*   **`ChannelFile.read()` exception handling**: Narrowed the exception catch from `Exception` to `ChannelException` so only genuine channel errors (timeout, closed) are handled; other errors propagate correctly.
+*   **`put_recursive()` mkdir error handling**: `SFTPClient.put_recursive()` and `AsyncSFTPClient.put_recursive()` now only suppress `SSH_FX_FAILURE` (directory already exists); other SFTP error codes propagate as before.
+*   **`_expect_message()` transport closed**: Changed a silent `return None` to `raise TransportException("Transport closed")` so callers are not handed a `None` message when the transport shuts down mid-wait.
+*   **Rekey counter reset**: Removed premature `_bytes_since_rekey` and `_last_rekey_time` resets inside `_check_rekey()` that ran before the KEX thread completed, potentially skipping a required rekey cycle.
+*   **`HostKeyStorage` load errors**: The constructor now silently ignores `FileNotFoundError` (normal on first use) but logs a warning for any other load error, rather than silently ignoring everything.
+*   **`HostKeyStorage` marker**: The `save()` method now writes `spindlex` as the library name in the known-hosts comment instead of the generic `ssh_library`.
+*   **`WarningPolicy` TOFU**: `WarningPolicy.missing_host_key()` now stores and persists the host key on first contact (trust-on-first-use), matching the documented behavior.
+*   **Keyboard-interactive fallback removed**: `AsyncSSHClient._authenticate()` no longer silently attempts keyboard-interactive as a final fallback when no credentials are provided, preventing unexpected interactive prompts.
+
+### Improved
+*   **`configure_sanitizing_logging()` public API**: Added a convenience function to attach `SanitizingFilter` to any logger by name, making it easy to redact credentials from application logs.
+*   **Async channel close safety**: `AsyncChannel._handle_close()` now schedules the EOF+CLOSE response as an `asyncio.ensure_future` task rather than calling `_send_message()` synchronously, preventing a potential event-loop deadlock in the native async receive path.
+*   **Transport architecture**: Extracted `_dispatch_packet()` from `_read_message()` in the base `Transport` class so the async path can reuse the same packet dispatch logic without the thread bridge.
+*   **Bandit/ruff noise reduction**: `AUTH_PASSWORD = "password"` now carries both `# noqa: S105` and `# nosec B105` markers with an explanatory comment; the four incorrect global ruff ignores (`S105`, `S106`, `S303`, `S324`) were removed from `pyproject.toml`.
+*   **Code hygiene**: Removed all `# Bug #N Fixed:` inline comments, a dead `if TYPE_CHECKING: pass` block, and a misleading comment in `_recv_version()`.
+*   **Benchmark scripts**: `AutoAddPolicy(accept_risk=True)` used in benchmark scripts to suppress the host-key warning during testing.
+
 ## [0.6.10] - 2026-05-08
 
 ### Added

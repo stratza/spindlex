@@ -10,6 +10,7 @@ from typing import Union
 
 from ..exceptions import ProtocolException
 from .constants import (
+    MAX_MESSAGE_SIZE,
     MAX_PACKET_SIZE,
     MAX_PADDING_SIZE,
     MIN_PACKET_SIZE,
@@ -101,7 +102,7 @@ def read_uint64(data: Union[bytes, bytearray], offset: int) -> tuple[int, int]:
 
 
 def read_string(
-    data: Union[bytes, bytearray], offset: int, max_size: int = MAX_PACKET_SIZE
+    data: Union[bytes, bytearray], offset: int, max_size: int = MAX_MESSAGE_SIZE
 ) -> tuple[bytes, int]:
     """
     Read string from data.
@@ -224,12 +225,13 @@ def write_uint64(value: int) -> bytes:
     return struct.pack(">Q", value)
 
 
-def write_string(value: Union[str, bytes]) -> bytes:
+def write_string(value: Union[str, bytes], max_size: int = MAX_MESSAGE_SIZE) -> bytes:
     """
     Write string to bytes.
 
     Args:
         value: String or bytes to write
+        max_size: Maximum allowed string length
 
     Returns:
         Serialized string with length prefix
@@ -243,7 +245,7 @@ def write_string(value: Union[str, bytes]) -> bytes:
     # Ensure value is bytes (not bytearray)
     value_bytes = bytes(value)
 
-    if len(value_bytes) > MAX_PACKET_SIZE:
+    if len(value_bytes) > max_size:
         raise ProtocolException(f"String too long: {len(value_bytes)}")
 
     return write_uint32(len(value_bytes)) + value_bytes

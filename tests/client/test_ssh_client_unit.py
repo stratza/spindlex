@@ -14,6 +14,7 @@ from spindlex.client.ssh_client import ChannelFile, SSHClient
 from spindlex.exceptions import (
     AuthenticationException,
     BadHostKeyException,
+    ChannelException,
     SSHException,
 )
 
@@ -85,22 +86,25 @@ class TestChannelFileReadAllWithTimeout:
 
     def test_read_all_timeout_with_partial_data(self):
         channel = MagicMock()
-        # First chunk succeeds, second raises a Timeout-like error
-        channel.recv.side_effect = [b"partial", Exception("Timeout occurred")]
+        # First chunk succeeds, second raises a timeout ChannelException
+        channel.recv.side_effect = [
+            b"partial",
+            ChannelException("Timeout receiving data"),
+        ]
         cf = ChannelFile(channel, "r")
         result = cf.read()
         assert result == b"partial"
 
     def test_read_all_closed_channel_with_data(self):
         channel = MagicMock()
-        channel.recv.side_effect = [b"data", Exception("channel closed")]
+        channel.recv.side_effect = [b"data", ChannelException("Channel is closed")]
         cf = ChannelFile(channel, "r")
         result = cf.read()
         assert result == b"data"
 
     def test_read_all_closed_channel_no_data(self):
         channel = MagicMock()
-        channel.recv.side_effect = Exception("channel closed")
+        channel.recv.side_effect = ChannelException("Channel is closed")
         cf = ChannelFile(channel, "r")
         result = cf.read()
         assert result == b""

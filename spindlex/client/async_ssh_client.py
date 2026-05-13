@@ -9,10 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import socket
-from typing import TYPE_CHECKING, Any, Callable
-
-if TYPE_CHECKING:
-    pass
+from typing import Any, Callable
 
 from ..exceptions import AuthenticationException, BadHostKeyException, SSHException
 from ..hostkeys.policy import MissingHostKeyPolicy, RejectPolicy
@@ -48,6 +45,7 @@ class AsyncSSHClient:
         password: str | None = None,
         pkey: Any | None = None,
         key_filename: str | list[str] | None = None,
+        key_password: str | None = None,
         timeout: float | None = None,
         compress: bool = False,
         sock: Any | None = None,
@@ -59,7 +57,7 @@ class AsyncSSHClient:
         rekey_time_limit: int | None = None,
     ) -> None:
         """
-        Connect to SSH server asynchronously.
+        Connect to SSH server asynchronously with retry logic for transient errors.
 
         Args:
             hostname: Server hostname or IP address
@@ -68,6 +66,7 @@ class AsyncSSHClient:
             password: Password for authentication
             pkey: Private key for authentication
             key_filename: Path to private key file(s)
+            key_password: Password for encrypted private key file(s)
             timeout: Connection timeout in seconds
             compress: Enable compression
             sock: Optional existing socket or channel to use
@@ -89,57 +88,117 @@ class AsyncSSHClient:
         if not (0 < port <= 65535):
             raise SSHException(f"Invalid port number: {port}")
 
+        max_retries = 3
+
         try:
-            if sock is None:
-                # Create socket connection
-                sock, reader, writer = await self._create_connection(
-                    hostname, port, timeout
-                )
-            else:
-                # If sock is provided, we need to wrap it if it's a raw socket
-                # In asyncio, we usually need reader/writer.
-                # If it's a SpindleX Channel, it might need special handling.
-                if hasattr(sock, "makefile"):  # Likely a socket-like object
-                    reader, writer = await asyncio.open_connection(sock=sock)
-                else:
-                    # Assume it's already a pair or handled by transport
-                    reader, writer = None, None
+            for attempt in range(max_retries):
+                try:
+                    if sock is None:
+                        # Create socket connection
+                        current_sock, reader, writer = await self._create_connection(
+                            hostname, port, timeout
+                        )
+                    else:
+                        # If sock is provided, we need to wrap it if it's a raw socket
+                        # In asyncio, we usually need reader/writer.
+                        # If it's a SpindleX Channel, it might need special handling.
+                        current_sock = sock
+                        if hasattr(
+                            current_sock, "makefile"
+                        ):  # Likely a socket-like object
+                            reader, writer = await asyncio.open_connection(
+                                sock=current_sock
+                            )
+                        else:
+                            # Assume it's already a pair or handled by transport
+                            reader, writer = None, None
 
-            # Create async transport
-            self._transport = AsyncTransport(
-                sock,
-                rekey_bytes_limit=rekey_bytes_limit,
-                rekey_time_limit=rekey_time_limit,
-            )
+                    # Create async transport
+                    self._transport = AsyncTransport(
+                        current_sock,
+                        rekey_bytes_limit=rekey_bytes_limit,
+                        rekey_time_limit=rekey_time_limit,
+                    )
 
-            # Use connect_existing helper to set reader/writer safely
-            if reader and writer:
-                await self._transport.connect_existing(reader, writer)
+                    # Use connect_existing helper to set reader/writer safely
+                    if reader and writer:
+                        await self._transport.connect_existing(reader, writer)
 
-            # Start client transport
-            await self._transport.start_client(timeout)
+                    # Start client transport
+                    await self._transport.start_client(timeout)
 
-            # Store connection info before host key verification so hostname is available
-            self._hostname = hostname
-            self._port = port
-            self._username = username
-            self._connected = True
+                    # Store connection info before host key verification so hostname is available
+                    self._hostname = hostname
+                    self._port = port
+                    self._username = username
+                    self._connected = True
 
-            # Verify host key
-            self._verify_host_key()
+                    # Verify host key
+                    self._verify_host_key()
 
-            # Perform authentication if credentials provided
-            if username:
-                await self._authenticate(
-                    username,
-                    password=password,
-                    pkey=pkey,
-                    key_filename=key_filename,
-                    gss_auth=gss_auth,
-                    gss_host=gss_host,
-                    gss_deleg_creds=gss_deleg_creds,
-                )
+                    # Perform authentication if credentials provided
+                    if username:
+                        await self._authenticate(
+                            username,
+                            password=password,
+                            pkey=pkey,
+                            key_filename=key_filename,
+                            key_password=key_password,
+                            gss_auth=gss_auth,
+                            gss_host=gss_host,
+                            gss_deleg_creds=gss_deleg_creds,
+                        )
 
+                    return  # Success
+
+                except (
+                    SSHException,
+                    ConnectionResetError,
+                    ConnectionRefusedError,
+                    OSError,
+                ) as e:
+                    # Cleanup failed attempt
+                    if self._transport:
+                        await self._transport.close()
+                        self._transport = None
+
+                    # Only retry on transient connection-level errors.
+                    # Avoid retrying on auth failure or host key mismatch.
+                    is_transient = isinstance(
+                        e, (ConnectionResetError, ConnectionRefusedError, socket.error)
+                    ) or (
+                        isinstance(e, SSHException)
+                        and any(
+                            kw in str(e)
+                            for kw in (
+                                "Connection reset",
+                                "Connection failed",
+                                "Client start failed",
+                                "Connection closed",
+                            )
+                        )
+                    )
+
+                    if not is_transient or attempt == max_retries - 1:
+                        if isinstance(
+                            e,
+                            (
+                                SSHException,
+                                AuthenticationException,
+                                BadHostKeyException,
+                            ),
+                        ):
+                            raise
+                        raise SSHException(f"Connection failed: {e}") from e
+
+                    # Exponential backoff with jitter: 0.2s, 0.4s, 0.8s...
+                    import random
+
+                    wait = (0.2 * (2**attempt)) + (random.random() * 0.1)  # noqa: S311 # nosec
+                    self._logger.debug(
+                        f"Connection attempt {attempt + 1} failed: {e}. Retrying in {wait:.2f}s..."
+                    )
+                    await asyncio.sleep(wait)
         except Exception as e:
             if self._transport:
                 await self._transport.close()
@@ -250,8 +309,15 @@ class AsyncSSHClient:
                 asyncio.open_connection(hostname, port), timeout=timeout
             )
 
-            # Get the underlying socket
+            # Get the underlying socket and tune it for throughput.
             sock = writer.get_extra_info("socket")
+            if sock is not None:
+                # Disable Nagle's algorithm so small control packets are sent
+                # immediately rather than coalesced (critical for handshake RTT).
+                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                # Larger kernel socket buffers reduce stalls on high-throughput transfers.
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 1 << 20)  # 1 MB
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 1 << 20)  # 1 MB
 
             return sock, reader, writer
 
@@ -461,6 +527,7 @@ class AsyncSSHClient:
         password: str | None = None,
         pkey: Any | None = None,
         key_filename: str | list[str] | None = None,
+        key_password: str | None = None,
         gss_auth: bool = False,
         gss_host: str | None = None,
         gss_deleg_creds: bool = False,
@@ -483,7 +550,10 @@ class AsyncSSHClient:
         if (pkey or key_filename) and not authenticated:
             try:
                 await self.auth_publickey(
-                    username, pkey=pkey, key_filename=key_filename, password=password
+                    username,
+                    pkey=pkey,
+                    key_filename=key_filename,
+                    password=key_password if key_password is not None else password,
                 )
                 authenticated = True
             except Exception as e:
@@ -496,14 +566,6 @@ class AsyncSSHClient:
                 authenticated = True
             except Exception as e:
                 self._logger.debug(f"Password authentication failed: {e}")
-
-        # Try Keyboard-Interactive if nothing else worked
-        if not authenticated:
-            try:
-                await self.auth_keyboard_interactive(username)
-                authenticated = True
-            except Exception as e:
-                self._logger.debug(f"Keyboard-interactive authentication failed: {e}")
 
         if not authenticated:
             raise AuthenticationException(f"Authentication failed for user {username}")

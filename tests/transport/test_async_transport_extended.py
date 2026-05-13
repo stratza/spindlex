@@ -394,10 +394,13 @@ class TestRecvMessageAsync:
     async def test_recv_from_transport(self, connected_transport):
         t = connected_transport
         msg = MagicMock(spec=Message)
-        from spindlex.transport.transport import Transport
-
-        with patch.object(Transport, "_read_message", return_value=msg):
-            result = await t._recv_message_async(check_queue=False)
+        msg.msg_type = 1
+        # New native-async path: mock _recv_packet_async + _dispatch_packet
+        with patch.object(
+            t, "_recv_packet_async", new=AsyncMock(return_value=b"\x00" * 8)
+        ):
+            with patch.object(t, "_dispatch_packet", return_value=msg):
+                result = await t._recv_message_async(check_queue=False)
         assert result is msg
 
 
@@ -409,15 +412,25 @@ class TestPumpAsync:
     async def test_pump_queues_non_channel_message(self, connected_transport):
         t = connected_transport
         msg = MagicMock(spec=Message)
-        with patch.object(t, "_read_single_packet", return_value=msg):
-            await t._pump_async()
+        msg.msg_type = 1  # Non-zero so it's not mistaken for HandledMessage sentinel
+        with patch.object(
+            t, "_recv_packet_async", new=AsyncMock(return_value=b"\x00" * 8)
+        ):
+            with patch.object(t, "_dispatch_packet", return_value=msg):
+                await t._pump_async()
         assert msg in t._message_queue
 
     @pytest.mark.asyncio
-    async def test_pump_none_does_not_queue(self, connected_transport):
+    async def test_pump_handled_sentinel_does_not_queue(self, connected_transport):
         t = connected_transport
-        with patch.object(t, "_read_single_packet", return_value=None):
-            await t._pump_async()
+        from spindlex.transport.transport import HandledMessage
+
+        sentinel = HandledMessage()
+        with patch.object(
+            t, "_recv_packet_async", new=AsyncMock(return_value=b"\x00" * 8)
+        ):
+            with patch.object(t, "_dispatch_packet", return_value=sentinel):
+                await t._pump_async()
         assert len(t._message_queue) == 0
 
 

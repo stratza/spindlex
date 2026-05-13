@@ -145,13 +145,13 @@ def test_read_uint64_insufficient_data():
 
 
 def test_read_string_too_long():
-    from spindlex.protocol.constants import MAX_PACKET_SIZE
+    from spindlex.protocol.constants import MAX_MESSAGE_SIZE
 
     # We need to provide at least enough data to satisfy new_offset + length > len(data) check
-    # but length must be > MAX_PACKET_SIZE.
-    # Actually, the check 'if new_offset + length > len(data)' comes BEFORE 'if length > MAX_PACKET_SIZE'.
+    # but length must be > MAX_MESSAGE_SIZE.
+    # Actually, the check 'if new_offset + length > len(data)' comes BEFORE 'if length > MAX_MESSAGE_SIZE'.
     # To hit "String too long", we need to provide enough data.
-    length = MAX_PACKET_SIZE + 1
+    length = MAX_MESSAGE_SIZE + 1
     data = struct.pack(">I", length) + b"a" * length
     with pytest.raises(ProtocolException, match="String too long"):
         read_string(data, 0)
@@ -171,9 +171,9 @@ def test_write_uint64_out_of_range():
 
 
 def test_write_string_too_long():
-    from spindlex.protocol.constants import MAX_PACKET_SIZE
+    from spindlex.protocol.constants import MAX_MESSAGE_SIZE
 
-    long_string = "a" * (MAX_PACKET_SIZE + 1)
+    long_string = "a" * (MAX_MESSAGE_SIZE + 1)
     with pytest.raises(ProtocolException, match="String too long"):
         write_string(long_string)
 
