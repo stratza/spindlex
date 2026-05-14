@@ -7,11 +7,14 @@ authentication, and secure packet transmission.
 
 import hmac
 import logging
+import os
 import socket
+import statistics
 import struct
 import threading
 import time
 from collections import deque
+from time import perf_counter
 from typing import TYPE_CHECKING, Any, Optional, Union
 
 if TYPE_CHECKING:
@@ -113,10 +116,61 @@ from .channel import Channel
 from .kex import KeyExchange
 
 _CIPHER_BLOCK_SIZES = {
+    "chacha20-poly1305@openssh.com": 8,
     "aes128-ctr": 16,
     "aes192-ctr": 16,
     "aes256-ctr": 16,
 }
+
+
+class PacketProfiler:
+    """
+    Optional per-stage packet timing. Activated by setting SPINDLEX_PROFILE=1.
+
+    Records build / encrypt / socket-write latencies for every packet sent
+    through _send_message, then reports median and P95 via summary().
+    """
+
+    __slots__ = ("build", "encrypt", "write")
+
+    def __init__(self) -> None:
+        self.build: list[float] = []
+        self.encrypt: list[float] = []
+        self.write: list[float] = []
+
+    def record(self, build_s: float, encrypt_s: float, write_s: float) -> None:
+        self.build.append(build_s)
+        self.encrypt.append(encrypt_s)
+        self.write.append(write_s)
+
+    def reset(self) -> None:
+        self.build.clear()
+        self.encrypt.clear()
+        self.write.clear()
+
+    def summary(self, pct: int = 95) -> str:
+        n = len(self.build)
+        if n == 0:
+            return "PacketProfiler: no samples"
+
+        def _stats(samples: list[float]) -> tuple[float, float]:
+            s = sorted(samples)
+            med = statistics.median(s)
+            idx = max(0, int(len(s) * pct / 100) - 1)
+            return med * 1e6, s[idx] * 1e6
+
+        b_med, b_p = _stats(self.build)
+        e_med, e_p = _stats(self.encrypt)
+        w_med, w_p = _stats(self.write)
+        total_med = b_med + e_med + w_med
+        total_p = b_p + e_p + w_p
+        return (
+            f"PacketProfiler ({n} packets) — median / P{pct} in µs:\n"
+            f"  build:   {b_med:7.1f} / {b_p:7.1f}\n"
+            f"  encrypt: {e_med:7.1f} / {e_p:7.1f}\n"
+            f"  write:   {w_med:7.1f} / {w_p:7.1f}\n"
+            f"  total:   {total_med:7.1f} / {total_p:7.1f}"
+        )
 
 
 class HandledMessage:
@@ -188,10 +242,12 @@ class Transport:
         # Cipher instances
         self._encryptor_instance: Optional[Any] = None
         self._decryptor_instance: Optional[Any] = None
+        self._chacha20_key_out: Optional[bytes] = None
+        self._chacha20_key_in: Optional[bytes] = None
 
         self._sequence_number_in = 0
         self._sequence_number_out = 0
-        self._packet_buffer = b""
+        self._packet_buffer = bytearray()
         # Lock ordering contract — to prevent ABBA deadlock, always acquire in this order:
         #   1. _read_lock  (socket-level serialisation; held while reading a packet)
         #   2. _lock       (state-level serialisation; held while mutating transport state)
@@ -227,8 +283,6 @@ class Transport:
         self._strict_kex = False
         self._stop_event = threading.Event()
 
-        import os
-
         self._buffer_size = 32768
         env_buffer_size = os.environ.get("SPINDLEX_BUFFER_SIZE")
         if env_buffer_size:
@@ -236,6 +290,10 @@ class Transport:
                 self._buffer_size = max(4096, int(env_buffer_size))
             except (ValueError, TypeError):
                 pass
+
+        self._profiler: Optional[PacketProfiler] = (
+            PacketProfiler() if os.environ.get("SPINDLEX_PROFILE") == "1" else None
+        )
 
     def get_timeout(self) -> Optional[float]:
         """
@@ -1178,9 +1236,6 @@ class Transport:
             # and is the single decrement point (mirrors the async path in
             # AsyncChannel.send). Transport must not decrement here, otherwise
             # the window would be debited twice per send.
-            self._logger.debug(
-                f"Channel {channel_id} window: remote={channel._remote_window_size}, max_packet={channel._remote_max_packet_size}, data={len(data)}"
-            )
             if len(data) > channel._remote_window_size:
                 raise TransportException("Remote window size exceeded")
 
@@ -1638,10 +1693,10 @@ class Transport:
         if self._server_mode:
             # Server sends kex-strict-s
             kex_algorithms = [
-                a for a in kex_algorithms if a != "kex-strict-c-v01@openssh.com"
+                a for a in kex_algorithms if a != "kex-strict-c-v00@openssh.com"
             ]
-            if "kex-strict-s-v01@openssh.com" not in kex_algorithms:
-                kex_algorithms.append("kex-strict-s-v01@openssh.com")
+            if "kex-strict-s-v00@openssh.com" not in kex_algorithms:
+                kex_algorithms.append("kex-strict-s-v00@openssh.com")
             # Servers don't send ext-info-c
             kex_algorithms = [a for a in kex_algorithms if a != "ext-info-c"]
         else:
@@ -1650,7 +1705,7 @@ class Transport:
                 if token not in kex_algorithms:
                     kex_algorithms.append(token)
             kex_algorithms = [
-                a for a in kex_algorithms if a != "kex-strict-s-v01@openssh.com"
+                a for a in kex_algorithms if a != "kex-strict-s-v00@openssh.com"
             ]
 
         kexinit_msg = KexInitMessage(
@@ -1679,22 +1734,19 @@ class Transport:
         self._peer_kexinit = msg
         self._logger.debug(f"Peer KEX algorithms: {msg.kex_algorithms}")
 
-        # Check for strict KEX marker from peer (handle both v00 and v01)
+        # Check for strict KEX marker from peer
         self._peer_strict_kex_version = None
-        if "kex-strict-s-v01@openssh.com" in msg.kex_algorithms:
-            self._peer_strict_kex_version = "v01"
-        elif "kex-strict-s-v00@openssh.com" in msg.kex_algorithms:
-            self._peer_strict_kex_version = "v00"
-        elif "kex-strict-c-v01@openssh.com" in msg.kex_algorithms:
-            self._peer_strict_kex_version = "v01"
-        elif "kex-strict-c-v00@openssh.com" in msg.kex_algorithms:
-            self._peer_strict_kex_version = "v00"
+        for algo in msg.kex_algorithms:
+            if algo in (
+                "kex-strict-s-v00@openssh.com",
+                "kex-strict-c-v00@openssh.com",
+            ):
+                self._peer_strict_kex_version = "v00"
+                break
 
         if self._peer_strict_kex_version:
             self._strict_kex = True
-            self._logger.debug(
-                f"Strict KEX mode enabled (Terrapin defense) version {self._peer_strict_kex_version}"
-            )
+            self._logger.debug("Strict KEX mode enabled (Terrapin defense)")
 
     def _check_rekey(self) -> None:
         """Check if rekeying is needed and start it if so."""
@@ -1737,15 +1789,28 @@ class Transport:
             payload = message.pack()
 
             with self._lock:
-                packet = self._build_packet(payload)
+                if self._profiler is not None:
+                    t0 = perf_counter()
+                    packet = self._build_packet(payload)
+                    t1 = perf_counter()
+                    if self._encryptor_instance or getattr(
+                        self, "_cipher_out_active", None
+                    ):
+                        packet = self._encrypt_packet(packet)
+                    t2 = perf_counter()
+                    self._socket.sendall(packet)
+                    t3 = perf_counter()
+                    self._profiler.record(t1 - t0, t2 - t1, t3 - t2)
+                else:
+                    packet = self._build_packet(payload)
 
-                # Encrypt if we have an active cipher
-                if self._encryptor_instance or getattr(
-                    self, "_cipher_out_active", None
-                ):
-                    packet = self._encrypt_packet(packet)
+                    # Encrypt if we have an active cipher
+                    if self._encryptor_instance or getattr(
+                        self, "_cipher_out_active", None
+                    ):
+                        packet = self._encrypt_packet(packet)
 
-                self._socket.sendall(packet)
+                    self._socket.sendall(packet)
 
                 # Track bytes sent for rekeying
                 if message.msg_type not in [
@@ -1761,19 +1826,11 @@ class Transport:
 
                 self._sequence_number_out = (self._sequence_number_out + 1) & 0xFFFFFFFF
 
-                # Strict-KEX (kex-strict-*@openssh.com): after NEWKEYS, the next
-                # outbound packet must use sequence number 0. Reset happens AFTER
-                # the unconditional increment above so seq 0 is used for the next
-                # _send_message call. Note: reset only happens in v01+.
+                # Strict-KEX (Terrapin defense, RFC): after sending NEWKEYS,
+                # reset outbound sequence to 0 so the next packet uses nonce 0.
                 if message.msg_type == MSG_NEWKEYS and self._strict_kex:
-                    peer_marker = getattr(self, "_peer_strict_kex_version", "v00")
-                    if peer_marker == "v01":
-                        self._sequence_number_out = 0
-                        self._logger.debug(
-                            "Sequence number (out) reset for strict KEX v01"
-                        )
-                    else:
-                        self._logger.debug("Strict KEX v00 active (no sequence reset)")
+                    self._sequence_number_out = 0
+                    self._logger.debug("Sequence number (out) reset for strict KEX")
 
         except (OSError, struct.error, TransportException) as e:
             if isinstance(e, TransportException):
@@ -2053,6 +2110,13 @@ class Transport:
 
         self._logger.info(f"Activating outbound encryption: {cipher_name}")
 
+        if cipher_name == "chacha20-poly1305@openssh.com":
+            self._chacha20_key_out = key
+            self._encryptor_instance = None
+            self._mac_out_active = None
+            self._mac_key_out_active = None
+            return
+
         encryptor = self._crypto_backend.create_cipher(cipher_name, key, iv)
         self._logger.debug(
             f"Activating {cipher_name}: key_len={len(key)}, iv_len={len(iv)}"
@@ -2096,26 +2160,35 @@ class Transport:
 
         self._logger.info(f"Activating inbound encryption: {cipher_name}")
 
-        decryptor = self._crypto_backend.create_cipher(cipher_name, key, iv)
-        # AES-CTR needs separate decryptor instance for state
-        self._decryptor_instance = decryptor.decryptor()
+        if cipher_name == "chacha20-poly1305@openssh.com":
+            self._chacha20_key_in = key
+            self._decryptor_instance = None
+            self._mac_in_active = None
+            self._mac_key_in_active = None
+        else:
+            decryptor = self._crypto_backend.create_cipher(cipher_name, key, iv)
+            # AES-CTR needs separate decryptor instance for state
+            self._decryptor_instance = decryptor.decryptor()
 
-        self._mac_in_active = mac_name
-        self._mac_key_in_active = mac_key
+            self._mac_in_active = mac_name
+            self._mac_key_in_active = mac_key
 
-        # Strict-KEX (Terrapin): sequence reset for all versions (v00, v01, etc.)
+        # Strict-KEX (Terrapin defense): after receiving NEWKEYS, reset inbound
+        # sequence to 0 so the next received packet is verified with nonce 0.
         if self._strict_kex:
-            peer_marker = getattr(self, "_peer_strict_kex_version", "v00")
-            if peer_marker == "v01":
-                self._sequence_number_in = 0
-                self._logger.debug("Sequence number (in) reset for strict KEX v01")
-            else:
-                self._logger.debug(
-                    f"Strict KEX {peer_marker} active (no sequence reset)"
-                )
+            self._sequence_number_in = 0
+            self._logger.debug("Sequence number (in) reset for strict KEX")
 
     def _encrypt_packet(self, packet: bytes) -> bytes:
         """Encrypt SSH packet and add MAC if needed."""
+        if getattr(self, "_cipher_out_active", None) == "chacha20-poly1305@openssh.com":
+            return self._crypto_backend.chacha20_poly1305_encrypt(
+                self._chacha20_key_out,
+                self._sequence_number_out,
+                packet[:PACKET_LENGTH_SIZE],
+                packet[PACKET_LENGTH_SIZE:],
+            )
+
         if self._encryptor_instance:
             # AES-CTR or similar
             encrypted = self._encryptor_instance.update(packet)
@@ -2154,11 +2227,19 @@ class Transport:
         else:
             block_size = 8
 
-        # Standard SSH (RFC 4253):
-        # "The total length of the packet (length, padding_length, payload,
-        #  and random padding) MUST be a multiple of [block_size] bytes."
+        # For AEAD ciphers (e.g. chacha20-poly1305) the 4-byte length field is
+        # encrypted separately, so only the body (packet_length bytes) must be a
+        # multiple of block_size.  For unencrypted packets and CTR/stream ciphers
+        # the entire packet (4-byte prefix + body) is one unit, so the prefix is
+        # included in the alignment.  Use _cipher_out_active (the currently
+        # active encryption cipher) not the negotiated _cipher_c2s, because
+        # NEWKEYS is sent before encryption is activated and must use standard
+        # alignment even though _cipher_c2s may already be set to chacha20.
+        _AEAD_CIPHERS = frozenset(["chacha20-poly1305@openssh.com"])
+        active_cipher = getattr(self, "_cipher_out_active", None)
+        length_overhead = 0 if active_cipher in _AEAD_CIPHERS else PACKET_LENGTH_SIZE
         padding_length = block_size - (
-            (len(payload) + PADDING_LENGTH_SIZE + PACKET_LENGTH_SIZE) % block_size
+            (len(payload) + PADDING_LENGTH_SIZE + length_overhead) % block_size
         )
 
         if padding_length < MIN_PADDING_SIZE:
@@ -2167,14 +2248,15 @@ class Transport:
         # Generate random padding
         padding = self._crypto_backend.generate_random(padding_length)
 
-        # Build packet
+        # Build packet into a pre-allocated bytearray to avoid repeated copies
         packet_length = PADDING_LENGTH_SIZE + len(payload) + padding_length
-        packet = struct.pack(">I", packet_length)
-        packet += struct.pack("B", padding_length)
-        packet += payload
-        packet += padding
+        packet = bytearray(PACKET_LENGTH_SIZE + PADDING_LENGTH_SIZE + len(payload) + padding_length)
+        struct.pack_into(">IB", packet, 0, packet_length, padding_length)
+        payload_start = PACKET_LENGTH_SIZE + PADDING_LENGTH_SIZE
+        packet[payload_start : payload_start + len(payload)] = payload
+        packet[payload_start + len(payload) :] = padding
 
-        return packet
+        return bytes(packet)
 
     def _recv_packet(self) -> bytes:
         """
@@ -2186,6 +2268,27 @@ class Transport:
         Raises:
             TransportException: If receive fails
         """
+        if getattr(self, "_cipher_in_active", None) == "chacha20-poly1305@openssh.com":
+            enc_length = self._recv_bytes(PACKET_LENGTH_SIZE)
+            if len(enc_length) < PACKET_LENGTH_SIZE:
+                if not self._active:
+                    return b""
+                raise TransportException("Short read while receiving packet length")
+            plain_length = self._crypto_backend.chacha20_poly1305_decrypt_length(
+                self._chacha20_key_in, self._sequence_number_in, enc_length
+            )
+            packet_length = struct.unpack(">I", plain_length)[0]
+            # For AEAD ciphers the minimum valid body is one block (8 bytes):
+            # padding_len(1) + payload(>=1) + padding(>=4), aligned to 8.
+            if packet_length < 8 or packet_length > MAX_PACKET_SIZE:
+                raise ProtocolException(f"Invalid packet length: {packet_length}")
+            enc_body = self._recv_bytes(packet_length)
+            tag = self._recv_bytes(16)
+            plain_body = self._crypto_backend.chacha20_poly1305_decrypt_body(
+                self._chacha20_key_in, self._sequence_number_in, enc_length, enc_body, tag
+            )
+            return bytes(plain_length + plain_body)
+
         if self._decryptor_instance:
             # AES-CTR: length is encrypted
             encrypted_length = self._recv_bytes(PACKET_LENGTH_SIZE)
@@ -2289,8 +2392,8 @@ class Transport:
         while True:
             with self._lock:
                 if len(self._packet_buffer) >= length:
-                    data = self._packet_buffer[:length]
-                    self._packet_buffer = self._packet_buffer[length:]
+                    data = bytes(self._packet_buffer[:length])
+                    del self._packet_buffer[:length]
                     return data
 
             with self._read_lock:
@@ -2298,8 +2401,8 @@ class Transport:
                 # may have refilled it while we waited.
                 with self._lock:
                     if len(self._packet_buffer) >= length:
-                        data = self._packet_buffer[:length]
-                        self._packet_buffer = self._packet_buffer[length:]
+                        data = bytes(self._packet_buffer[:length])
+                        del self._packet_buffer[:length]
                         return data
                     short_by = length - len(self._packet_buffer)
 

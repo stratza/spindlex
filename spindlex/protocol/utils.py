@@ -294,7 +294,10 @@ def validate_packet_structure(packet_data: bytes) -> bool:
     Raises:
         ProtocolException: If packet structure is invalid
     """
-    if len(packet_data) < MIN_PACKET_SIZE:
+    # Minimum total = PACKET_LENGTH_SIZE(4) + minimum body(8):
+    #   AEAD ciphers (chacha20-poly1305) require body % 8 == 0, so minimum body = 8.
+    #   Standard ciphers have larger minimums enforced elsewhere.
+    if len(packet_data) < PACKET_LENGTH_SIZE + 8:
         raise ProtocolException(f"Packet too small: {len(packet_data)}")
 
     if len(packet_data) > MAX_PACKET_SIZE:
@@ -303,8 +306,8 @@ def validate_packet_structure(packet_data: bytes) -> bool:
     # Read packet length
     packet_length = struct.unpack(">I", packet_data[:PACKET_LENGTH_SIZE])[0]
 
-    # Validate packet length
-    if packet_length < MIN_PACKET_SIZE - PACKET_LENGTH_SIZE:
+    # Validate packet length — minimum body is 8 (one AEAD block or standard minimum)
+    if packet_length < 8:
         raise ProtocolException(f"Invalid packet length: {packet_length}")
 
     if packet_length > MAX_PACKET_SIZE - PACKET_LENGTH_SIZE:
