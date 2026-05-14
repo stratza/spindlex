@@ -33,7 +33,7 @@ class CipherSuite:
     # Client-only signaling tokens appended to the client's KEXINIT kex list.
     # Servers MUST NOT include these; clients include them to advertise capabilities.
     KEX_SIGNAL_TOKENS = [
-        "kex-strict-c-v01@openssh.com",
+        "kex-strict-c-v00@openssh.com",
         "ext-info-c",
     ]
 
@@ -49,6 +49,7 @@ class CipherSuite:
 
     # Supported encryption algorithms (in preference order)
     ENCRYPTION_ALGORITHMS = [
+        "chacha20-poly1305@openssh.com",
         "aes256-ctr",
         "aes192-ctr",
         "aes128-ctr",
@@ -60,8 +61,12 @@ class CipherSuite:
         "hmac-sha2-512",
     ]
 
+    # Ciphers that bundle authentication (no separate MAC)
+    AEAD_CIPHERS: frozenset[str] = frozenset(["chacha20-poly1305@openssh.com"])
+
     # Cipher key and IV lengths
     CIPHER_INFO = {
+        "chacha20-poly1305@openssh.com": {"key_len": 64, "iv_len": 0},
         "aes256-ctr": {"key_len": 32, "iv_len": 16},
         "aes192-ctr": {"key_len": 24, "iv_len": 16},
         "aes128-ctr": {"key_len": 16, "iv_len": 16},
@@ -131,8 +136,8 @@ class CipherSuite:
         kex_markers = {
             "ext-info-c",
             "ext-info-s",
-            "kex-strict-c-v01@openssh.com",
-            "kex-strict-s-v01@openssh.com",
+            "kex-strict-c-v00@openssh.com",
+            "kex-strict-s-v00@openssh.com",
         }
 
         for category, (key, preferred_list) in categories.items():

@@ -9,9 +9,11 @@ import os
 import struct
 from typing import Any, Protocol
 
+from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, hmac
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives.poly1305 import Poly1305
 
 from ..exceptions import CryptoException
 
@@ -66,6 +68,29 @@ class CryptoBackend(Protocol):
         key_length: int,
     ) -> bytes:
         """Derive encryption/MAC keys from shared secret."""
+        ...
+
+    def chacha20_poly1305_encrypt(
+        self, key_64: bytes, seq_num: int, length_bytes: bytes, body_bytes: bytes
+    ) -> bytes:
+        """Encrypt an SSH packet using chacha20-poly1305@openssh.com."""
+        ...
+
+    def chacha20_poly1305_decrypt_length(
+        self, key_64: bytes, seq_num: int, enc_length: bytes
+    ) -> bytes:
+        """Decrypt the 4-byte length field using chacha20-poly1305@openssh.com."""
+        ...
+
+    def chacha20_poly1305_decrypt_body(
+        self,
+        key_64: bytes,
+        seq_num: int,
+        enc_length: bytes,
+        enc_body: bytes,
+        tag: bytes,
+    ) -> bytes:
+        """Verify Poly1305 tag and decrypt the packet body."""
         ...
 
 
@@ -365,6 +390,72 @@ class CryptographyBackend:
             ``data`` unchanged (passthrough for CTR-mode callers).
         """
         return bytes(data)
+
+    def chacha20_poly1305_encrypt(
+        self, key_64: bytes, seq_num: int, length_bytes: bytes, body_bytes: bytes
+    ) -> bytes:
+        seq_be = struct.pack(">Q", seq_num)
+        nonce_c0 = b"\x00" * 8 + seq_be
+        nonce_c1 = b"\x01\x00\x00\x00" + b"\x00" * 4 + seq_be
+        key_body = key_64[:32]
+        key_header = key_64[32:]
+        enc_length = (
+            Cipher(algorithms.ChaCha20(key_header, nonce_c0), mode=None)
+            .encryptor()
+            .update(length_bytes)
+        )
+        poly_key = (
+            Cipher(algorithms.ChaCha20(key_body, nonce_c0), mode=None)
+            .encryptor()
+            .update(b"\x00" * 32)
+        )
+        enc_body = (
+            Cipher(algorithms.ChaCha20(key_body, nonce_c1), mode=None)
+            .encryptor()
+            .update(body_bytes)
+        )
+        ciphertext = enc_length + enc_body
+        tag = Poly1305.generate_tag(poly_key, ciphertext)
+        return ciphertext + tag
+
+    def chacha20_poly1305_decrypt_length(
+        self, key_64: bytes, seq_num: int, enc_length: bytes
+    ) -> bytes:
+        seq_be = struct.pack(">Q", seq_num)
+        nonce_c0 = b"\x00" * 4 + b"\x00" * 4 + seq_be
+        key_header = key_64[32:]
+        return (
+            Cipher(algorithms.ChaCha20(key_header, nonce_c0), mode=None)
+            .encryptor()
+            .update(enc_length)
+        )
+
+    def chacha20_poly1305_decrypt_body(
+        self,
+        key_64: bytes,
+        seq_num: int,
+        enc_length: bytes,
+        enc_body: bytes,
+        tag: bytes,
+    ) -> bytes:
+        seq_be = struct.pack(">Q", seq_num)
+        nonce_c0 = b"\x00" * 4 + b"\x00" * 4 + seq_be
+        nonce_c1 = b"\x01\x00\x00\x00" + b"\x00" * 4 + seq_be
+        key_body = key_64[:32]
+        poly_key = (
+            Cipher(algorithms.ChaCha20(key_body, nonce_c0), mode=None)
+            .encryptor()
+            .update(b"\x00" * 32)
+        )
+        try:
+            Poly1305.verify_tag(poly_key, enc_length + enc_body, tag)
+        except InvalidSignature as e:
+            raise CryptoException("Poly1305 authentication failed") from e
+        return (
+            Cipher(algorithms.ChaCha20(key_body, nonce_c1), mode=None)
+            .encryptor()
+            .update(enc_body)
+        )
 
 
 # Default backend instance
