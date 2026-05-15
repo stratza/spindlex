@@ -243,12 +243,12 @@ class AsyncTransport(Transport):
     async def _send_message_async(self, message: Message) -> None:
         """Async version of _send_message."""
         async with self._send_lock:
+            if not self._writer:
+                raise TransportException("Transport not initialized with async streams")
+
             payload = message.pack()
             packet = self._build_packet(payload)
             packet = self._encrypt_packet(packet)
-
-            if not self._writer:
-                raise TransportException("Transport not initialized with async streams")
 
             self._writer.write(packet)
             # Only drain when the write buffer is large; avoids a per-packet
@@ -273,6 +273,12 @@ class AsyncTransport(Transport):
 
             self._sequence_number_out = (self._sequence_number_out + 1) & 0xFFFFFFFF
 
+            # Strict-KEX (Terrapin defense, RFC): after sending NEWKEYS,
+            # reset outbound sequence to 0 so the next packet uses nonce 0.
+            if message.msg_type == MSG_NEWKEYS and self._strict_kex:
+                self._sequence_number_out = 0
+                self._logger.debug("Sequence number (out) reset for strict KEX")
+
     async def _recv_packet_async(self) -> bytes:
         """
         Read one complete SSH packet directly from the asyncio StreamReader.
@@ -285,6 +291,21 @@ class AsyncTransport(Transport):
             raise TransportException("Transport not initialised with async streams")
 
         try:
+            if getattr(self, "_cipher_in_active", None) == "chacha20-poly1305@openssh.com":
+                enc_length = await self._reader.readexactly(PACKET_LENGTH_SIZE)
+                plain_length = self._crypto_backend.chacha20_poly1305_decrypt_length(
+                    self._chacha20_key_in, self._sequence_number_in, enc_length
+                )
+                packet_length = struct.unpack(">I", plain_length)[0]
+                if packet_length < 8 or packet_length > MAX_PACKET_SIZE:
+                    raise ProtocolException(f"Invalid packet length: {packet_length}")
+                enc_body = await self._reader.readexactly(packet_length)
+                tag = await self._reader.readexactly(16)
+                plain_body = self._crypto_backend.chacha20_poly1305_decrypt_body(
+                    self._chacha20_key_in, self._sequence_number_in, enc_length, enc_body, tag
+                )
+                return bytes(plain_length + plain_body)
+
             if self._decryptor_instance:
                 # Read the encrypted packet-length field
                 enc_len = await self._reader.readexactly(PACKET_LENGTH_SIZE)
