@@ -2182,6 +2182,7 @@ class Transport:
     def _encrypt_packet(self, packet: bytes) -> bytes:
         """Encrypt SSH packet and add MAC if needed."""
         if getattr(self, "_cipher_out_active", None) == "chacha20-poly1305@openssh.com":
+            assert self._chacha20_key_out is not None
             return self._crypto_backend.chacha20_poly1305_encrypt(
                 self._chacha20_key_out,
                 self._sequence_number_out,
@@ -2250,7 +2251,9 @@ class Transport:
 
         # Build packet into a pre-allocated bytearray to avoid repeated copies
         packet_length = PADDING_LENGTH_SIZE + len(payload) + padding_length
-        packet = bytearray(PACKET_LENGTH_SIZE + PADDING_LENGTH_SIZE + len(payload) + padding_length)
+        packet = bytearray(
+            PACKET_LENGTH_SIZE + PADDING_LENGTH_SIZE + len(payload) + padding_length
+        )
         struct.pack_into(">IB", packet, 0, packet_length, padding_length)
         payload_start = PACKET_LENGTH_SIZE + PADDING_LENGTH_SIZE
         packet[payload_start : payload_start + len(payload)] = payload
@@ -2274,6 +2277,7 @@ class Transport:
                 if not self._active:
                     return b""
                 raise TransportException("Short read while receiving packet length")
+            assert self._chacha20_key_in is not None
             plain_length = self._crypto_backend.chacha20_poly1305_decrypt_length(
                 self._chacha20_key_in, self._sequence_number_in, enc_length
             )
@@ -2285,7 +2289,11 @@ class Transport:
             enc_body = self._recv_bytes(packet_length)
             tag = self._recv_bytes(16)
             plain_body = self._crypto_backend.chacha20_poly1305_decrypt_body(
-                self._chacha20_key_in, self._sequence_number_in, enc_length, enc_body, tag
+                self._chacha20_key_in,
+                self._sequence_number_in,
+                enc_length,
+                enc_body,
+                tag,
             )
             return bytes(plain_length + plain_body)
 

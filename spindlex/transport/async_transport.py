@@ -291,8 +291,12 @@ class AsyncTransport(Transport):
             raise TransportException("Transport not initialised with async streams")
 
         try:
-            if getattr(self, "_cipher_in_active", None) == "chacha20-poly1305@openssh.com":
+            if (
+                getattr(self, "_cipher_in_active", None)
+                == "chacha20-poly1305@openssh.com"
+            ):
                 enc_length = await self._reader.readexactly(PACKET_LENGTH_SIZE)
+                assert self._chacha20_key_in is not None
                 plain_length = self._crypto_backend.chacha20_poly1305_decrypt_length(
                     self._chacha20_key_in, self._sequence_number_in, enc_length
                 )
@@ -302,7 +306,11 @@ class AsyncTransport(Transport):
                 enc_body = await self._reader.readexactly(packet_length)
                 tag = await self._reader.readexactly(16)
                 plain_body = self._crypto_backend.chacha20_poly1305_decrypt_body(
-                    self._chacha20_key_in, self._sequence_number_in, enc_length, enc_body, tag
+                    self._chacha20_key_in,
+                    self._sequence_number_in,
+                    enc_length,
+                    enc_body,
+                    tag,
                 )
                 return bytes(plain_length + plain_body)
 

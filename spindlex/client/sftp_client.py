@@ -43,11 +43,11 @@ from ..protocol.sftp_messages import (
     SFTPVersionMessage,
     SFTPWriteMessage,
 )
+from ..transport.channel import Channel
+from ..transport.transport import Transport
 
 # Fallback write chunk when limits@openssh.com is not supported.
 _DEFAULT_MAX_WRITE = SFTP_MAX_PACKET_SIZE - 1024  # 64 KB minus SFTP header overhead
-from ..transport.channel import Channel
-from ..transport.transport import Transport
 
 
 class SFTPFile:
@@ -156,7 +156,9 @@ class SFTPFile:
         while offset < len(data):
             chunk = data[offset : offset + _MAX_CHUNK]
             request_id = self._client._get_next_request_id()
-            write_msg = SFTPWriteMessage(request_id, self._handle, self._send_offset, chunk)
+            write_msg = SFTPWriteMessage(
+                request_id, self._handle, self._send_offset, chunk
+            )
             self._client._send_message(write_msg)
             chunk_len = len(chunk)
             self._send_offset += chunk_len
@@ -312,7 +314,7 @@ class SFTPClient:
                     )
                     if max_write > 0:
                         self._max_write_len = int(max_write)
-        except Exception:
+        except Exception:  # nosec B110
             pass  # non-fatal: fall back to _DEFAULT_MAX_WRITE
 
     def _get_next_request_id(self) -> int:
