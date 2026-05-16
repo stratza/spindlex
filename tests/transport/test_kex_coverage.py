@@ -55,7 +55,7 @@ def _set_kexinit_blobs(kex: KeyExchange) -> None:
 
 
 # ---------------------------------------------------------------------------
-# _perform_client_kex — NISTP384 / NISTP521 dispatch
+# _perform_client_kex - NISTP384 / NISTP521 dispatch
 # ---------------------------------------------------------------------------
 
 
@@ -76,7 +76,7 @@ class TestPerformClientKexNistDispatch:
 
 
 # ---------------------------------------------------------------------------
-# _perform_server_kex — NISTP384 / NISTP521 dispatch
+# _perform_server_kex - NISTP384 / NISTP521 dispatch
 # ---------------------------------------------------------------------------
 
 
@@ -250,7 +250,7 @@ class TestVerifyServerSignatureFailurePaths:
 
 
 # ---------------------------------------------------------------------------
-# _perform_ecdh — unsupported algorithm guard and exception wrapping
+# _perform_ecdh - unsupported algorithm guard and exception wrapping
 # ---------------------------------------------------------------------------
 
 
@@ -316,7 +316,7 @@ class TestGenerateKeysBeforeKeyExchange:
 
 
 # ---------------------------------------------------------------------------
-# _perform_dh_group14_sha256 — public key <= 0 guard
+# _perform_dh_group14_sha256 - public key <= 0 guard
 # ---------------------------------------------------------------------------
 
 

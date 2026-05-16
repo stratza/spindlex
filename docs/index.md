@@ -12,8 +12,8 @@ Welcome to SpindleX's documentation! SpindleX is a modern, high-performance SSHv
 
 ## Features
 
-*   **:zap: High Performance**: Optimized protocol implementation with internal read buffering.
-*   **:shield: Modern Security**: Supports Ed25519, ECDSA, AES-256-CTR, and other modern algorithms.
+*   **:zap: High Performance**: Adaptive SFTP write chunks up to 255 KB via `limits@openssh.com`, pipelined transfers, and zero-copy internal buffering.
+*   **:shield: Modern Security**: ChaCha20-Poly1305 (AEAD, preferred), Ed25519, ECDSA, AES-CTR - legacy and weak primitives excluded. See [Algorithms](algorithms.md).
 *   **:package: Lean Design**: Minimal dependencies, leveraging the industry-standard `cryptography` library.
 *   **:link: Full SSH & SFTP**: Both client and server implementations for SSHv2 and SFTP.
 *   **:cyclone: Native Async**: First-class support for `asyncio` with `AsyncSSHClient` and `AsyncSFTPClient`.
@@ -36,7 +36,7 @@ pip install spindlex
     ```python
     from spindlex import SSHClient
 
-    # Default policy is RejectPolicy — load ~/.ssh/known_hosts first.
+    # Default policy is RejectPolicy - load ~/.ssh/known_hosts first.
     with SSHClient() as client:
         client.get_host_keys().load()
         client.connect('example.com', username='user', password='password')

@@ -108,7 +108,7 @@ class Message:
             MSG_USERAUTH_BANNER: UserAuthBannerMessage,
             # Types 60 and 61 are INTENTIONALLY omitted from this table (see constants.py).
             # Four auth methods share type 60 and two share type 61 (RFC 4252 / 4256 /
-            # draft-ietf-secsh-gss).  The wire type alone is ambiguous — each auth handler
+            # draft-ietf-secsh-gss).  The wire type alone is ambiguous - each auth handler
             # MUST receive these as a raw Message and re-interpret the payload using the
             # known active auth method as context before casting to a concrete class.
             # MSG_USERAUTH_PK_OK / MSG_USERAUTH_INFO_REQUEST / MSG_USERAUTH_GSSAPI_RESPONSE

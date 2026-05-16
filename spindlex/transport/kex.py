@@ -575,7 +575,7 @@ class KeyExchange:
             server_host_key = self._transport._server_key
             server_host_key_blob = server_host_key.get_public_key_bytes()
 
-            # 6. Compute exchange hash H — pass client key explicitly to avoid mutating state
+            # 6. Compute exchange hash H - pass client key explicitly to avoid mutating state
             self._compute_exchange_hash(
                 server_host_key_blob,
                 write_mpint(server_public_numbers.y),  # f as mpint (RFC 4253 §8)
@@ -695,7 +695,7 @@ class KeyExchange:
         """Sign exchange hash using server private key."""
         server_key = self._transport._server_key
         if server_key is None:
-            raise CryptoException("Server key not set — cannot sign exchange hash")
+            raise CryptoException("Server key not set - cannot sign exchange hash")
         signature = server_key.sign(exchange_hash)
         if signature is None:
             raise CryptoException("Failed to sign exchange hash")

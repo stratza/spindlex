@@ -132,7 +132,7 @@ class WarningPolicy(MissingHostKeyPolicy):
 
     def missing_host_key(self, client: Any, hostname: str, key: Any) -> None:
         """
-        Log warning and accept unknown host key (TOFU — stores on first use).
+        Log warning and accept unknown host key (TOFU - stores on first use).
 
         Args:
             client: SSH client instance

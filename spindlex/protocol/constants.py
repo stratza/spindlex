@@ -38,10 +38,10 @@ MSG_USERAUTH_BANNER = 53
 
 # User Authentication Method Specific Messages (60-79)
 #
-# IMPORTANT — intentional type aliasing per RFC 4252 / RFC 4256 / draft-ietf-secsh-gss:
+# IMPORTANT - intentional type aliasing per RFC 4252 / RFC 4256 / draft-ietf-secsh-gss:
 # Type 60 is shared by four message classes (publickey / password / keyboard-interactive
 # / GSSAPI) and type 61 is shared by two.  The wire type byte is NOT sufficient for
-# dispatch — callers MUST use the currently active authentication method as context and
+# dispatch - callers MUST use the currently active authentication method as context and
 # assert they are in the expected auth state before interpreting the payload.
 MSG_USERAUTH_PK_OK = 60  # publickey: key acceptable (query response)
 MSG_USERAUTH_PASSWD_CHANGEREQ = 60  # password: change required

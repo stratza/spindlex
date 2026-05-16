@@ -54,10 +54,10 @@ class AsyncChannel(Channel):
         if loop:
             try:
                 asyncio.get_running_loop()
-                # On the event-loop thread — schedule as a fire-and-forget task.
+                # On the event-loop thread - schedule as a fire-and-forget task.
                 asyncio.ensure_future(self._async_close_handshake())
             except RuntimeError:
-                # Called from a worker thread — safe to use run_coroutine_threadsafe.
+                # Called from a worker thread - safe to use run_coroutine_threadsafe.
                 asyncio.run_coroutine_threadsafe(self._async_close_handshake(), loop)
         else:
             # Sync transport fallback.

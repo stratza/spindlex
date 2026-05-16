@@ -1,7 +1,7 @@
 """
 Unit tests for spindlex/client/async_sftp_client.py
 
-All tests use AsyncMock / MagicMock — no real SSH/SFTP server required.
+All tests use AsyncMock / MagicMock - no real SSH/SFTP server required.
 asyncio_mode = "auto" is set in pyproject.toml so no @pytest.mark.asyncio needed.
 """
 

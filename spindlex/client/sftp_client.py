@@ -7,6 +7,7 @@ secure file operations over SSH connections.
 
 import logging
 import os
+import struct
 import threading
 import time
 from typing import Any, Optional
@@ -31,6 +32,8 @@ from ..protocol.sftp_messages import (
     SFTPAttributes,
     SFTPCloseMessage,
     SFTPDataMessage,
+    SFTPExtendedMessage,
+    SFTPExtendedReplyMessage,
     SFTPHandleMessage,
     SFTPInitMessage,
     SFTPMessage,
@@ -42,6 +45,9 @@ from ..protocol.sftp_messages import (
 )
 from ..transport.channel import Channel
 from ..transport.transport import Transport
+
+# Fallback write chunk when limits@openssh.com is not supported.
+_DEFAULT_MAX_WRITE = SFTP_MAX_PACKET_SIZE - 1024  # 64 KB minus SFTP header overhead
 
 
 class SFTPFile:
@@ -62,6 +68,7 @@ class SFTPFile:
         self._handle = handle
         self._mode = mode
         self._offset = 0
+        self._send_offset = 0
         self._closed = False
         self._write_queue: list[tuple[int, int]] = []  # (request_id, data_length)
 
@@ -144,18 +151,18 @@ class SFTPFile:
         if self._closed:
             raise SFTPError("File is closed")
 
-        # Chunk large writes to fit within SFTP_MAX_PACKET_SIZE.
-        # Account for SFTP write message overhead (header + handle + offset).
-        _MAX_CHUNK = SFTP_MAX_PACKET_SIZE - 1024
+        _MAX_CHUNK = self._client._max_write_len
         offset = 0
         while offset < len(data):
             chunk = data[offset : offset + _MAX_CHUNK]
             request_id = self._client._get_next_request_id()
-            # Use current send offset (which may be ahead of committed offset in pipeline)
-            send_offset = self._offset + sum(n for _, n in self._write_queue)
-            write_msg = SFTPWriteMessage(request_id, self._handle, send_offset, chunk)
+            write_msg = SFTPWriteMessage(
+                request_id, self._handle, self._send_offset, chunk
+            )
             self._client._send_message(write_msg)
-            self._write_queue.append((request_id, len(chunk)))
+            chunk_len = len(chunk)
+            self._send_offset += chunk_len
+            self._write_queue.append((request_id, chunk_len))
 
             # Collect the oldest pending ACK when the pipeline is full so we
             # surface write errors promptly and keep memory usage bounded.
@@ -171,7 +178,7 @@ class SFTPFile:
                 else:
                     raise SFTPError("Unexpected response to write request")
 
-            offset += len(chunk)
+            offset += chunk_len
 
         return len(data)
 
@@ -233,6 +240,7 @@ class SFTPClient:
         self._server_version: Optional[int] = None
         self._server_extensions: dict[str, str] = {}
         self._pending_responses: dict[int, SFTPMessage] = {}
+        self._max_write_len: int = _DEFAULT_MAX_WRITE
 
         # Initialize SFTP session
         self._initialize_sftp()
@@ -273,8 +281,15 @@ class SFTPClient:
                     f"Server SFTP version {self._server_version} < {SFTP_VERSION}"
                 )
 
+            # Query server limits via limits@openssh.com extension.
+            # This allows much larger write chunks (e.g. 255 KB) instead of
+            # the protocol default of 64 KB, cutting round trips for large uploads.
+            if self._server_extensions.get("limits@openssh.com") == "1":
+                self._query_limits()
+
             self._logger.debug(
-                f"SFTP initialized, server version: {self._server_version}"
+                f"SFTP initialized, server version: {self._server_version}, "
+                f"max_write_len: {self._max_write_len}"
             )
 
         except Exception as e:
@@ -284,6 +299,23 @@ class SFTPClient:
             if isinstance(e, SFTPError):
                 raise
             raise SFTPError(f"SFTP initialization failed: {e}") from e
+
+    def _query_limits(self) -> None:
+        """Query server limits via limits@openssh.com and update _max_write_len."""
+        try:
+            request_id = self._get_next_request_id()
+            self._send_message(SFTPExtendedMessage(request_id, "limits@openssh.com"))
+            response = self._receive_message_for_id(request_id, timeout=10.0)
+            if isinstance(response, SFTPExtendedReplyMessage):
+                data = response.extended_data
+                if len(data) >= 32:
+                    _max_pkt, _max_read, max_write, _max_handles = struct.unpack(
+                        ">QQQQ", data[:32]
+                    )
+                    if max_write > 0:
+                        self._max_write_len = int(max_write)
+        except Exception:  # nosec B110
+            pass  # non-fatal: fall back to _DEFAULT_MAX_WRITE
 
     def _get_next_request_id(self) -> int:
         """Get next request ID for SFTP messages."""
@@ -492,10 +524,7 @@ class SFTPClient:
             handle = response.handle
 
             try:
-                # Open local file for reading and upload in pipelined chunks
-                # 32700 fits the SFTP write message (header ~25B + handle ~4B) within
-                # the 32768-byte SSH channel max-packet limit (one packet per write).
-                _CHUNK = 32700
+                _CHUNK = self._max_write_len
                 _DEPTH = 32
                 with open(localpath, "rb") as local_file:
                     offset = 0

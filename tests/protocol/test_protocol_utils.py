@@ -190,9 +190,8 @@ def test_validate_packet_structure_errors():
         validate_packet_structure(b"a" * (MAX_PACKET_SIZE + 1))
 
     # Invalid packet length (too small)
-    # MIN_PACKET_SIZE is 16. PACKET_LENGTH_SIZE is 4.
-    # packet_length < MIN_PACKET_SIZE - PACKET_LENGTH_SIZE => packet_length < 12
-    data = struct.pack(">I", 11) + b"a" * 12
+    # AEAD minimum body is 8; packet_length < 8 is invalid.
+    data = struct.pack(">I", 7) + b"a" * 12
     with pytest.raises(ProtocolException, match="Invalid packet length"):
         validate_packet_structure(data)
 

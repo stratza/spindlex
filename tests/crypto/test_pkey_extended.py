@@ -26,7 +26,7 @@ class TestPKeyEqualityException:
     def test_eq_raises_returns_false(self):
         """When get_public_key_bytes raises, __eq__ returns False."""
         k1 = Ed25519Key.generate()
-        k2 = Ed25519Key()  # no key loaded — get_public_key_bytes will raise
+        k2 = Ed25519Key()  # no key loaded - get_public_key_bytes will raise
         # k1 == k2 → k2.get_public_key_bytes() raises → returns False
         assert k1 != k2
 

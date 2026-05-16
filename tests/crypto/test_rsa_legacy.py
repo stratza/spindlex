@@ -55,7 +55,7 @@ def test_rsa_sha1_verify_disabled_by_default(rsa_key):
     # Disable again
     rsa_key.allow_sha1 = False
 
-    # Verification should return False by default for ssh-rsa (no warning —
+    # Verification should return False by default for ssh-rsa (no warning -
     # the algorithm is rejected before the SHA-1 code path is reached).
     assert not rsa_key.verify(signature, data)
 

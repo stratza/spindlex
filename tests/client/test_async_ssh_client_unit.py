@@ -360,7 +360,7 @@ class TestVerifyHostKey:
 
     def test_policy_non_bad_host_key_exception_is_swallowed(self):
         """A policy that raises a generic exception (not BadHostKeyException)
-        should be swallowed with a warning log — the source explicitly catches it."""
+        should be swallowed with a warning log - the source explicitly catches it."""
         client = _connected_client()
         server_key = MagicMock()
         server_key.get_public_key_bytes.return_value = b"key"
@@ -374,7 +374,7 @@ class TestVerifyHostKey:
         bad_policy.missing_host_key.side_effect = RuntimeError("policy exploded")
         client._host_key_policy = bad_policy
 
-        # Source code logs a warning and continues — does NOT raise
+        # Source code logs a warning and continues - does NOT raise
         client._verify_host_key()  # must not raise
 
 
@@ -1227,7 +1227,7 @@ class TestRecvMessageBridge:
         mock_future = MagicMock()
         mock_future.result.return_value = expected_msg
 
-        # RuntimeError means no running loop on this thread — safe to block
+        # RuntimeError means no running loop on this thread - safe to block
         with patch(
             "spindlex.transport.async_transport.asyncio.get_running_loop",
             side_effect=RuntimeError("no running loop"),

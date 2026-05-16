@@ -8,7 +8,7 @@ Security notes
 --------------
 All examples use the secure-by-default ``RejectPolicy`` host-key policy.
 Before running these examples, make sure the target server's host key is
-already recorded in your ``known_hosts`` file — e.g. by connecting once
+already recorded in your ``known_hosts`` file - e.g. by connecting once
 with OpenSSH (``ssh user@host``) or by calling
 ``client.get_host_keys().load()``.
 
@@ -43,7 +43,7 @@ def _configure_client(client: SSHClient) -> None:
     try:
         client.get_host_keys().load()
     except SSHException as exc:
-        # Not fatal — just means no known_hosts entries are available and
+        # Not fatal - just means no known_hosts entries are available and
         # every connection will be rejected unless the caller adds one.
         print(f"Warning: could not load known_hosts: {exc}")
 

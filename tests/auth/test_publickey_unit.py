@@ -3,7 +3,7 @@ Unit tests for:
   - spindlex/auth/publickey.py  (PublicKeyAuth)
   - spindlex/auth/password.py   (PasswordAuth)
 
-All tests are mock-based — no real SSH connections are made.
+All tests are mock-based - no real SSH connections are made.
 asyncio_mode = "auto" is configured project-wide so individual async tests
 do NOT need @pytest.mark.asyncio.
 """

@@ -4,10 +4,33 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-05-16
+
+### Added
+*   **ChaCha20-Poly1305 cipher**: Full `chacha20-poly1305@openssh.com` implementation - encrypt, decrypt_length, and decrypt_body - added to `CryptographyBackend`. Registered as the preferred cipher in `CipherSuite` (first in `ENCRYPTION_ALGORITHMS`), with `AEAD_CIPHERS` sentinel set and `key_len: 64` entry in `CIPHER_INFO`.
+*   **ChaCha20 sync transport path**: `_encrypt_packet` and `_recv_packet` in `Transport` handle ChaCha20-Poly1305 natively via the two-key AEAD construction (64-byte key split into body key + header key, Poly1305 tag over enc_length + enc_body).
+*   **ChaCha20 async transport path**: `_recv_packet_async` in `AsyncTransport` implements the AEAD inbound path - reads enc_length (4 B), decrypts length, reads enc_body + Poly1305 tag (16 B), verifies and decrypts body.
+*   **Strict-KEX sequence reset**: After sending `NEWKEYS` with strict-KEX active (`kex-strict-c-v00@openssh.com`), the outbound sequence number is reset to 0 in the async path (Terrapin defense, RFC 9142).
+*   **SFTP `limits@openssh.com` negotiation**: `SFTPClient._query_limits()` sends `SSH_FXP_EXTENDED` after version negotiation and parses the 4×uint64 reply to obtain `max_write_len`. On OpenSSH servers this raises the write chunk from 64 KB to 255 KB, reducing round trips for a 1 MiB upload from ~16 to ~4.
+*   **`PacketProfiler`**: Optional per-stage packet timing. Set `SPINDLEX_PROFILE=1` to record build / encrypt / socket-write latencies for every sent packet; call `transport._profiler.summary()` for median and P95 per stage.
+*   **Algorithms reference page**: New `docs/algorithms.md` covering all supported KEX, host-key, cipher, and MAC algorithms with preference order, notes, and an explicit exclusion list.
+
+### Changed
+*   **Preferred cipher**: ChaCha20-Poly1305 is now the first cipher advertised in `CipherSuite.ENCRYPTION_ALGORITHMS`.
+*   **KEX signal token**: Corrected from `kex-strict-c-v01@openssh.com` to the standard `kex-strict-c-v00@openssh.com`.
+*   **`_packet_buffer`**: Changed from `bytes` to `bytearray` in `Transport`, eliminating O(n) copies on buffer advance.
+*   **SFTP write chunk**: `SFTPFile.write()` and `SFTPClient.put()` now use the negotiated `_max_write_len` (default 64 KB, up to 255 KB on OpenSSH) instead of a hardcoded constant.
+*   **`validate_packet_structure`**: Minimum packet body relaxed to 8 bytes for AEAD cipher compatibility.
+*   **Writer presence check**: In `_send_message_async`, the `_writer` guard is now checked before packet build/encrypt.
+
+### Fixed
+*   mypy `Optional[bytes]` narrowing for `_chacha20_key_out` / `_chacha20_key_in` at all call sites.
+*   Import order in `sftp_client.py` (transport imports moved above module-level constant).
+
 ## [0.6.11] - 2026-05-12
 
 ### Performance
-*   **Async throughput overhaul**: SpindleX async SFTP now outperforms asyncssh on handshake, upload, and download benchmarks (LAN: ~42 ms handshake vs asyncssh ~65 ms; ~14 ms/MiB upload vs asyncssh ~15 ms/MiB; ~13 ms/MiB download vs asyncssh ~14 ms/MiB).
+*   **Async throughput overhaul**: SpindleX async SFTP now outperforms other leading SSH libraries on handshake, upload, and download benchmarks (LAN: ~42 ms handshake vs ~65 ms; ~14 ms/MiB upload vs ~15 ms/MiB; ~13 ms/MiB download vs ~14 ms/MiB).
 *   **Native async packet receive**: Replaced `asyncio.to_thread(super()._read_message)` with `_recv_packet_async()`, which reads directly from the asyncio `StreamReader`. Eliminates two cross-thread context switches per received SSH packet.
 *   **Threshold-based write drain**: `_send_message_async()` no longer calls `drain()` after every packet. Drain fires only when the asyncio write buffer exceeds 64 KB, eliminating ~32 event-loop yields per 1 MiB SFTP upload window.
 *   **Doubled SFTP pipeline depth**: `_WINDOW` and `_PIPELINE_DEPTH` increased from 32 to 64, keeping up to 2 MiB of SFTP reads/writes in flight (was 1 MiB).
@@ -119,7 +142,7 @@ This release hardens the project lifecycle around release automation, PR gates, 
 ## [0.6.6] - 2026-05-01
 
 ### Summary
-This release is a broad hardening pass across every layer of the library — SFTP client/server, transport, key exchange, async forwarding, logging, and host key verification. It resolves 37 issues identified since v0.6.5, including critical resource leaks, protocol correctness bugs, race conditions, and API/documentation gaps.
+This release is a broad hardening pass across every layer of the library - SFTP client/server, transport, key exchange, async forwarding, logging, and host key verification. It resolves 37 issues identified since v0.6.5, including critical resource leaks, protocol correctness bugs, race conditions, and API/documentation gaps.
 
 ### Fixed
 
@@ -134,7 +157,7 @@ This release is a broad hardening pass across every layer of the library — SFT
 
 **Transport & Channels**
 *   Multiple transport issues: `_recv_message` incorrect return type, dead channel message handlers, KEX race condition, and deadlock risk under concurrent channel use (#72, #73, #75, #91, #92, #94, #106).
-*   Lock release/acquire exception safety in `channel.send()` — lock could be permanently held on exception (#70).
+*   Lock release/acquire exception safety in `channel.send()` - lock could be permanently held on exception (#70).
 *   `ChannelExtendedDataMessage` was missing the data length prefix, violating the SSH wire format (#69).
 
 **Key Exchange**
@@ -174,7 +197,7 @@ This release is a broad hardening pass across every layer of the library — SFT
 
 ### Removed
 *   **`chacha20-poly1305@openssh.com`** dropped from the cipher list. The AEAD construction requires a fundamentally different packet framing (no separate MAC field, length encrypted separately) that is not yet implemented. Removed to prevent negotiating a cipher the transport cannot correctly handle.
-*   **`aes128-gcm@openssh.com` and `aes256-gcm@openssh.com`** dropped for the same reason — GCM AEAD requires the same alternative framing path as ChaCha20-Poly1305. Both will be re-introduced in a future release once AEAD framing support is implemented.
+*   **`aes128-gcm@openssh.com` and `aes256-gcm@openssh.com`** dropped for the same reason - GCM AEAD requires the same alternative framing path as ChaCha20-Poly1305. Both will be re-introduced in a future release once AEAD framing support is implemented.
 
 ### Changed
 *   `scripts/benchmark_ciphers.py`: removed the `-p` password CLI argument in favour of an interactive prompt to prevent credentials appearing in shell history (#123).
@@ -188,7 +211,7 @@ This release is a broad hardening pass across every layer of the library — SFT
 ## [0.6.5] - 2026-04-26
 
 ### Performance
-*   **SFTP 32-deep pipelined request window**: Replaced the strict send-one-wait-ACK-repeat loop in `SFTPFile.read(-1)` and `SFTPFile.write()` with a sliding window of 32 concurrent in-flight SFTP requests. Benchmark against a LAN server (1 MiB file): upload 79 ms → 14 ms (now ~1.6× faster than asyncssh), download 50 ms → 15 ms (on par with asyncssh). `SFTPClient.get()` and `SFTPClient.put()` also use equivalent pipelining.
+*   **SFTP 32-deep pipelined request window**: Replaced the strict send-one-wait-ACK-repeat loop in `SFTPFile.read(-1)` and `SFTPFile.write()` with a sliding window of 32 concurrent in-flight SFTP requests. Benchmark against a LAN server (1 MiB file): upload 79 ms → 14 ms (now ~1.6× faster than other SSH libraries), download 50 ms → 15 ms (on par with other SSH libraries). `SFTPClient.get()` and `SFTPClient.put()` also use equivalent pipelining.
 
 ### Fixed
 *   **Transport rekeying deadlock**: `_recv_message` and `_expect_message` called `self._stop_event.wait(0.1)` while holding `self._lock`. `threading.Event.wait()` does not release locks, starving the KEX thread and causing rekeying to deadlock until pytest-timeout killed it. Fixed by moving the `wait()` call outside the `with self._lock:` block.
@@ -219,14 +242,14 @@ This release is a broad hardening pass across every layer of the library — SFT
 *   **Sync recv()/recv_stderr()/send_channel_request flat 100 ms penalty**: in sync mode each of these waited up to 100 ms on a `threading.Event` before driving `Transport._pump()`, but nothing else sets that event without a background pump thread. They now drive `_pump()` directly when no `_kex_thread` is present, with `select()` to bound the wait when a channel timeout is set. Warm `exec_command` dropped from ~215 ms → ~5 ms; large reads from ~5.3 s → ~20 ms; SFTP upload from ~8.4 s → ~80 ms.
 *   **SFTP downloads stalling after ~2 MiB**: `Channel._adjust_window` was incrementing `_local_window_size` *and* the transport-side helper was incrementing it again, double-counting the local view of the advertised window. The threshold check then stopped firing, no further `WINDOW_ADJUST` packets were sent, and the server's view of our window expired. Removed the duplicate increment; transport-side bookkeeping is now the single source of truth.
 *   **`_recv_bytes` lock scope**: `_read_lock` was held for the entire receive flow, including the buffer-served fast path. Restructured so `_lock` guards short non-blocking buffer slices and `_read_lock` is only held around the actual blocking `socket.recv`. Threads that already have buffered data return without contending with a peer blocked in `recv`.
-*   **Two-lock deadlock in `Transport.close()`**: held `self._lock` while calling `Channel.close()`, which re-takes its own lock and then `_close_channel` which re-takes `self._lock` — inverting the order taken by concurrent `Channel.close()` callers. Snapshot channels under the lock, drop it, close each channel, then re-acquire briefly to clear `self._channels`.
+*   **Two-lock deadlock in `Transport.close()`**: held `self._lock` while calling `Channel.close()`, which re-takes its own lock and then `_close_channel` which re-takes `self._lock` - inverting the order taken by concurrent `Channel.close()` callers. Snapshot channels under the lock, drop it, close each channel, then re-acquire briefly to clear `self._channels`.
 *   **`Channel.send` halved the effective remote window**: both `Channel.send()` and `Transport._send_channel_data()` were decrementing `_remote_window_size`, causing premature flow-control stalls. Removed the duplicate decrement on the transport side; the defensive size check is preserved.
 *   **SFTPServer path traversal hardening**: `_resolve_path` now uses `realpath` containment checks and rejects NUL bytes; exception handlers narrowed.
 
 ### Security
 *   **Strict-KEX / Terrapin defense**: the extension filter listed `kex-strict-{c,s}-v00@openssh.com`, but real implementations (and our own transport) advertise/detect the v01 spelling. The v01 marker leaked through the negotiator and the Terrapin defense could silently fail to activate against real OpenSSH peers. Filter now matches v01; `CipherSuite.negotiate_algorithms` also explicitly excludes all strict-KEX / `ext-info` markers from the KEX category and iterates the client's preference order per RFC 4253 §7.1.
 *   **Strict-KEX sequence-number reset** and channel-open hardening in transport.
-*   **Public-key auth signature algorithm bug**: the algorithm name was hardcoded as `ssh-rsa` in signatures regardless of the negotiated algorithm — fixed.
+*   **Public-key auth signature algorithm bug**: the algorithm name was hardcoded as `ssh-rsa` in signatures regardless of the negotiated algorithm - fixed.
 *   **Atomic rekeying state transitions** under lock; aligned inbound MAC sequence-number wrap with the outbound path.
 *   **Global logging sanitizer bypass**: child loggers escaped sanitization; routed through a `LogRecordFactory` hook so the sanitizer applies uniformly.
 *   **SHA-1 RSA gated**: signatures over SHA-1 now require an explicit `allow_sha1=True` and emit a `DeprecationWarning`.
@@ -235,7 +258,7 @@ This release is a broad hardening pass across every layer of the library — SFT
 ### Added
 *   **`Channel` / `Transport` context-manager support** (`with channel:` / `with transport:`).
 *   **`AsyncSFTPClient.rename` / `chmod` / `normalize`** implementations.
-*   **`scripts/benchmark_compare.py`**: cross-library SSH/SFTP benchmark vs paramiko and asyncssh across handshake, exec_command (small + ~1.4 MB), SFTP upload/download, and 10 parallel handshakes. Per-library failures are isolated and rendered as `FAILED -- <error>` instead of aborting the run.
+*   **`scripts/benchmark_compare.py`**: cross-library SSH/SFTP benchmark vs other SSH libraries across handshake, exec_command (small + ~1.4 MB), SFTP upload/download, and 10 parallel handshakes. Per-library failures are isolated and rendered as `FAILED -- <error>` instead of aborting the run.
 
 ### Changed
 *   **Test layout**: ~50 test files reorganized into per-component subfolders (`auth/`, `channel/`, `client/`, `crypto/`, `hostkeys/`, `log/`, `misc/`, `protocol/`, `real_server/`, `sftp/`, `transport/`); imports re-grouped per first-party isort rules.

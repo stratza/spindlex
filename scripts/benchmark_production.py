@@ -1,24 +1,24 @@
 """
 SpindleX Production Readiness Benchmark.
 
-Validates library-level correctness and stability — not raw performance.
+Validates library-level correctness and stability - not raw performance.
 
 Sections:
-  1. SSH Protocol Correctness     — KEX, cipher, host-key algorithm coverage
+  1. SSH Protocol Correctness     - KEX, cipher, host-key algorithm coverage
                                     + silent-fallback detection
-  2. Session Lifecycle            — sequential stability, async task leak check,
+  2. Session Lifecycle            - sequential stability, async task leak check,
                                     reconnect consistency
-  3. Exec Reliability             — small / medium / large output integrity,
+  3. Exec Reliability             - small / medium / large output integrity,
                                     stdout/stderr separation, sync==async
-  4. SFTP Integrity               — SHA-256 round-trip per chunk size,
+  4. SFTP Integrity               - SHA-256 round-trip per chunk size,
                                     large-file stability, repeated-transfer consistency
-  5. Concurrency Correctness      — per-session output identity (no cross-session
+  5. Concurrency Correctness      - per-session output identity (no cross-session
                                     data leakage), async and sync thread-pool
-  6. Failure Classification       — deterministic typed exceptions per error class,
+  6. Failure Classification       - deterministic typed exceptions per error class,
                                     sync/async exception-type consistency
-  7. Negotiation Determinism      — same config → same outcome across N runs,
+  7. Negotiation Determinism      - same config → same outcome across N runs,
                                     no flapping
-  8. Performance Stability        — jitter (p99/median), cumulative slowdown,
+  8. Performance Stability        - jitter (p99/median), cumulative slowdown,
                                     error rate
 
 Usage:
@@ -63,7 +63,6 @@ KEX_ALGORITHMS = [
     "ecdh-sha2-nistp384",
     "ecdh-sha2-nistp521",
     "diffie-hellman-group14-sha256",
-    "diffie-hellman-group16-sha512",
 ]
 
 HOST_KEY_ALGORITHMS = [
@@ -76,12 +75,18 @@ HOST_KEY_ALGORITHMS = [
 ]
 
 CIPHER_ALGORITHMS = [
+    "chacha20-poly1305@openssh.com",
     "aes256-ctr",
     "aes192-ctr",
     "aes128-ctr",
 ]
 
-SFTP_CHUNK = 16 * 1024  # 16 KiB — stays under server packet limits
+MAC_ALGORITHMS = [
+    "hmac-sha2-256",
+    "hmac-sha2-512",
+]
+
+SFTP_CHUNK = 16 * 1024  # 16 KiB - stays under server packet limits
 
 
 # ── Run config ─────────────────────────────────────────────────────────────────
@@ -196,6 +201,7 @@ def _force_algos(
     cipher: str | None = None,
     kex: str | None = None,
     hostkey: str | None = None,
+    mac: str | None = None,
 ) -> Iterator[None]:
     """Temporarily constrain CipherSuite to a single algorithm per category."""
     saved: dict[str, list[str]] = {}
@@ -209,6 +215,9 @@ def _force_algos(
         if hostkey is not None:
             saved["HOST_KEY_ALGORITHMS"] = CipherSuite.HOST_KEY_ALGORITHMS[:]
             CipherSuite.HOST_KEY_ALGORITHMS = [hostkey]
+        if mac is not None:
+            saved["MAC_ALGORITHMS"] = CipherSuite.MAC_ALGORITHMS[:]
+            CipherSuite.MAC_ALGORITHMS = [mac]
         yield
     finally:
         for attr, val in saved.items():
@@ -239,7 +248,7 @@ def check_protocol_correctness(cfg: dict[str, Any]) -> None:
                 spx_open(cfg).close()
             passed(f"    kex  {kex}")
         except SSHException as e:
-            # Server may not advertise this KEX — mark SKIP, not FAIL
+            # Server may not advertise this KEX - mark SKIP, not FAIL
             skipped(f"    kex  {kex}", f"{type(e).__name__}: server may not offer this")
         except Exception as e:
             failed(f"    kex  {kex}", f"non-SSH exception: {type(e).__name__}: {e}")
@@ -275,11 +284,29 @@ def check_protocol_correctness(cfg: dict[str, Any]) -> None:
         except Exception as e:
             failed(f"    cipher  {ciph}", f"non-SSH exception: {type(e).__name__}: {e}")
 
+    print("  MAC algorithms:")
+    for mac in MAC_ALGORITHMS:
+        try:
+            with _force_algos(mac=mac):
+                c = spx_open(cfg)
+                _, stdout, _ = c.exec_command("echo mac_ok")
+                out = stdout.read().strip()
+                c.close()
+            if out == b"mac_ok":
+                passed(f"    mac  {mac}")
+            else:
+                failed(f"    mac  {mac}", f"unexpected output: {out!r}")
+        except SSHException as e:
+            failed(f"    mac  {mac}", type(e).__name__)
+        except Exception as e:
+            failed(f"    mac  {mac}", f"non-SSH exception: {type(e).__name__}: {e}")
+
     print("  Silent-fallback detection (fake algorithms must be rejected):")
     for kind, fake in [
         ("kex", "nonexistent-kex-00"),
         ("hostkey", "nonexistent-hk-00"),
         ("cipher", "nonexistent-ciph-00"),
+        ("mac", "nonexistent-mac-00"),
     ]:
         kwargs: dict[str, str] = {kind: fake}
         try:
@@ -287,7 +314,7 @@ def check_protocol_correctness(cfg: dict[str, Any]) -> None:
                 spx_open(cfg).close()
             failed(
                 f"    no-fallback  {kind}",
-                "connection succeeded — silent fallback occurred",
+                "connection succeeded - silent fallback occurred",
             )
         except SSHException:
             passed(f"    no-fallback  {kind}", "correctly rejected with SSHException")
@@ -393,9 +420,9 @@ def check_exec_reliability(cfg: dict[str, Any], run_cfg: RunConfig) -> None:
         _, stdout, _ = c.exec_command("echo hello")
         out = stdout.read().strip()
         if out == b"hello":
-            passed("Small exec (echo hello) — output correctness")
+            passed("Small exec (echo hello) - output correctness")
         else:
-            failed("Small exec (echo hello) — output correctness", f"got {out!r}")
+            failed("Small exec (echo hello) - output correctness", f"got {out!r}")
 
         # Medium output (~100 KB)
         med_cmd = "dd if=/dev/zero bs=1024 count=100 2>/dev/null | base64"
@@ -404,12 +431,12 @@ def check_exec_reliability(cfg: dict[str, Any], run_cfg: RunConfig) -> None:
         expected_min = 130_000  # base64 of 100 KiB ~= 136 KB
         if len(med_data) >= expected_min:
             passed(
-                "Medium exec (~100 KB output) — no truncation",
+                "Medium exec (~100 KB output) - no truncation",
                 f"{len(med_data):,} bytes",
             )
         else:
             failed(
-                "Medium exec (~100 KB output) — no truncation",
+                "Medium exec (~100 KB output) - no truncation",
                 f"only {len(med_data):,} bytes (expected >= {expected_min:,})",
             )
 
@@ -420,23 +447,23 @@ def check_exec_reliability(cfg: dict[str, Any], run_cfg: RunConfig) -> None:
         expected_large = int(run_cfg.large_output_kb * 1024 * 1.33)
         if len(large_data) >= expected_large:
             passed(
-                f"Large exec (~{run_cfg.large_output_kb} KB output) — no truncation",
+                f"Large exec (~{run_cfg.large_output_kb} KB output) - no truncation",
                 f"{len(large_data):,} bytes",
             )
         else:
             failed(
-                f"Large exec (~{run_cfg.large_output_kb} KB output) — no truncation",
+                f"Large exec (~{run_cfg.large_output_kb} KB output) - no truncation",
                 f"only {len(large_data):,} bytes (expected >= {expected_large:,})",
             )
 
-        # Stdout/stderr separation — no deadlock
+        # Stdout/stderr separation - no deadlock
         _, stdout, stderr = c.exec_command(
             "sh -c 'printf stdout_ok; printf stderr_ok >&2'"
         )
         out_s = stdout.read()
         err_s = stderr.read()
         if b"stdout_ok" in out_s and b"stderr_ok" in err_s:
-            passed("Stdout/stderr separation — no deadlock")
+            passed("Stdout/stderr separation - no deadlock")
         elif b"stdout_ok" in out_s:
             warned("Stdout/stderr separation", "stderr empty or not captured")
         else:
@@ -528,14 +555,14 @@ def check_sftp_integrity(cfg: dict[str, Any]) -> None:
             with sftp.open(large_remote, "rb") as fh:
                 dl = fh.read()
             if _sha256(dl) == large_hash:
-                passed("SFTP large file (10 MB) — integrity")
+                passed("SFTP large file (10 MB) - integrity")
             else:
                 failed(
-                    "SFTP large file (10 MB) — integrity",
+                    "SFTP large file (10 MB) - integrity",
                     "hash mismatch after download",
                 )
         except Exception as e:
-            failed("SFTP large file (10 MB) — integrity", f"{type(e).__name__}: {e}")
+            failed("SFTP large file (10 MB) - integrity", f"{type(e).__name__}: {e}")
 
         # Repeated transfer consistency (5 rounds, same payload)
         rpt_payload = os.urandom(256 * 1024)
@@ -608,15 +635,15 @@ def check_concurrency_correctness(cfg: dict[str, Any], run_cfg: RunConfig) -> No
 
         try:
             correct, errs = asyncio.run(_run())
-            label = f"Async N={n} — per-session output identity"
+            label = f"Async N={n} - per-session output identity"
             if correct == n:
                 passed(label, f"{n}/{n} sessions correct")
             else:
                 first_err = errs[0] if errs else "unknown"
-                failed(label, f"{correct}/{n} correct — {first_err}")
+                failed(label, f"{correct}/{n} correct - {first_err}")
         except Exception as e:
             failed(
-                f"Async N={n} — per-session output identity",
+                f"Async N={n} - per-session output identity",
                 f"stage error: {type(e).__name__}: {e}",
             )
 
@@ -640,12 +667,12 @@ def check_concurrency_correctness(cfg: dict[str, Any], run_cfg: RunConfig) -> No
         thread_results = list(pool.map(_thread, range(n_threads)))
 
     correct = sum(thread_results)
-    label = f"Sync thread-pool N={n_threads} — per-thread output identity"
+    label = f"Sync thread-pool N={n_threads} - per-thread output identity"
     if correct == n_threads:
         passed(label, f"{n_threads}/{n_threads} threads correct")
     else:
         first_err = thread_errors[0] if thread_errors else "wrong output"
-        failed(label, f"{correct}/{n_threads} correct — {first_err}")
+        failed(label, f"{correct}/{n_threads} correct - {first_err}")
 
     # Mixed async workload: exec + sftp sessions concurrently
     remote_base = f"/tmp/spx_mixed_{os.getpid()}"
@@ -760,7 +787,7 @@ def check_failure_classification(cfg: dict[str, Any]) -> None:
     async_auth_exc = asyncio.run(_async_catch(_async_bad_auth()))
 
     for mode, exc in [("sync", sync_auth_exc), ("async", async_auth_exc)]:
-        label = f"Auth failure ({mode}) — raises AuthenticationException"
+        label = f"Auth failure ({mode}) - raises AuthenticationException"
         if exc is None:
             failed(label, "no exception for wrong password")
         elif isinstance(exc, AuthenticationException):
@@ -772,7 +799,7 @@ def check_failure_classification(cfg: dict[str, Any]) -> None:
         else:
             failed(label, f"non-SSH exception: {type(exc).__name__}")
 
-    label_cons = "Auth failure — sync/async exception type consistent"
+    label_cons = "Auth failure - sync/async exception type consistent"
     if sync_auth_exc is not None and async_auth_exc is not None:
         if type(sync_auth_exc) is type(async_auth_exc):
             passed(label_cons, type(sync_auth_exc).__name__)
@@ -784,7 +811,7 @@ def check_failure_classification(cfg: dict[str, Any]) -> None:
     else:
         skipped(label_cons, "one or both modes had no exception")
 
-    # Bad KEX — must raise SSHException (not raw/internal exception)
+    # Bad KEX - must raise SSHException (not raw/internal exception)
     def _sync_bad_kex() -> None:
         with _force_algos(kex="nonexistent-kex-prod-bench"):
             spx_open(cfg).close()
@@ -798,7 +825,7 @@ def check_failure_classification(cfg: dict[str, Any]) -> None:
     async_kex_exc = asyncio.run(_async_catch(_async_bad_kex()))
 
     for mode, exc in [("sync", sync_kex_exc), ("async", async_kex_exc)]:
-        label = f"KEX mismatch ({mode}) — raises SSHException subclass"
+        label = f"KEX mismatch ({mode}) - raises SSHException subclass"
         if exc is None:
             failed(label, "no exception for nonexistent KEX")
         elif isinstance(exc, SSHException):
@@ -806,7 +833,7 @@ def check_failure_classification(cfg: dict[str, Any]) -> None:
         else:
             failed(label, f"raw non-SSH exception: {type(exc).__name__}: {exc}")
 
-    label_kex_cons = "KEX mismatch — sync/async exception type consistent"
+    label_kex_cons = "KEX mismatch - sync/async exception type consistent"
     if sync_kex_exc is not None and async_kex_exc is not None:
         if type(sync_kex_exc) is type(async_kex_exc):
             passed(label_kex_cons, type(sync_kex_exc).__name__)
@@ -818,13 +845,13 @@ def check_failure_classification(cfg: dict[str, Any]) -> None:
     else:
         skipped(label_kex_cons, "one or both modes had no exception")
 
-    # Bad cipher — must raise SSHException
+    # Bad cipher - must raise SSHException
     def _sync_bad_cipher() -> None:
         with _force_algos(cipher="nonexistent-cipher-prod-bench"):
             spx_open(cfg).close()
 
     ciph_exc = _catch(_sync_bad_cipher)
-    label = "Cipher mismatch (sync) — raises SSHException subclass"
+    label = "Cipher mismatch (sync) - raises SSHException subclass"
     if ciph_exc is None:
         failed(label, "no exception for nonexistent cipher")
     elif isinstance(ciph_exc, SSHException):
@@ -869,7 +896,7 @@ def check_negotiation_determinism(cfg: dict[str, Any], run_cfg: RunConfig) -> No
                     check_label, f"{run_cfg.negotiation_repeats}x consistent success"
                 )
             else:
-                # Consistently fails — deterministic, just unsupported
+                # Consistently fails - deterministic, just unsupported
                 skipped(
                     check_label,
                     f"{run_cfg.negotiation_repeats}x consistently: {result}",

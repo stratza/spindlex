@@ -8,7 +8,7 @@ Security notes
 --------------
 All examples use the secure-by-default ``RejectPolicy``. Populate your
 ``~/.ssh/known_hosts`` with the target server's key before running these
-examples. Never use ``AutoAddPolicy`` in production — it trusts every
+examples. Never use ``AutoAddPolicy`` in production - it trusts every
 first-seen key and disables MITM protection.
 """
 

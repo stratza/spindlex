@@ -60,7 +60,7 @@ Implementation tasks:
   - OpenSSH versions
   - Dropbear support
   - known incompatibilities
-  - behavior differences vs Paramiko and AsyncSSH
+  - behavior differences vs other SSH libraries
 - Convert repeated compatibility reports into tests or canaries.
 - Review compatibility before each minor release.
 

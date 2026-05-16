@@ -1,7 +1,7 @@
 """
 Unit tests for spindlex/client/ssh_client.py
 
-Uses only mocks — no real SSH server required.
+Uses only mocks - no real SSH server required.
 """
 
 from __future__ import annotations
@@ -42,7 +42,7 @@ def _connected_client() -> SSHClient:
 
 
 class TestChannelFileReadClosed:
-    """Line 58 — read raises ValueError when file is closed."""
+    """Line 58 - read raises ValueError when file is closed."""
 
     def test_read_raises_on_closed(self):
         channel = MagicMock()
@@ -60,7 +60,7 @@ class TestChannelFileReadClosed:
 
 
 class TestChannelFileReadSizeStderr:
-    """Line 62 — read(size) on stderr mode."""
+    """Line 62 - read(size) on stderr mode."""
 
     def test_read_size_stderr(self):
         channel = MagicMock()
@@ -72,7 +72,7 @@ class TestChannelFileReadSizeStderr:
 
 
 class TestChannelFileReadSizeWriteMode:
-    """Line 66 — read(size) on write-only file raises."""
+    """Line 66 - read(size) on write-only file raises."""
 
     def test_read_size_write_mode_raises(self):
         channel = MagicMock()
@@ -82,7 +82,7 @@ class TestChannelFileReadSizeWriteMode:
 
 
 class TestChannelFileReadAllWithTimeout:
-    """Lines 80-87 — exception handling in read-all loop."""
+    """Lines 80-87 - exception handling in read-all loop."""
 
     def test_read_all_timeout_with_partial_data(self):
         channel = MagicMock()
@@ -130,7 +130,7 @@ class TestChannelFileReadAllWithTimeout:
 
 
 class TestChannelFileWriteClosed:
-    """Line 101 — write raises ValueError when file is closed."""
+    """Line 101 - write raises ValueError when file is closed."""
 
     def test_write_raises_on_closed(self):
         channel = MagicMock()
@@ -141,7 +141,7 @@ class TestChannelFileWriteClosed:
 
 
 class TestChannelFileWriteReadMode:
-    """Line 104 — write on read-only file raises."""
+    """Line 104 - write on read-only file raises."""
 
     def test_write_raises_on_read_mode(self):
         channel = MagicMock()
@@ -151,7 +151,7 @@ class TestChannelFileWriteReadMode:
 
 
 class TestChannelFileGetExitStatus:
-    """Line 118 — get_exit_status delegates to channel."""
+    """Line 118 - get_exit_status delegates to channel."""
 
     def test_get_exit_status(self):
         channel = MagicMock()
@@ -162,7 +162,7 @@ class TestChannelFileGetExitStatus:
 
 
 class TestChannelFileRecvExitStatus:
-    """Line 127 — recv_exit_status delegates to channel."""
+    """Line 127 - recv_exit_status delegates to channel."""
 
     def test_recv_exit_status(self):
         channel = MagicMock()
@@ -173,7 +173,7 @@ class TestChannelFileRecvExitStatus:
 
 
 class TestChannelFileIter:
-    """Lines 136, 148-151 — __iter__ and __next__."""
+    """Lines 136, 148-151 - __iter__ and __next__."""
 
     def test_iter_returns_self(self):
         channel = MagicMock()
@@ -197,7 +197,7 @@ class TestChannelFileIter:
 
 
 class TestChannelFileReadline:
-    """Lines 160-168 — readline reads char-by-char until newline."""
+    """Lines 160-168 - readline reads char-by-char until newline."""
 
     def test_readline_reads_line(self):
         channel = MagicMock()
@@ -216,7 +216,7 @@ class TestChannelFileReadline:
 
 
 class TestChannelFileChannelProperty:
-    """Line 173 — channel property."""
+    """Line 173 - channel property."""
 
     def test_channel_property(self):
         channel = MagicMock()
@@ -230,7 +230,7 @@ class TestChannelFileChannelProperty:
 
 
 class TestGetHostKeyStorage:
-    """Line 230 — get_host_key_storage."""
+    """Line 230 - get_host_key_storage."""
 
     def test_get_host_key_storage(self):
         client = SSHClient()
@@ -239,12 +239,12 @@ class TestGetHostKeyStorage:
 
 
 # ===========================================================================
-# SSHClient.connect — already connected guard (line 275)
+# SSHClient.connect - already connected guard (line 275)
 # ===========================================================================
 
 
 class TestConnectAlreadyConnected:
-    """Line 275 — raises SSHException if already connected."""
+    """Line 275 - raises SSHException if already connected."""
 
     def test_already_connected_raises(self):
         client = SSHClient()
@@ -257,12 +257,12 @@ class TestConnectAlreadyConnected:
 
 
 # ===========================================================================
-# SSHClient.connect — timeout / rekey / pkey paths
+# SSHClient.connect - timeout / rekey / pkey paths
 # ===========================================================================
 
 
 class TestConnectWithTimeout:
-    """Line 304 — set_timeout called when timeout provided."""
+    """Line 304 - set_timeout called when timeout provided."""
 
     @patch("spindlex.client.ssh_client.SSHClient._verify_host_key")
     @patch("spindlex.client.ssh_client.SSHClient._authenticate")
@@ -284,7 +284,7 @@ class TestConnectWithTimeout:
 
 
 class TestConnectWithPkey:
-    """Lines 519-523 — connect with pkey triggers publickey auth."""
+    """Lines 519-523 - connect with pkey triggers publickey auth."""
 
     @patch("spindlex.client.ssh_client.SSHClient._verify_host_key")
     @patch("spindlex.client.ssh_client.Transport")
@@ -304,7 +304,7 @@ class TestConnectWithPkey:
 
 
 class TestConnectWithKeyFilename:
-    """Lines 527-537 — connect with key_filename loads key from file."""
+    """Lines 527-537 - connect with key_filename loads key from file."""
 
     @patch("spindlex.client.ssh_client.SSHClient._verify_host_key")
     @patch("spindlex.client.ssh_client.Transport")
@@ -350,7 +350,7 @@ class TestConnectWithKeyFilename:
 
 
 class TestConnectGssAuth:
-    """Lines 513, 518-523 — _authenticate with gss_auth=True."""
+    """Lines 513, 518-523 - _authenticate with gss_auth=True."""
 
     @patch("spindlex.client.ssh_client.SSHClient._verify_host_key")
     @patch("spindlex.client.ssh_client.Transport")
@@ -388,7 +388,7 @@ class TestConnectGssAuth:
 
 
 class TestConnectRekeyLimits:
-    """Lines 296-300 — rekey_bytes_limit and rekey_time_limit forwarded to Transport."""
+    """Lines 296-300 - rekey_bytes_limit and rekey_time_limit forwarded to Transport."""
 
     @patch("spindlex.client.ssh_client.SSHClient._verify_host_key")
     @patch("spindlex.client.ssh_client.SSHClient._authenticate")
@@ -419,7 +419,7 @@ class TestConnectRekeyLimits:
 
 
 class TestConnectExceptionCleanup:
-    """Lines 327-337 — cleanup on failure."""
+    """Lines 327-337 - cleanup on failure."""
 
     @patch("spindlex.client.ssh_client.Transport")
     @patch("spindlex.client.ssh_client.socket.create_connection")
@@ -457,7 +457,7 @@ class TestConnectExceptionCleanup:
 
 
 class TestConnectSocketCreationFailure:
-    """Lines 285-290 — OSError during socket.create_connection."""
+    """Lines 285-290 - OSError during socket.create_connection."""
 
     @patch("spindlex.client.ssh_client.socket.create_connection")
     def test_socket_create_connection_fails(self, mock_conn):
@@ -468,12 +468,12 @@ class TestConnectSocketCreationFailure:
 
 
 # ===========================================================================
-# SSHClient._authenticate — no-auth / all-fail paths
+# SSHClient._authenticate - no-auth / all-fail paths
 # ===========================================================================
 
 
 class TestAuthenticateNoMethods:
-    """Lines 562-574 — raises AuthenticationException when nothing succeeds."""
+    """Lines 562-574 - raises AuthenticationException when nothing succeeds."""
 
     def test_authenticate_no_methods_raises(self):
         client = SSHClient()
@@ -505,7 +505,7 @@ class TestAuthenticateNoMethods:
         transport.auth_password.return_value = True
         client._transport = transport
         pkey = MagicMock()
-        # Should not raise — password succeeds after pkey fails
+        # Should not raise - password succeeds after pkey fails
         client._authenticate("user", password="pass", pkey=pkey)
         transport.auth_password.assert_called_once_with("user", "pass")
 
@@ -524,7 +524,7 @@ class TestAuthenticateNoMethods:
 
 
 class TestAuthPassword:
-    """Lines 399, 402 — auth_password no transport / failure."""
+    """Lines 399, 402 - auth_password no transport / failure."""
 
     def test_auth_password_no_transport_raises(self):
         client = SSHClient()
@@ -553,7 +553,7 @@ class TestAuthPassword:
 
 
 class TestAuthPublickey:
-    """Lines 424, 427, 430, 433 — auth_publickey variants."""
+    """Lines 424, 427, 430, 433 - auth_publickey variants."""
 
     def test_auth_publickey_no_transport_raises(self):
         client = SSHClient()
@@ -593,7 +593,7 @@ class TestAuthPublickey:
 
 
 class TestAuthKeyboardInteractive:
-    """Lines 454, 460 — keyboard interactive auth."""
+    """Lines 454, 460 - keyboard interactive auth."""
 
     def test_auth_keyboard_no_transport_raises(self):
         client = SSHClient()
@@ -636,7 +636,7 @@ class TestAuthKeyboardInteractive:
 
 
 class TestAuthGssapi:
-    """Lines 479-483 — GSSAPI auth."""
+    """Lines 479-483 - GSSAPI auth."""
 
     def test_auth_gssapi_no_transport_raises(self):
         client = SSHClient()
@@ -666,7 +666,7 @@ class TestAuthGssapi:
 
 
 class TestExecCommand:
-    """Lines 593, 596, 600, 616-619 — exec_command paths."""
+    """Lines 593, 596, 600, 616-619 - exec_command paths."""
 
     def test_exec_command_not_connected_raises(self):
         client = SSHClient()
@@ -715,7 +715,7 @@ class TestExecCommand:
 
 
 class TestInvokeShell:
-    """Lines 631-653 — invoke_shell paths."""
+    """Lines 631-653 - invoke_shell paths."""
 
     def test_invoke_shell_not_connected_raises(self):
         client = SSHClient()
@@ -755,7 +755,7 @@ class TestInvokeShell:
 
 
 class TestOpenSftp:
-    """Lines 665-677 — open_sftp paths."""
+    """Lines 665-677 - open_sftp paths."""
 
     def test_open_sftp_not_connected_raises(self):
         client = SSHClient()
@@ -794,12 +794,12 @@ class TestOpenSftp:
 
 
 # ===========================================================================
-# SSHClient.open_sftp — real path (no patch of open_sftp itself)
+# SSHClient.open_sftp - real path (no patch of open_sftp itself)
 # ===========================================================================
 
 
 class TestOpenSftpReal:
-    """open_sftp calls SFTPClient(transport) — test the real code path."""
+    """open_sftp calls SFTPClient(transport) - test the real code path."""
 
     def test_open_sftp_calls_sftp_client_constructor(self):
         client = _connected_client()
@@ -817,12 +817,12 @@ class TestOpenSftpReal:
 
 
 # ===========================================================================
-# SSHClient.close — edge cases
+# SSHClient.close - edge cases
 # ===========================================================================
 
 
 class TestClose:
-    """Lines 691-702 — close edge cases."""
+    """Lines 691-702 - close edge cases."""
 
     def test_close_with_forwarding_manager_error(self):
         client = SSHClient()
@@ -893,7 +893,7 @@ class TestGetTransport:
 
 
 class TestCreateLocalPortForward:
-    """Lines 748-761 — create_local_port_forward."""
+    """Lines 748-761 - create_local_port_forward."""
 
     def test_create_local_port_forward_not_connected_raises(self):
         client = SSHClient()
@@ -931,7 +931,7 @@ class TestCreateLocalPortForward:
 
 
 class TestCreateRemotePortForward:
-    """Lines 781-794 — create_remote_port_forward."""
+    """Lines 781-794 - create_remote_port_forward."""
 
     def test_create_remote_port_forward_not_connected_raises(self):
         client = SSHClient()
@@ -967,7 +967,7 @@ class TestCreateRemotePortForward:
 
 
 class TestClosePortForward:
-    """Lines 806-817 — close_port_forward."""
+    """Lines 806-817 - close_port_forward."""
 
     def test_close_port_forward_not_connected_raises(self):
         client = SSHClient()
@@ -999,7 +999,7 @@ class TestClosePortForward:
 
 
 class TestGetPortForwards:
-    """Lines 829-853 — get_port_forwards."""
+    """Lines 829-853 - get_port_forwards."""
 
     def test_get_port_forwards_not_connected_raises(self):
         client = SSHClient()
@@ -1050,7 +1050,7 @@ class TestGetPortForwards:
 
 
 class TestIsActive:
-    """is_active property — transport None vs active."""
+    """is_active property - transport None vs active."""
 
     def test_is_active_false_no_transport(self):
         client = SSHClient()
@@ -1070,12 +1070,12 @@ class TestIsActive:
 
 
 # ===========================================================================
-# SSHClient — _verify_host_key no transport
+# SSHClient - _verify_host_key no transport
 # ===========================================================================
 
 
 class TestVerifyHostKeyNoTransport:
-    """Line 347 — _verify_host_key with no transport."""
+    """Line 347 - _verify_host_key with no transport."""
 
     def test_verify_host_key_no_transport_raises(self):
         client = SSHClient()
@@ -1084,7 +1084,7 @@ class TestVerifyHostKeyNoTransport:
 
 
 class TestVerifyHostKeyNoneKey:
-    """Line 356 — server returns None host key."""
+    """Line 356 - server returns None host key."""
 
     def test_verify_host_key_none_server_key_raises(self):
         client = SSHClient()
@@ -1098,7 +1098,7 @@ class TestVerifyHostKeyNoneKey:
 
 
 class TestVerifyHostKeyPolicyError:
-    """Lines 367-371 — policy throws unexpected exception."""
+    """Lines 367-371 - policy throws unexpected exception."""
 
     def test_verify_host_key_policy_unexpected_error(self):
         client = SSHClient()
@@ -1123,7 +1123,7 @@ class TestVerifyHostKeyPolicyError:
 
 
 class TestVerifyHostKeyMatch:
-    """Lines 383-385 — outer exception handler."""
+    """Lines 383-385 - outer exception handler."""
 
     def test_verify_host_key_outer_error_wraps(self):
         client = SSHClient()
@@ -1137,12 +1137,12 @@ class TestVerifyHostKeyMatch:
 
 
 # ===========================================================================
-# SSHClient — _authenticate no transport guard
+# SSHClient - _authenticate no transport guard
 # ===========================================================================
 
 
 class TestAuthenticateNoTransport:
-    """Line 513 — _authenticate raises when no transport."""
+    """Line 513 - _authenticate raises when no transport."""
 
     def test_authenticate_no_transport_raises_auth_exception(self):
         client = SSHClient()
@@ -1151,12 +1151,12 @@ class TestAuthenticateNoTransport:
 
 
 # ===========================================================================
-# SSHClient — _authenticate publickey + password combo
+# SSHClient - _authenticate publickey + password combo
 # ===========================================================================
 
 
 class TestAuthenticatePkeyThenPassword:
-    """Lines 541-551, 554-563 — both key and password provided."""
+    """Lines 541-551, 554-563 - both key and password provided."""
 
     def test_pkey_succeeds_password_not_tried(self):
         client = SSHClient()
@@ -1179,12 +1179,12 @@ class TestAuthenticatePkeyThenPassword:
 
 
 # ===========================================================================
-# SSHClient — key_filename with key_password
+# SSHClient - key_filename with key_password
 # ===========================================================================
 
 
 class TestAuthenticateKeyFilenameWithKeyPassword:
-    """Lines 527-537 — key_password takes precedence over password for key."""
+    """Lines 527-537 - key_password takes precedence over password for key."""
 
     def test_key_password_used_for_key_file(self):
         client = SSHClient()
@@ -1228,7 +1228,7 @@ class TestAuthenticateKeyFilenameWithKeyPassword:
 
 
 # ===========================================================================
-# SSHClient — host key key_filename already set (skip load)
+# SSHClient - host key key_filename already set (skip load)
 # ===========================================================================
 
 

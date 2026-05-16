@@ -337,7 +337,7 @@ class SSHClient:
 
         try:
             if sock is None:
-                # Create socket connection — create_connection resolves IPv4 and IPv6
+                # Create socket connection - create_connection resolves IPv4 and IPv6
                 self._logger.debug(f"Connecting to {hostname}:{port}")
                 try:
                     sock = socket.create_connection(

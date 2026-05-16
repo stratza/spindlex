@@ -47,13 +47,13 @@ def mock_transport():
 
 
 # ---------------------------------------------------------------------------
-# AsyncLocalPortForwarder._handle_client — active tunnel path
+# AsyncLocalPortForwarder._handle_client - active tunnel path
 # ---------------------------------------------------------------------------
 
 
 class TestAsyncLocalHandleClientActivePath:
     async def test_handle_client_active_tunnel(self, mock_transport):
-        """_handle_client when tunnel is active — opens channel and relays."""
+        """_handle_client when tunnel is active - opens channel and relays."""
         lpf = AsyncLocalPortForwarder(mock_transport)
         tunnel = AsyncForwardingTunnel(
             "t1", ("127.0.0.1", 8080), ("remote", 80), "local"
@@ -111,7 +111,7 @@ class TestAsyncLocalHandleClientActivePath:
 
 
 # ---------------------------------------------------------------------------
-# AsyncLocalPortForwarder relay methods — exception paths
+# AsyncLocalPortForwarder relay methods - exception paths
 # ---------------------------------------------------------------------------
 
 
@@ -235,7 +235,7 @@ class TestAsyncRemoteHandleForwardedConnection:
 
 
 # ---------------------------------------------------------------------------
-# AsyncRemotePortForwarder relay — exception paths and writer=None
+# AsyncRemotePortForwarder relay - exception paths and writer=None
 # ---------------------------------------------------------------------------
 
 

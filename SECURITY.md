@@ -6,7 +6,8 @@ Only the latest version of SpindleX is currently supported for security updates.
 
 | Version | Supported |
 | ------- | --------- |
-| 0.6.x   | Yes       |
+| 0.7.x   | Yes       |
+| 0.6.x   | No        |
 | < 0.6   | No        |
 
 ## Reporting a Vulnerability

@@ -1,5 +1,5 @@
 """
-Unit tests for transport/forwarding.py — ForwardingTunnel, LocalPortForwarder,
+Unit tests for transport/forwarding.py - ForwardingTunnel, LocalPortForwarder,
 PortForwardingManager covering the untested 65%.
 """
 

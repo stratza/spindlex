@@ -81,9 +81,9 @@ body:
     id: prior_art
     attributes:
       label: Prior Art / References
-      description: Links to similar features in other SSH libraries (Paramiko, AsyncSSH, libssh2-python), RFCs, or relevant discussions.
+      description: Links to similar features in other SSH libraries, RFCs, or relevant discussions.
       placeholder: |
-        - AsyncSSH does this via `process.wait(timeout=30)`: https://...
+        - Other SSH libraries support this via `process.wait(timeout=30)`: https://...
         - RFC 4254 §6.10 describes the underlying protocol support
     validations:
       required: false

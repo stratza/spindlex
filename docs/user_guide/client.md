@@ -15,7 +15,7 @@ The SSH client is the primary interface for connecting to SSH servers and execut
     # Create client
     client = SSHClient()
 
-    # Configure host key policy. RejectPolicy is the secure default —
+    # Configure host key policy. RejectPolicy is the secure default -
     # shown explicitly here to make the security posture obvious.
     client.set_missing_host_key_policy(RejectPolicy())
 
@@ -155,7 +155,7 @@ from spindlex.hostkeys.policy import (
     AutoAddPolicy, RejectPolicy, WarningPolicy
 )
 
-# Reject all unknown host keys (the secure default — recommended).
+# Reject all unknown host keys (the secure default - recommended).
 client.set_missing_host_key_policy(RejectPolicy())
 
 # Log warning but accept unknown host keys. Use this only when you
@@ -164,7 +164,7 @@ client.set_missing_host_key_policy(WarningPolicy())
 
 # WARNING: AutoAddPolicy trusts every first-seen host key and therefore
 # disables MITM protection. Only use it in short-lived disposable test
-# environments — never in production.
+# environments - never in production.
 client.set_missing_host_key_policy(AutoAddPolicy())
 ```
 

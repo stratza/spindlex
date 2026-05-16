@@ -1,7 +1,7 @@
 """
 Unit tests for spindlex/client/sftp_client.py
 
-All tests use mocks — no real SSH/SFTP server required.
+All tests use mocks - no real SSH/SFTP server required.
 """
 
 from __future__ import annotations
@@ -93,6 +93,7 @@ def _make_sftp_client() -> tuple[SFTPClient, MagicMock]:
     client._server_version = 3
     client._server_extensions = {}
     client._pending_responses = {}
+    client._max_write_len = 64512  # _DEFAULT_MAX_WRITE fallback
     return client, channel
 
 

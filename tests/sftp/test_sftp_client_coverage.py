@@ -97,6 +97,7 @@ def _make_sftp_client() -> tuple[SFTPClient, MagicMock]:
     client._server_version = 3
     client._server_extensions = {}
     client._pending_responses = {}
+    client._max_write_len = 64512  # _DEFAULT_MAX_WRITE fallback
     return client, channel
 
 
@@ -113,7 +114,7 @@ def _make_sftp_file(
 
 
 # ---------------------------------------------------------------------------
-# SFTPFile — pipelined read error/unexpected paths
+# SFTPFile - pipelined read error/unexpected paths
 # ---------------------------------------------------------------------------
 
 
@@ -136,7 +137,7 @@ class TestSFTPFilePipelinedReadErrors:
 
 
 # ---------------------------------------------------------------------------
-# SFTPFile — write pipeline full drain error
+# SFTPFile - write pipeline full drain error
 # ---------------------------------------------------------------------------
 
 
@@ -179,7 +180,7 @@ class TestSFTPFileWritePipelineDrain:
 
 
 # ---------------------------------------------------------------------------
-# SFTPClient._send_message / _receive_message — no channel
+# SFTPClient._send_message / _receive_message - no channel
 # ---------------------------------------------------------------------------
 
 
@@ -212,7 +213,7 @@ class TestSFTPClientChannelGuards:
 
 
 # ---------------------------------------------------------------------------
-# SFTPClient._receive_message_for_id — timeout
+# SFTPClient._receive_message_for_id - timeout
 # ---------------------------------------------------------------------------
 
 
@@ -516,7 +517,7 @@ class TestSFTPClientRecursive:
 
 
 # ---------------------------------------------------------------------------
-# SFTPClient.listdir — error paths
+# SFTPClient.listdir - error paths
 # ---------------------------------------------------------------------------
 
 
@@ -575,7 +576,7 @@ class TestSFTPClientListdirErrors:
 
 
 # ---------------------------------------------------------------------------
-# SFTPClient.stat / lstat / chmod — unexpected paths
+# SFTPClient.stat / lstat / chmod - unexpected paths
 # ---------------------------------------------------------------------------
 
 
@@ -624,7 +625,7 @@ class TestSFTPClientStatChmodUnexpected:
 
 
 # ---------------------------------------------------------------------------
-# SFTPClient.mkdir / rmdir / remove / rename — unexpected
+# SFTPClient.mkdir / rmdir / remove / rename - unexpected
 # ---------------------------------------------------------------------------
 
 
@@ -671,7 +672,7 @@ class TestSFTPClientOpsUnexpected:
 
 
 # ---------------------------------------------------------------------------
-# SFTPClient.getcwd / normalize / readlink — unexpected and empty paths
+# SFTPClient.getcwd / normalize / readlink - unexpected and empty paths
 # ---------------------------------------------------------------------------
 
 
@@ -750,7 +751,7 @@ class TestSFTPClientPathOps:
 
 
 # ---------------------------------------------------------------------------
-# SFTPClient.open — unexpected path
+# SFTPClient.open - unexpected path
 # ---------------------------------------------------------------------------
 
 
