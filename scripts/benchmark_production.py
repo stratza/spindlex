@@ -63,7 +63,6 @@ KEX_ALGORITHMS = [
     "ecdh-sha2-nistp384",
     "ecdh-sha2-nistp521",
     "diffie-hellman-group14-sha256",
-    "diffie-hellman-group16-sha512",
 ]
 
 HOST_KEY_ALGORITHMS = [
@@ -76,9 +75,15 @@ HOST_KEY_ALGORITHMS = [
 ]
 
 CIPHER_ALGORITHMS = [
+    "chacha20-poly1305@openssh.com",
     "aes256-ctr",
     "aes192-ctr",
     "aes128-ctr",
+]
+
+MAC_ALGORITHMS = [
+    "hmac-sha2-256",
+    "hmac-sha2-512",
 ]
 
 SFTP_CHUNK = 16 * 1024  # 16 KiB — stays under server packet limits
@@ -196,6 +201,7 @@ def _force_algos(
     cipher: str | None = None,
     kex: str | None = None,
     hostkey: str | None = None,
+    mac: str | None = None,
 ) -> Iterator[None]:
     """Temporarily constrain CipherSuite to a single algorithm per category."""
     saved: dict[str, list[str]] = {}
@@ -209,6 +215,9 @@ def _force_algos(
         if hostkey is not None:
             saved["HOST_KEY_ALGORITHMS"] = CipherSuite.HOST_KEY_ALGORITHMS[:]
             CipherSuite.HOST_KEY_ALGORITHMS = [hostkey]
+        if mac is not None:
+            saved["MAC_ALGORITHMS"] = CipherSuite.MAC_ALGORITHMS[:]
+            CipherSuite.MAC_ALGORITHMS = [mac]
         yield
     finally:
         for attr, val in saved.items():
@@ -275,11 +284,29 @@ def check_protocol_correctness(cfg: dict[str, Any]) -> None:
         except Exception as e:
             failed(f"    cipher  {ciph}", f"non-SSH exception: {type(e).__name__}: {e}")
 
+    print("  MAC algorithms:")
+    for mac in MAC_ALGORITHMS:
+        try:
+            with _force_algos(mac=mac):
+                c = spx_open(cfg)
+                _, stdout, _ = c.exec_command("echo mac_ok")
+                out = stdout.read().strip()
+                c.close()
+            if out == b"mac_ok":
+                passed(f"    mac  {mac}")
+            else:
+                failed(f"    mac  {mac}", f"unexpected output: {out!r}")
+        except SSHException as e:
+            failed(f"    mac  {mac}", type(e).__name__)
+        except Exception as e:
+            failed(f"    mac  {mac}", f"non-SSH exception: {type(e).__name__}: {e}")
+
     print("  Silent-fallback detection (fake algorithms must be rejected):")
     for kind, fake in [
         ("kex", "nonexistent-kex-00"),
         ("hostkey", "nonexistent-hk-00"),
         ("cipher", "nonexistent-ciph-00"),
+        ("mac", "nonexistent-mac-00"),
     ]:
         kwargs: dict[str, str] = {kind: fake}
         try:

@@ -44,11 +44,12 @@ warnings.filterwarnings("ignore", category=UserWarning)
 ITERATIONS = 3
 WARMUP = 1
 PAYLOAD_SIZE = 1024 * 1024  # 1 MiB
-SFTP_CHUNK = 16 * 1024
+SFTP_CHUNK = 32 * 1024
 
 # ── Algorithm profiles ────────────────────────────────────────────────────────
 
 CIPHER_PROFILES: list[dict[str, Any]] = [
+    {"label": "chacha20-poly1305", "cipher": "chacha20-poly1305@openssh.com"},
     {"label": "aes256-ctr", "cipher": "aes256-ctr"},
     {"label": "aes192-ctr", "cipher": "aes192-ctr"},
     {"label": "aes128-ctr", "cipher": "aes128-ctr"},
