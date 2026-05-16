@@ -85,7 +85,7 @@ docs/
 
 Comparison page rules:
 
-- Compare against Paramiko and AsyncSSH honestly.
+- Compare against other SSH libraries honestly.
 - Include strengths and weaknesses.
 - Include unsupported features.
 - Compare use cases, not only speed.
@@ -117,7 +117,7 @@ Create `docs/compatibility.md` with:
 - Dropbear support note.
 - Known incompatibilities.
 - Unsupported features.
-- Behavior differences vs Paramiko and AsyncSSH.
+- Behavior differences vs other SSH libraries.
 
 Known incompatibility entry format:
 
@@ -216,7 +216,7 @@ spindlex-benchmark --scenario basic --output results.json
 
 Benchmark design:
 
-- Pin versions of SpindleX, Paramiko, AsyncSSH, and OpenSSH.
+- Pin versions of SpindleX, other SSH libraries, and OpenSSH.
 - Record:
   - OS
   - CPU
@@ -234,8 +234,7 @@ Benchmark design:
 
 Compare against:
 
-- Paramiko for sync workflows.
-- AsyncSSH for async workflows.
+- Other SSH libraries for sync and async workflows.
 - OpenSSH CLI/SFTP as practical baseline.
 
 Publish results:

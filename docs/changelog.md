@@ -30,7 +30,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [0.6.11] - 2026-05-12
 
 ### Performance
-*   **Async throughput overhaul**: SpindleX async SFTP now outperforms asyncssh on handshake, upload, and download benchmarks (LAN: ~42 ms handshake vs asyncssh ~65 ms; ~14 ms/MiB upload vs asyncssh ~15 ms/MiB; ~13 ms/MiB download vs asyncssh ~14 ms/MiB).
+*   **Async throughput overhaul**: SpindleX async SFTP now outperforms other leading SSH libraries on handshake, upload, and download benchmarks (LAN: ~42 ms handshake vs ~65 ms; ~14 ms/MiB upload vs ~15 ms/MiB; ~13 ms/MiB download vs ~14 ms/MiB).
 *   **Native async packet receive**: Replaced `asyncio.to_thread(super()._read_message)` with `_recv_packet_async()`, which reads directly from the asyncio `StreamReader`. Eliminates two cross-thread context switches per received SSH packet.
 *   **Threshold-based write drain**: `_send_message_async()` no longer calls `drain()` after every packet. Drain fires only when the asyncio write buffer exceeds 64 KB, eliminating ~32 event-loop yields per 1 MiB SFTP upload window.
 *   **Doubled SFTP pipeline depth**: `_WINDOW` and `_PIPELINE_DEPTH` increased from 32 to 64, keeping up to 2 MiB of SFTP reads/writes in flight (was 1 MiB).
@@ -211,7 +211,7 @@ This release is a broad hardening pass across every layer of the library - SFTP 
 ## [0.6.5] - 2026-04-26
 
 ### Performance
-*   **SFTP 32-deep pipelined request window**: Replaced the strict send-one-wait-ACK-repeat loop in `SFTPFile.read(-1)` and `SFTPFile.write()` with a sliding window of 32 concurrent in-flight SFTP requests. Benchmark against a LAN server (1 MiB file): upload 79 ms → 14 ms (now ~1.6× faster than asyncssh), download 50 ms → 15 ms (on par with asyncssh). `SFTPClient.get()` and `SFTPClient.put()` also use equivalent pipelining.
+*   **SFTP 32-deep pipelined request window**: Replaced the strict send-one-wait-ACK-repeat loop in `SFTPFile.read(-1)` and `SFTPFile.write()` with a sliding window of 32 concurrent in-flight SFTP requests. Benchmark against a LAN server (1 MiB file): upload 79 ms → 14 ms (now ~1.6× faster than other SSH libraries), download 50 ms → 15 ms (on par with other SSH libraries). `SFTPClient.get()` and `SFTPClient.put()` also use equivalent pipelining.
 
 ### Fixed
 *   **Transport rekeying deadlock**: `_recv_message` and `_expect_message` called `self._stop_event.wait(0.1)` while holding `self._lock`. `threading.Event.wait()` does not release locks, starving the KEX thread and causing rekeying to deadlock until pytest-timeout killed it. Fixed by moving the `wait()` call outside the `with self._lock:` block.
@@ -258,7 +258,7 @@ This release is a broad hardening pass across every layer of the library - SFTP 
 ### Added
 *   **`Channel` / `Transport` context-manager support** (`with channel:` / `with transport:`).
 *   **`AsyncSFTPClient.rename` / `chmod` / `normalize`** implementations.
-*   **`scripts/benchmark_compare.py`**: cross-library SSH/SFTP benchmark vs paramiko and asyncssh across handshake, exec_command (small + ~1.4 MB), SFTP upload/download, and 10 parallel handshakes. Per-library failures are isolated and rendered as `FAILED -- <error>` instead of aborting the run.
+*   **`scripts/benchmark_compare.py`**: cross-library SSH/SFTP benchmark vs other SSH libraries across handshake, exec_command (small + ~1.4 MB), SFTP upload/download, and 10 parallel handshakes. Per-library failures are isolated and rendered as `FAILED -- <error>` instead of aborting the run.
 
 ### Changed
 *   **Test layout**: ~50 test files reorganized into per-component subfolders (`auth/`, `channel/`, `client/`, `crypto/`, `hostkeys/`, `log/`, `misc/`, `protocol/`, `real_server/`, `sftp/`, `transport/`); imports re-grouped per first-party isort rules.

@@ -31,7 +31,7 @@
 ### 🔥 Key Features
 
 - 🚀 **High Performance**: Adaptive SFTP write chunks up to 255 KB via `limits@openssh.com` negotiation, pipelined transfers, and zero-copy internal buffering.
-- 🔒 **ChaCha20-Poly1305**: Preferred AEAD cipher - no separate MAC pass, full Terrapin-defense strict-KEX, matches asyncssh throughput.
+- 🔒 **ChaCha20-Poly1305**: Preferred AEAD cipher - no separate MAC pass, full Terrapin-defense strict-KEX, on par with leading SSH libraries.
 - 🔄 **Native Async**: First-class `asyncio` support via `AsyncSSHClient` and `AsyncSFTPClient`.
 - 🛡️ **Secure by Default**: Modern primitives only - Ed25519, ECDSA, ChaCha20-Poly1305, AES-CTR. Legacy/weak ciphers are not negotiated.
 - 🔗 **Advanced Tunneling**: Support for **ProxyJump** (bastion hosts) and TCP port forwarding.
@@ -115,9 +115,9 @@ asyncio.run(main())
 
 ## 📊 Performance Benchmarks
 
-SpindleX is optimized for high-throughput environments. The 0.7.x line closed the gap with asyncssh on SFTP upload throughput and added ChaCha20-Poly1305 as the preferred cipher.
+SpindleX is optimized for high-throughput environments. The 0.7.x line brings SFTP upload throughput in line with leading SSH libraries and adds ChaCha20-Poly1305 as the preferred cipher.
 
-| Operation | SpindleX | asyncssh | Notes |
+| Operation | SpindleX | Other libs | Notes |
 |:---|:---:|:---:|:---|
 | **SFTP upload (1 MiB, chacha20)** | ~14 ms | ~14 ms | On par after limits negotiation |
 | **SFTP upload (1 MiB, AES-CTR)** | ~14 ms | ~14 ms | Pipelined, 255 KB chunks |

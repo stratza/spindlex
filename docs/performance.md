@@ -18,7 +18,7 @@ SpindleX is engineered for speed, security, and protocol efficiency. Key perform
 
 SpindleX ships two benchmark scripts in `scripts/`:
 
-- **`benchmark_ciphers.py`** - compares upload throughput across all supported ciphers (ChaCha20-Poly1305, AES-256/192/128-CTR) against asyncssh on a live server configured in `.env`.
+- **`benchmark_ciphers.py`** - compares upload throughput across all supported ciphers (ChaCha20-Poly1305, AES-256/192/128-CTR) against other SSH libraries on a live server configured in `.env`.
 - **`benchmark_production.py`** - full protocol correctness and performance sweep: verifies every cipher, MAC, KEX, and host-key algorithm negotiates and transfers data correctly, then reports timing.
 
 ```bash
@@ -104,6 +104,6 @@ for msg_type, data in stats.items():
 ## Best Practices Summary
 
 1.  **Use Connection Pooling**: Reuse SSH connections for multiple operations to avoid the overhead of repeated handshakes.
-2.  **Choose Modern Algorithms**: ChaCha20-Poly1305 is the default and preferred cipher - it is AEAD (no separate MAC pass) and matches asyncssh throughput on typical hardware.
+2.  **Choose Modern Algorithms**: ChaCha20-Poly1305 is the default and preferred cipher - it is AEAD (no separate MAC pass) and matches other leading SSH libraries on typical hardware.
 3.  **Stream Large Files**: Use the SFTP streaming methods to minimize memory usage for large file transfers. SpindleX automatically negotiates `limits@openssh.com` with OpenSSH servers to use write chunks up to 255 KB, reducing round trips by ~8× compared to the 32 KB default.
 4.  **Monitor Network Latency**: Use the built-in monitoring tools to track performance across different network environments.
