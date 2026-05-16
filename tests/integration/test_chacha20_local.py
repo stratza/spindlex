@@ -164,8 +164,12 @@ async def test_chacha20_async_local_integration():
 
             assert client.connected
             assert client._transport.authenticated
-            assert client._transport._cipher_out_active == "chacha20-poly1305@openssh.com"
-            assert client._transport._cipher_in_active == "chacha20-poly1305@openssh.com"
+            assert (
+                client._transport._cipher_out_active == "chacha20-poly1305@openssh.com"
+            )
+            assert (
+                client._transport._cipher_in_active == "chacha20-poly1305@openssh.com"
+            )
 
     finally:
         CipherSuite.ENCRYPTION_ALGORITHMS = original_ciphers
