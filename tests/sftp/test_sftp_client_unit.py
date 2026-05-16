@@ -1,7 +1,7 @@
 """
 Unit tests for spindlex/client/sftp_client.py
 
-All tests use mocks — no real SSH/SFTP server required.
+All tests use mocks - no real SSH/SFTP server required.
 """
 
 from __future__ import annotations

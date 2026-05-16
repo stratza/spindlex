@@ -305,7 +305,7 @@ def validate_packet_structure(packet_data: bytes) -> bool:
     # Read packet length
     packet_length = struct.unpack(">I", packet_data[:PACKET_LENGTH_SIZE])[0]
 
-    # Validate packet length — minimum body is 8 (one AEAD block or standard minimum)
+    # Validate packet length - minimum body is 8 (one AEAD block or standard minimum)
     if packet_length < 8:
         raise ProtocolException(f"Invalid packet length: {packet_length}")
 

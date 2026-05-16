@@ -241,7 +241,7 @@ class Channel:
 
             # If a background thread is pumping the transport (e.g. during
             # rekey or in async mode), wait for it to deliver data via the
-            # event.  Otherwise drive _pump() directly — without this,
+            # event.  Otherwise drive _pump() directly - without this,
             # sync-mode recv() pays 100ms of dead wait time per packet.
             has_bg_thread = getattr(self._transport, "_kex_thread", None) is not None
 
@@ -257,7 +257,7 @@ class Channel:
                 # When a channel timeout is active, bound the socket wait via
                 # select() so the deadline is honoured.  When there is no
                 # channel timeout, _pump() blocks on socket.recv() until a
-                # packet arrives — which is what we want.
+                # packet arrives - which is what we want.
                 if self._timeout is not None:
                     elapsed = time.time() - start_time
                     remaining = self._timeout - elapsed
@@ -452,7 +452,7 @@ class Channel:
                 raise ChannelException("Timeout waiting for exit status")
             return self.get_exit_status()
 
-        # No background receive thread — pump until exit status arrives.
+        # No background receive thread - pump until exit status arrives.
         start_time = time.time()
         while self._exit_status is None and not self._closed:
             if effective_timeout is not None:
@@ -706,7 +706,7 @@ class Channel:
             self._local_window_size -= bytes_consumed
 
             # Send window adjust if needed.  _send_channel_window_adjust
-            # increments _local_window_size itself — do not double-count here.
+            # increments _local_window_size itself - do not double-count here.
             if self._local_window_size < DEFAULT_WINDOW_SIZE // 2:
                 bytes_to_add = DEFAULT_WINDOW_SIZE - self._local_window_size
                 self._transport._send_channel_window_adjust(

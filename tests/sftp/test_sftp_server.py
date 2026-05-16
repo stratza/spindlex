@@ -192,7 +192,7 @@ def test_sftp_server_resolve_path_hardening(mock_channel, temp_root):
             server._resolve_path("ok\x00name")
 
         # Backslash separators on any platform should be normalized before
-        # the traversal check — ``..\\..\\etc\\passwd`` must not bypass it.
+        # the traversal check - ``..\\..\\etc\\passwd`` must not bypass it.
         with pytest.raises(SFTPError, match="outside root"):
             server._resolve_path("..\\..\\etc\\passwd")
 

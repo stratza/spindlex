@@ -6,12 +6,12 @@ SSH_PASSWORD) and runs five workloads against the same target,
 reporting median / mean / stddev for each library/workload pair.
 
 Workloads:
-  1. handshake        — full connect + auth + close cycle
-  2. exec-small       — exec_command("echo hello") on a warm connection
-  3. exec-large       — ~1 MiB stdout (base64 of /dev/zero)
-  4. sftp-upload      — write a 1 MiB temp file to the server
-  5. sftp-download    — read a 1 MiB temp file back
-  6. parallel-connect — 10 concurrent handshakes
+  1. handshake        - full connect + auth + close cycle
+  2. exec-small       - exec_command("echo hello") on a warm connection
+  3. exec-large       - ~1 MiB stdout (base64 of /dev/zero)
+  4. sftp-upload      - write a 1 MiB temp file to the server
+  5. sftp-download    - read a 1 MiB temp file back
+  6. parallel-connect - 10 concurrent handshakes
 
 Methodology: 1 warm-up iteration (discarded) + N timed iterations
 per workload (default 5). Times are wall-clock, monotonic clock.
@@ -96,7 +96,7 @@ def safe(label: str, sampler: Callable[[], list[float]]) -> dict[str, Any]:
     """
     try:
         return stats(sampler())
-    except BaseException as e:  # noqa: BLE001 — keep going past KeyboardInterrupt subclasses too
+    except BaseException as e:  # noqa: BLE001 - keep going past KeyboardInterrupt subclasses too
         if isinstance(e, KeyboardInterrupt):
             raise
         tb = traceback.format_exception_only(type(e), e)[-1].strip()
@@ -350,7 +350,7 @@ def bench_sftp_upload(
 ) -> dict[str, dict[str, Any]]:
     out: dict[str, dict[str, Any]] = {}
 
-    # spindlex — needs explicit chunking; the protocol layer rejects strings
+    # spindlex - needs explicit chunking; the protocol layer rejects strings
     # larger than the SFTP write limit, unlike paramiko/asyncssh which chunk.
     def _spx() -> list[float]:
         c = spindlex_open(cfg)

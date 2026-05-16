@@ -1,7 +1,7 @@
 """
 Unit tests for spindlex/transport/kex.py
 
-All tests are mock-based — no real SSH connections are made.
+All tests are mock-based - no real SSH connections are made.
 """
 
 from __future__ import annotations
@@ -446,7 +446,7 @@ class TestSignExchangeHash:
 
 
 # ---------------------------------------------------------------------------
-# start_kex — top-level integration (mocked internals)
+# start_kex - top-level integration (mocked internals)
 # ---------------------------------------------------------------------------
 
 

@@ -1,5 +1,5 @@
 """
-Coverage tests for SFTPHandle (sftp_server.py) — all read/write/seek/close paths.
+Coverage tests for SFTPHandle (sftp_server.py) - all read/write/seek/close paths.
 Also tests SFTPServer._handle_message dispatch and _process_messages break paths.
 """
 

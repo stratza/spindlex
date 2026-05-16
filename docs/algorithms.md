@@ -1,6 +1,6 @@
 # Algorithms
 
-SpindleX supports a carefully chosen set of modern SSH cryptographic algorithms. Legacy and weak primitives are excluded by default — only algorithms that are actively implemented, negotiation-tested, and considered safe for current deployments are advertised to the server.
+SpindleX supports a carefully chosen set of modern SSH cryptographic algorithms. Legacy and weak primitives are excluded by default - only algorithms that are actively implemented, negotiation-tested, and considered safe for current deployments are advertised to the server.
 
 !!! info "Benchmark-verified"
     Every algorithm on this page is covered by the production readiness benchmark (`scripts/benchmark_production.py`), which verifies end-to-end negotiation and data integrity against a live server on every release.
@@ -28,7 +28,7 @@ Key exchange establishes the shared session secret before any user data is sent.
 
 ### Client signaling tokens
 
-SpindleX appends `kex-strict-c-v00@openssh.com` and `ext-info-c` to the client's KEX list as capability signals per OpenSSH extension negotiation. These are **not** real algorithms — they are never selected as the negotiated KEX method and have no implementation behind them.
+SpindleX appends `kex-strict-c-v00@openssh.com` and `ext-info-c` to the client's KEX list as capability signals per OpenSSH extension negotiation. These are **not** real algorithms - they are never selected as the negotiated KEX method and have no implementation behind them.
 
 ---
 
@@ -48,7 +48,7 @@ Host key algorithms determine how the server proves its identity. SpindleX adver
 ### Notes
 
 - **`ssh-ed25519`** is the preferred host key type. It has the smallest key size, fastest verification, and strong security properties.
-- **RSA** host keys are supported via the modern `rsa-sha2-256` and `rsa-sha2-512` signature algorithms (RFC 8332). Raw `ssh-rsa` (SHA-1 signatures) is not advertised and requires an explicit opt-in — see [Legacy Algorithms](#legacy-algorithms) below.
+- **RSA** host keys are supported via the modern `rsa-sha2-256` and `rsa-sha2-512` signature algorithms (RFC 8332). Raw `ssh-rsa` (SHA-1 signatures) is not advertised and requires an explicit opt-in - see [Legacy Algorithms](#legacy-algorithms) below.
 - The server's host key is verified against `~/.ssh/known_hosts` (or a custom `HostKeyStorage`) on every connection. See the [Security Guide](security.md) for host key policy details.
 
 ---
@@ -66,7 +66,7 @@ Encryption algorithms protect the data stream after key exchange. SpindleX adver
 
 ### Notes
 
-- **`chacha20-poly1305@openssh.com`** is the preferred modern cipher. It is an AEAD (Authenticated Encryption with Associated Data) construction that bundles confidentiality and integrity into a single pass — no separate MAC is computed or verified when this cipher is active. It uses a 64-byte derived key split into two 32-byte halves: one to encrypt the packet length field, one to encrypt the body and derive the Poly1305 authentication tag.
+- **`chacha20-poly1305@openssh.com`** is the preferred modern cipher. It is an AEAD (Authenticated Encryption with Associated Data) construction that bundles confidentiality and integrity into a single pass - no separate MAC is computed or verified when this cipher is active. It uses a 64-byte derived key split into two 32-byte halves: one to encrypt the packet length field, one to encrypt the body and derive the Poly1305 authentication tag.
 - **AES-CTR ciphers** are retained for compatibility with servers that do not advertise `chacha20-poly1305@openssh.com`. They require a separate HMAC for packet authentication.
 - All AES ciphers use **Counter (CTR) mode**, which is not vulnerable to padding oracle attacks.
 - CBC mode ciphers (`aes128-cbc`, `aes256-cbc`, `3des-cbc`) are not implemented.
@@ -158,10 +158,10 @@ The following algorithms are deliberately excluded:
 
 | Algorithm | Reason |
 |-----------|--------|
-| `diffie-hellman-group1-sha1` | 1024-bit DH group, SHA-1 — broken |
-| `diffie-hellman-group14-sha1` | SHA-1 — deprecated |
-| `hmac-sha1`, `hmac-md5` | SHA-1 / MD5 — deprecated |
+| `diffie-hellman-group1-sha1` | 1024-bit DH group, SHA-1 - broken |
+| `diffie-hellman-group14-sha1` | SHA-1 - deprecated |
+| `hmac-sha1`, `hmac-md5` | SHA-1 / MD5 - deprecated |
 | `arcfour`, `3des-cbc`, `blowfish-cbc` | Weak or broken ciphers |
-| `aes*-cbc` | CBC mode — vulnerable to padding oracle attacks |
-| `none` (cipher) | Plaintext — never negotiated |
+| `aes*-cbc` | CBC mode - vulnerable to padding oracle attacks |
+| `none` (cipher) | Plaintext - never negotiated |
 | `zlib`, `zlib@openssh.com` | Not implemented |

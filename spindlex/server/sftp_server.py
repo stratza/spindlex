@@ -419,7 +419,7 @@ class SFTPServer:
         Raises:
             SFTPError: If path is outside root directory
         """
-        # Reject NUL bytes outright — they can truncate paths in some native
+        # Reject NUL bytes outright - they can truncate paths in some native
         # APIs and have no legitimate use in SFTP paths.
         if "\x00" in path:
             raise SFTPError("Invalid path", SSH_FX_PERMISSION_DENIED)

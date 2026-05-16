@@ -165,7 +165,7 @@ class PacketProfiler:
         total_med = b_med + e_med + w_med
         total_p = b_p + e_p + w_p
         return (
-            f"PacketProfiler ({n} packets) — median / P{pct} in µs:\n"
+            f"PacketProfiler ({n} packets) - median / P{pct} in µs:\n"
             f"  build:   {b_med:7.1f} / {b_p:7.1f}\n"
             f"  encrypt: {e_med:7.1f} / {e_p:7.1f}\n"
             f"  write:   {w_med:7.1f} / {w_p:7.1f}\n"
@@ -248,7 +248,7 @@ class Transport:
         self._sequence_number_in = 0
         self._sequence_number_out = 0
         self._packet_buffer = bytearray()
-        # Lock ordering contract — to prevent ABBA deadlock, always acquire in this order:
+        # Lock ordering contract - to prevent ABBA deadlock, always acquire in this order:
         #   1. _read_lock  (socket-level serialisation; held while reading a packet)
         #   2. _lock       (state-level serialisation; held while mutating transport state)
         # Never acquire _read_lock while already holding _lock.
@@ -878,7 +878,7 @@ class Transport:
         """
         # Parse the remote sender_channel up-front so we always have a valid
         # id to reference in a failure response, even if later fields are
-        # malformed. If even this fails we cannot reply safely — the peer
+        # malformed. If even this fails we cannot reply safely - the peer
         # will time out, which is the expected behaviour for a garbage frame.
         sender_channel: Optional[int] = None
         try:
@@ -922,7 +922,7 @@ class Transport:
             # Do not leak internal exception details to the remote peer.
             self._logger.error("Channel open failed: %s", e)
             if sender_channel is None:
-                # No valid sender id parsed — can't send a targeted failure.
+                # No valid sender id parsed - can't send a targeted failure.
                 return
             try:
                 failure_msg = ChannelOpenFailureMessage(
@@ -1232,7 +1232,7 @@ class Transport:
 
             channel = self._channels[channel_id]
 
-            # Defensive check only — the channel layer owns _remote_window_size
+            # Defensive check only - the channel layer owns _remote_window_size
             # and is the single decrement point (mirrors the async path in
             # AsyncChannel.send). Transport must not decrement here, otherwise
             # the window would be debited twice per send.
@@ -1494,7 +1494,7 @@ class Transport:
         # Snapshot the channel list under the transport lock, then release it
         # before calling Channel.close(). Channel.close() takes the channel
         # lock and then re-enters _close_channel which takes the transport
-        # lock — holding the transport lock here while calling channel.close()
+        # lock - holding the transport lock here while calling channel.close()
         # would invert the order taken by any concurrent caller of
         # Channel.close() and deadlock the two threads.
         with self._lock:
@@ -1880,7 +1880,7 @@ class Transport:
                 self._activate_inbound_encryption()
 
             if msg.msg_type == MSG_KEXINIT and not self._kex_in_progress:
-                # Peer initiated rekeying — set flag, queue message, start KEX thread.
+                # Peer initiated rekeying - set flag, queue message, start KEX thread.
                 self._kex_in_progress = True
                 self._message_queue.append(msg)
                 self._kex_thread = threading.Thread(target=self._start_kex, daemon=True)
@@ -1936,7 +1936,7 @@ class Transport:
                     msg = self._dispatch_packet(packet, single_pump)
                     if msg is not None:
                         return msg
-                    # None means handled internally — loop to read the next packet.
+                    # None means handled internally - loop to read the next packet.
 
         except (OSError, struct.error, SSHException, ProtocolException) as e:
             if isinstance(e, (SSHException, ProtocolException)):
@@ -1985,7 +1985,7 @@ class Transport:
                 if self._stop_event.wait(0.1):
                     raise TransportException("Transport is stopping")
 
-            # Inner loop exited via break — safe to read from socket now
+            # Inner loop exited via break - safe to read from socket now
             msg = self._read_message()
             if msg is not None:
                 return msg

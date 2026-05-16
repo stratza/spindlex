@@ -1,7 +1,7 @@
 """
 Unit tests for spindlex/server/sftp_server.py
 
-Covers missing lines using mock-based testing only — no real SSH server.
+Covers missing lines using mock-based testing only - no real SSH server.
 Focuses on: error paths, permission checks, all message-type handlers,
 SFTPHandle read/write/close edge cases, _run_server, _generate_handle,
 _resolve_path, _path_to_attrs, _format_longname, close().

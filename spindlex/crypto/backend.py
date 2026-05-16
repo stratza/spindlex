@@ -311,7 +311,7 @@ class CryptographyBackend:
 
         Args:
             algorithm: Hash algorithm for key derivation
-            shared_secret: Shared secret K — MUST be mpint-encoded per RFC 4253 §7.2,
+            shared_secret: Shared secret K - MUST be mpint-encoded per RFC 4253 §7.2,
                 i.e. a 4-byte big-endian length prefix followed by the minimal
                 two's-complement big-endian representation of K (with a leading
                 0x00 byte if the MSB is set). Pass write_mpint(K) from protocol.utils.

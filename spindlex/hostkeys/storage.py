@@ -37,7 +37,7 @@ class HostKeyStorage:
         try:
             self.load()
         except FileNotFoundError:
-            pass  # normal — known_hosts file not yet created
+            pass  # normal - known_hosts file not yet created
         except Exception as e:
             self._logger.warning(f"Could not load host keys from {self._filename}: {e}")
 

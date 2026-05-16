@@ -1,7 +1,7 @@
 """
 Unit tests for spindlex/transport/async_channel.py
 
-All tests are mock-based — no real SSH server connections are made.
+All tests are mock-based - no real SSH server connections are made.
 pytest-asyncio is configured with asyncio_mode = "auto" in pyproject.toml,
 so individual async tests do NOT need @pytest.mark.asyncio.
 """

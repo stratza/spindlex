@@ -382,7 +382,7 @@ class AsyncTransport(Transport):
             ) from e
 
     async def _recv_message_async(self, check_queue: bool = True) -> Message:
-        """Async version of _recv_message — reads natively from StreamReader."""
+        """Async version of _recv_message - reads natively from StreamReader."""
         if check_queue:
             async with self._state_lock:
                 if self._message_queue:

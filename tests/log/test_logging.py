@@ -210,7 +210,7 @@ def test_security_formatter():
     formatted = formatter.format(record)
     assert "[unknown]" in formatted
 
-    # Test with client_ip — the format string inserts it as-is; filter masks IPs in the message body
+    # Test with client_ip - the format string inserts it as-is; filter masks IPs in the message body
     record2 = logging.LogRecord(
         name="security",
         level=logging.WARNING,

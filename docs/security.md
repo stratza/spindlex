@@ -94,7 +94,7 @@ Host key verification is critical to prevent man-in-the-middle (MITM) attacks.
 
 ## Supported Cryptographic Algorithms
 
-For a full reference of all supported KEX, host key, cipher, and MAC algorithms — including preference order, deprecation status, and what is explicitly not supported — see the [Algorithms](algorithms.md) page.
+For a full reference of all supported KEX, host key, cipher, and MAC algorithms - including preference order, deprecation status, and what is explicitly not supported - see the [Algorithms](algorithms.md) page.
 
 ---
 

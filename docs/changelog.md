@@ -7,9 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [0.7.0] - 2026-05-16
 
 ### Added
-*   **ChaCha20-Poly1305 cipher**: Full `chacha20-poly1305@openssh.com` implementation — encrypt, decrypt_length, and decrypt_body — added to `CryptographyBackend`. Registered as the preferred cipher in `CipherSuite` (first in `ENCRYPTION_ALGORITHMS`), with `AEAD_CIPHERS` sentinel set and `key_len: 64` entry in `CIPHER_INFO`.
+*   **ChaCha20-Poly1305 cipher**: Full `chacha20-poly1305@openssh.com` implementation - encrypt, decrypt_length, and decrypt_body - added to `CryptographyBackend`. Registered as the preferred cipher in `CipherSuite` (first in `ENCRYPTION_ALGORITHMS`), with `AEAD_CIPHERS` sentinel set and `key_len: 64` entry in `CIPHER_INFO`.
 *   **ChaCha20 sync transport path**: `_encrypt_packet` and `_recv_packet` in `Transport` handle ChaCha20-Poly1305 natively via the two-key AEAD construction (64-byte key split into body key + header key, Poly1305 tag over enc_length + enc_body).
-*   **ChaCha20 async transport path**: `_recv_packet_async` in `AsyncTransport` implements the AEAD inbound path — reads enc_length (4 B), decrypts length, reads enc_body + Poly1305 tag (16 B), verifies and decrypts body.
+*   **ChaCha20 async transport path**: `_recv_packet_async` in `AsyncTransport` implements the AEAD inbound path - reads enc_length (4 B), decrypts length, reads enc_body + Poly1305 tag (16 B), verifies and decrypts body.
 *   **Strict-KEX sequence reset**: After sending `NEWKEYS` with strict-KEX active (`kex-strict-c-v00@openssh.com`), the outbound sequence number is reset to 0 in the async path (Terrapin defense, RFC 9142).
 *   **SFTP `limits@openssh.com` negotiation**: `SFTPClient._query_limits()` sends `SSH_FXP_EXTENDED` after version negotiation and parses the 4×uint64 reply to obtain `max_write_len`. On OpenSSH servers this raises the write chunk from 64 KB to 255 KB, reducing round trips for a 1 MiB upload from ~16 to ~4.
 *   **`PacketProfiler`**: Optional per-stage packet timing. Set `SPINDLEX_PROFILE=1` to record build / encrypt / socket-write latencies for every sent packet; call `transport._profiler.summary()` for median and P95 per stage.
@@ -142,7 +142,7 @@ This release hardens the project lifecycle around release automation, PR gates, 
 ## [0.6.6] - 2026-05-01
 
 ### Summary
-This release is a broad hardening pass across every layer of the library — SFTP client/server, transport, key exchange, async forwarding, logging, and host key verification. It resolves 37 issues identified since v0.6.5, including critical resource leaks, protocol correctness bugs, race conditions, and API/documentation gaps.
+This release is a broad hardening pass across every layer of the library - SFTP client/server, transport, key exchange, async forwarding, logging, and host key verification. It resolves 37 issues identified since v0.6.5, including critical resource leaks, protocol correctness bugs, race conditions, and API/documentation gaps.
 
 ### Fixed
 
@@ -157,7 +157,7 @@ This release is a broad hardening pass across every layer of the library — SFT
 
 **Transport & Channels**
 *   Multiple transport issues: `_recv_message` incorrect return type, dead channel message handlers, KEX race condition, and deadlock risk under concurrent channel use (#72, #73, #75, #91, #92, #94, #106).
-*   Lock release/acquire exception safety in `channel.send()` — lock could be permanently held on exception (#70).
+*   Lock release/acquire exception safety in `channel.send()` - lock could be permanently held on exception (#70).
 *   `ChannelExtendedDataMessage` was missing the data length prefix, violating the SSH wire format (#69).
 
 **Key Exchange**
@@ -197,7 +197,7 @@ This release is a broad hardening pass across every layer of the library — SFT
 
 ### Removed
 *   **`chacha20-poly1305@openssh.com`** dropped from the cipher list. The AEAD construction requires a fundamentally different packet framing (no separate MAC field, length encrypted separately) that is not yet implemented. Removed to prevent negotiating a cipher the transport cannot correctly handle.
-*   **`aes128-gcm@openssh.com` and `aes256-gcm@openssh.com`** dropped for the same reason — GCM AEAD requires the same alternative framing path as ChaCha20-Poly1305. Both will be re-introduced in a future release once AEAD framing support is implemented.
+*   **`aes128-gcm@openssh.com` and `aes256-gcm@openssh.com`** dropped for the same reason - GCM AEAD requires the same alternative framing path as ChaCha20-Poly1305. Both will be re-introduced in a future release once AEAD framing support is implemented.
 
 ### Changed
 *   `scripts/benchmark_ciphers.py`: removed the `-p` password CLI argument in favour of an interactive prompt to prevent credentials appearing in shell history (#123).
@@ -242,14 +242,14 @@ This release is a broad hardening pass across every layer of the library — SFT
 *   **Sync recv()/recv_stderr()/send_channel_request flat 100 ms penalty**: in sync mode each of these waited up to 100 ms on a `threading.Event` before driving `Transport._pump()`, but nothing else sets that event without a background pump thread. They now drive `_pump()` directly when no `_kex_thread` is present, with `select()` to bound the wait when a channel timeout is set. Warm `exec_command` dropped from ~215 ms → ~5 ms; large reads from ~5.3 s → ~20 ms; SFTP upload from ~8.4 s → ~80 ms.
 *   **SFTP downloads stalling after ~2 MiB**: `Channel._adjust_window` was incrementing `_local_window_size` *and* the transport-side helper was incrementing it again, double-counting the local view of the advertised window. The threshold check then stopped firing, no further `WINDOW_ADJUST` packets were sent, and the server's view of our window expired. Removed the duplicate increment; transport-side bookkeeping is now the single source of truth.
 *   **`_recv_bytes` lock scope**: `_read_lock` was held for the entire receive flow, including the buffer-served fast path. Restructured so `_lock` guards short non-blocking buffer slices and `_read_lock` is only held around the actual blocking `socket.recv`. Threads that already have buffered data return without contending with a peer blocked in `recv`.
-*   **Two-lock deadlock in `Transport.close()`**: held `self._lock` while calling `Channel.close()`, which re-takes its own lock and then `_close_channel` which re-takes `self._lock` — inverting the order taken by concurrent `Channel.close()` callers. Snapshot channels under the lock, drop it, close each channel, then re-acquire briefly to clear `self._channels`.
+*   **Two-lock deadlock in `Transport.close()`**: held `self._lock` while calling `Channel.close()`, which re-takes its own lock and then `_close_channel` which re-takes `self._lock` - inverting the order taken by concurrent `Channel.close()` callers. Snapshot channels under the lock, drop it, close each channel, then re-acquire briefly to clear `self._channels`.
 *   **`Channel.send` halved the effective remote window**: both `Channel.send()` and `Transport._send_channel_data()` were decrementing `_remote_window_size`, causing premature flow-control stalls. Removed the duplicate decrement on the transport side; the defensive size check is preserved.
 *   **SFTPServer path traversal hardening**: `_resolve_path` now uses `realpath` containment checks and rejects NUL bytes; exception handlers narrowed.
 
 ### Security
 *   **Strict-KEX / Terrapin defense**: the extension filter listed `kex-strict-{c,s}-v00@openssh.com`, but real implementations (and our own transport) advertise/detect the v01 spelling. The v01 marker leaked through the negotiator and the Terrapin defense could silently fail to activate against real OpenSSH peers. Filter now matches v01; `CipherSuite.negotiate_algorithms` also explicitly excludes all strict-KEX / `ext-info` markers from the KEX category and iterates the client's preference order per RFC 4253 §7.1.
 *   **Strict-KEX sequence-number reset** and channel-open hardening in transport.
-*   **Public-key auth signature algorithm bug**: the algorithm name was hardcoded as `ssh-rsa` in signatures regardless of the negotiated algorithm — fixed.
+*   **Public-key auth signature algorithm bug**: the algorithm name was hardcoded as `ssh-rsa` in signatures regardless of the negotiated algorithm - fixed.
 *   **Atomic rekeying state transitions** under lock; aligned inbound MAC sequence-number wrap with the outbound path.
 *   **Global logging sanitizer bypass**: child loggers escaped sanitization; routed through a `LogRecordFactory` hook so the sanitizer applies uniformly.
 *   **SHA-1 RSA gated**: signatures over SHA-1 now require an explicit `allow_sha1=True` and emit a `DeprecationWarning`.

@@ -29,7 +29,7 @@ pip install spindlex[gssapi]
     !!! warning "Host key verification"
         The default `RejectPolicy` requires the server's host key to already
         be trusted (for example, recorded in `~/.ssh/known_hosts`). Only use
-        `AutoAddPolicy` in disposable test environments — it disables
+        `AutoAddPolicy` in disposable test environments - it disables
         MITM protection.
 
     ```python

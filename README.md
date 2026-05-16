@@ -26,14 +26,14 @@
 **SpindleX** is a modern SSH protocol implementation for Python 3.9+. It is designed for high-performance automation and secure file transfers, providing a clean alternative to legacy SSH libraries.
 
 > [!NOTE]
-> **0.7.x — ChaCha20-Poly1305 & SFTP throughput era.** This release line adds full `chacha20-poly1305@openssh.com` support as the preferred cipher, adaptive SFTP write chunks via `limits@openssh.com` (up to 255 KB), and a hardened async transport. Review [meta/SECURITY.md](meta/SECURITY.md) before deploying in production-facing workflows and pin exact versions.
+> **0.7.x - ChaCha20-Poly1305 & SFTP throughput era.** This release line adds full `chacha20-poly1305@openssh.com` support as the preferred cipher, adaptive SFTP write chunks via `limits@openssh.com` (up to 255 KB), and a hardened async transport. Review [meta/SECURITY.md](meta/SECURITY.md) before deploying in production-facing workflows and pin exact versions.
 
 ### 🔥 Key Features
 
 - 🚀 **High Performance**: Adaptive SFTP write chunks up to 255 KB via `limits@openssh.com` negotiation, pipelined transfers, and zero-copy internal buffering.
-- 🔒 **ChaCha20-Poly1305**: Preferred AEAD cipher — no separate MAC pass, full Terrapin-defense strict-KEX, matches asyncssh throughput.
+- 🔒 **ChaCha20-Poly1305**: Preferred AEAD cipher - no separate MAC pass, full Terrapin-defense strict-KEX, matches asyncssh throughput.
 - 🔄 **Native Async**: First-class `asyncio` support via `AsyncSSHClient` and `AsyncSFTPClient`.
-- 🛡️ **Secure by Default**: Modern primitives only — Ed25519, ECDSA, ChaCha20-Poly1305, AES-CTR. Legacy/weak ciphers are not negotiated.
+- 🛡️ **Secure by Default**: Modern primitives only - Ed25519, ECDSA, ChaCha20-Poly1305, AES-CTR. Legacy/weak ciphers are not negotiated.
 - 🔗 **Advanced Tunneling**: Support for **ProxyJump** (bastion hosts) and TCP port forwarding.
 - 📂 **Recursive SFTP**: Native support for recursive directory uploads and downloads.
 - 🏷️ **Fully Typed**: Comprehensive type hints for IDE integration and static analysis.
@@ -136,7 +136,7 @@ SpindleX is optimized for high-throughput environments. The 0.7.x line closed th
 
 - **Verification Enforced**: Host key verification is mandatory by default.
 - **Log Sanitization**: Credentials and sensitive data are automatically filtered from logs.
-- **AEAD Preferred**: `chacha20-poly1305@openssh.com` is the default cipher — authentication is integral, no separate MAC.
+- **AEAD Preferred**: `chacha20-poly1305@openssh.com` is the default cipher - authentication is integral, no separate MAC.
 - **Terrapin Defense**: Strict-KEX (`kex-strict-c-v00@openssh.com`) enabled, sequence numbers reset after NEWKEYS.
 - **Modern Defaults**: Ed25519, ECDSA, ChaCha20-Poly1305, and AES-CTR only. SHA-1 and CBC mode are excluded.
 - **Full Policy**: See [meta/SECURITY.md](meta/SECURITY.md) for vulnerability reporting and security standards.

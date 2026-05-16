@@ -20,7 +20,7 @@ class CipherSuite:
     """
 
     # Negotiable key exchange algorithms (in preference order)
-    # Do NOT include signaling tokens here — they are not real KEX algorithms
+    # Do NOT include signaling tokens here - they are not real KEX algorithms
     # and must not appear in server-bound KEXINIT lists.
     KEX_ALGORITHMS = [
         "curve25519-sha256",
