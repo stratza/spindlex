@@ -4,6 +4,8 @@ import time
 
 import pytest
 
+pytestmark = pytest.mark.integration
+
 from spindlex import SSHClient, SSHServer
 from spindlex.crypto.ciphers import CipherSuite
 from spindlex.crypto.pkey import RSAKey
