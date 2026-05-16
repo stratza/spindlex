@@ -1,16 +1,18 @@
+import os
 import socket
+import tempfile
 import threading
 import time
 
 import pytest
-
-pytestmark = pytest.mark.integration
 
 from spindlex import SSHClient, SSHServer
 from spindlex.crypto.ciphers import CipherSuite
 from spindlex.crypto.pkey import RSAKey
 from spindlex.hostkeys.policy import AutoAddPolicy
 from spindlex.hostkeys.storage import HostKeyStorage
+
+pytestmark = pytest.mark.integration
 
 
 class MockSSHServer(SSHServer):
@@ -24,6 +26,13 @@ class MockSSHServer(SSHServer):
 
     def check_auth_publickey(self, username, key):
         return 1  # AUTH_FAILED
+
+
+def _pump_until_done(transport, timeout=10.0):
+    """Drive the server transport's message loop until auth completes or timeout."""
+    deadline = time.time() + timeout
+    while transport.active and not transport.authenticated and time.time() < deadline:
+        transport._pump()
 
 
 def test_chacha20_local_integration():
@@ -42,17 +51,19 @@ def test_chacha20_local_integration():
     lsock.listen(1)
     port = lsock.getsockname()[1]
 
+    server_transport_holder = []
+
     def run_server():
         conn, addr = lsock.accept()
         try:
             transport = server.start_server(conn)
-            # Wait for authentication
-            while not transport.authenticated and transport.active:
-                time.sleep(0.1)
-
+            server_transport_holder.append(transport)
+            _pump_until_done(transport)
             if transport.authenticated:
-                # Wait a bit then close
-                time.sleep(1)
+                # Keep pumping briefly to allow client to complete
+                deadline = time.time() + 2
+                while transport.active and time.time() < deadline:
+                    transport._pump()
             transport.close()
         except Exception as e:
             print(f"Server error: {e}")
@@ -63,10 +74,11 @@ def test_chacha20_local_integration():
     server_thread = threading.Thread(target=run_server, daemon=True)
     server_thread.start()
 
+    tmp_known_hosts = tempfile.mktemp(suffix=".known_hosts")
     try:
         # 3. Connect Client
         with SSHClient() as client:
-            client.set_host_key_storage(HostKeyStorage("/dev/null"))
+            client.set_host_key_storage(HostKeyStorage(tmp_known_hosts))
             client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
             client.connect(
                 "127.0.0.1",
@@ -89,12 +101,14 @@ def test_chacha20_local_integration():
 
     finally:
         CipherSuite.ENCRYPTION_ALGORITHMS = original_ciphers
+        if os.path.exists(tmp_known_hosts):
+            os.unlink(tmp_known_hosts)
         if server_thread.is_alive():
             try:
                 lsock.close()
             except Exception:
                 pass
-            server_thread.join(timeout=2)
+            server_thread.join(timeout=3)
 
 
 @pytest.mark.asyncio
@@ -119,9 +133,11 @@ async def test_chacha20_async_local_integration():
         conn, addr = lsock.accept()
         try:
             transport = server.start_server(conn)
-            while not transport.authenticated and transport.active:
-                time.sleep(0.1)
-            time.sleep(1)
+            _pump_until_done(transport)
+            if transport.authenticated:
+                deadline = time.time() + 2
+                while transport.active and time.time() < deadline:
+                    transport._pump()
             transport.close()
         except Exception as e:
             print(f"Server error: {e}")
@@ -132,10 +148,11 @@ async def test_chacha20_async_local_integration():
     server_thread = threading.Thread(target=run_server, daemon=True)
     server_thread.start()
 
+    tmp_known_hosts = tempfile.mktemp(suffix=".known_hosts")
     try:
         # 3. Connect Async Client
         async with AsyncSSHClient() as client:
-            client.set_host_key_storage(HostKeyStorage("/dev/null"))
+            client.set_host_key_storage(HostKeyStorage(tmp_known_hosts))
             client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
             await client.connect(
                 "127.0.0.1",
@@ -145,22 +162,18 @@ async def test_chacha20_async_local_integration():
                 timeout=10,
             )
 
-            assert client.is_active
-            assert client.get_transport().authenticated
-            assert (
-                client.get_transport()._cipher_out_active
-                == "chacha20-poly1305@openssh.com"
-            )
-            assert (
-                client.get_transport()._cipher_in_active
-                == "chacha20-poly1305@openssh.com"
-            )
+            assert client.connected
+            assert client._transport.authenticated
+            assert client._transport._cipher_out_active == "chacha20-poly1305@openssh.com"
+            assert client._transport._cipher_in_active == "chacha20-poly1305@openssh.com"
 
     finally:
         CipherSuite.ENCRYPTION_ALGORITHMS = original_ciphers
+        if os.path.exists(tmp_known_hosts):
+            os.unlink(tmp_known_hosts)
         if server_thread.is_alive():
             try:
                 lsock.close()
             except Exception:
                 pass
-            server_thread.join(timeout=2)
+            server_thread.join(timeout=3)
