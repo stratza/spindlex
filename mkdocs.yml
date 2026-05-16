@@ -105,6 +105,7 @@ nav:
       - Tools: api_reference/tools.md
       - Logging: api_reference/logging.md
       - Exceptions: api_reference/exceptions.md
+  - Algorithms: algorithms.md
   - Security: security.md
   - Performance: performance.md
   - Contributing: contributing.md
