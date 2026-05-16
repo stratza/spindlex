@@ -10,13 +10,39 @@ SpindleX is engineered for speed, security, and protocol efficiency. Key perform
 *   **:rocket: Low Latency I/O**: Native management of `TCP_NODELAY` to bypass Nagle's algorithm, reducing latency for small packets.
 *   **:package: Lean Design**: Optimized protocol layer leveraging the industry-standard `cryptography` library.
 *   **:link: Streamlined Handshake**: Efficient version exchange and key negotiation logic.
-*   **:shield: Modern Cryptography**: Optimized support for Ed25519, Curve25519, and AES-256-CTR with HMAC-SHA2.
+*   **:shield: Modern Cryptography**: ChaCha20-Poly1305 (preferred AEAD cipher), Ed25519, Curve25519, and AES-CTR with HMAC-SHA2.
 
 ## Benchmarking and Profiling
 
-### Built-in Benchmark Tool
+### Benchmark Scripts
 
-SpindleX includes a `spindlex-benchmark` CLI tool to help you evaluate performance in your specific environment.
+SpindleX ships two benchmark scripts in `scripts/`:
+
+- **`benchmark_ciphers.py`** — compares upload throughput across all supported ciphers (ChaCha20-Poly1305, AES-256/192/128-CTR) against asyncssh on a live server configured in `.env`.
+- **`benchmark_production.py`** — full protocol correctness and performance sweep: verifies every cipher, MAC, KEX, and host-key algorithm negotiates and transfers data correctly, then reports timing.
+
+```bash
+python scripts/benchmark_ciphers.py
+python scripts/benchmark_production.py
+```
+
+### Packet-Level Profiler
+
+Set `SPINDLEX_PROFILE=1` to enable the built-in `PacketProfiler`, which records per-packet build / encrypt / socket-write latencies for every packet sent through the transport:
+
+```bash
+SPINDLEX_PROFILE=1 python your_script.py
+```
+
+The profiler is a zero-overhead no-op when the env var is absent. When active, call `transport._profiler.summary()` to get median and P95 timings broken down by stage:
+
+```
+PacketProfiler (500 packets) — median / P95 in µs:
+  build:     9.4 /  14.1
+  encrypt:  53.7 /  71.2
+  write:    20.5 /  38.9
+  total:    83.6 / 124.2
+```
 
 ### Performance Metrics
 
@@ -78,6 +104,6 @@ for msg_type, data in stats.items():
 ## Best Practices Summary
 
 1.  **Use Connection Pooling**: Reuse SSH connections for multiple operations to avoid the overhead of repeated handshakes.
-2.  **Choose Modern Algorithms**: Prefer Ed25519 and AES-256-CTR for the best balance of security and speed.
-3.  **Stream Large Files**: Use the SFTP streaming methods to minimize memory usage for large file transfers.
+2.  **Choose Modern Algorithms**: ChaCha20-Poly1305 is the default and preferred cipher — it is AEAD (no separate MAC pass) and matches asyncssh throughput on typical hardware.
+3.  **Stream Large Files**: Use the SFTP streaming methods to minimize memory usage for large file transfers. SpindleX automatically negotiates `limits@openssh.com` with OpenSSH servers to use write chunks up to 255 KB, reducing round trips by ~8× compared to the 32 KB default.
 4.  **Monitor Network Latency**: Use the built-in monitoring tools to track performance across different network environments.

@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-05-16
+
+### Added
+*   **ChaCha20-Poly1305 cipher**: Full `chacha20-poly1305@openssh.com` implementation — encrypt, decrypt_length, and decrypt_body — added to `CryptographyBackend`. Registered as the preferred cipher in `CipherSuite` (first in `ENCRYPTION_ALGORITHMS`), with `AEAD_CIPHERS` sentinel set and `key_len: 64` entry in `CIPHER_INFO`.
+*   **ChaCha20 sync transport path**: `_encrypt_packet` and `_recv_packet` in `Transport` handle ChaCha20-Poly1305 natively via the two-key AEAD construction (64-byte key split into body key + header key, Poly1305 tag over enc_length + enc_body).
+*   **ChaCha20 async transport path**: `_recv_packet_async` in `AsyncTransport` implements the AEAD inbound path — reads enc_length (4 B), decrypts length, reads enc_body + Poly1305 tag (16 B), verifies and decrypts body.
+*   **Strict-KEX sequence reset**: After sending `NEWKEYS` with strict-KEX active (`kex-strict-c-v00@openssh.com`), the outbound sequence number is reset to 0 in the async path (Terrapin defense, RFC 9142).
+*   **SFTP `limits@openssh.com` negotiation**: `SFTPClient._query_limits()` sends `SSH_FXP_EXTENDED` after version negotiation and parses the 4×uint64 reply to obtain `max_write_len`. On OpenSSH servers this raises the write chunk from 64 KB to 255 KB, reducing round trips for a 1 MiB upload from ~16 to ~4.
+*   **`PacketProfiler`**: Optional per-stage packet timing. Set `SPINDLEX_PROFILE=1` to record build / encrypt / socket-write latencies for every sent packet; call `transport._profiler.summary()` for median and P95 per stage.
+*   **Algorithms reference page**: New `docs/algorithms.md` covering all supported KEX, host-key, cipher, and MAC algorithms with preference order, notes, and an explicit exclusion list.
+
+### Changed
+*   **Preferred cipher**: ChaCha20-Poly1305 is now the first cipher advertised in `CipherSuite.ENCRYPTION_ALGORITHMS`.
+*   **KEX signal token**: Corrected from `kex-strict-c-v01@openssh.com` to the standard `kex-strict-c-v00@openssh.com`.
+*   **`_packet_buffer`**: Changed from `bytes` to `bytearray` in `Transport`, eliminating O(n) copies on buffer advance.
+*   **SFTP write chunk**: `SFTPFile.write()` and `SFTPClient.put()` now use the negotiated `_max_write_len` (default 64 KB, up to 255 KB on OpenSSH) instead of a hardcoded constant.
+*   **`validate_packet_structure`**: Minimum packet body relaxed to 8 bytes for AEAD cipher compatibility.
+*   **Writer presence check**: In `_send_message_async`, the `_writer` guard is now checked before packet build/encrypt.
+
+### Fixed
+*   mypy `Optional[bytes]` narrowing for `_chacha20_key_out` / `_chacha20_key_in` at all call sites.
+*   Import order in `sftp_client.py` (transport imports moved above module-level constant).
+
 ## [0.6.11] - 2026-05-12
 
 ### Performance
