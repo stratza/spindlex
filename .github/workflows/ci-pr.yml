@@ -30,7 +30,8 @@ jobs:
       - name: Install project and tooling
         run: uv pip install --system -e ".[dev,docs,test]" pip-audit "setuptools<81" "semgrep>=1.136.0"
 
-      - name: Validate PR metadata
+      - id: validate
+        name: Validate PR metadata
         run: python scripts/validate_pr_body.py --event-path "$GITHUB_EVENT_PATH"
 
       - name: Lint and format
@@ -45,6 +46,7 @@ jobs:
         run: pytest tests -m "not integration and not real_server and not slow and not performance"
 
       - name: Changelog check
+        if: steps.validate.outputs.release_needed == 'true'
         run: python scripts/check_changelog_updated.py --event-path "$GITHUB_EVENT_PATH"
 
       - name: Docs build
