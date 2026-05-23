@@ -6,7 +6,9 @@ on:
     types: [opened, synchronize, reopened, edited, ready_for_review]
 
 permissions:
+  actions: read
   contents: read
+  issues: write
   pull-requests: read
 
 concurrency:
@@ -85,11 +87,13 @@ jobs:
     name: PR compatibility matrix
     needs: pr-quality
     uses: ./.github/workflows/ci-matrix.yml
+    secrets: inherit
 
   integration:
     name: PR integration
     needs: compatibility-matrix
     uses: ./.github/workflows/integration.yml
+    secrets: inherit
 
   property-tests:
     name: PR property tests
