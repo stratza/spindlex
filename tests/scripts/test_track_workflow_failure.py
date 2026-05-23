@@ -161,6 +161,9 @@ def release_args(**overrides):
         "planned_version": "0.6.7",
         "compatibility_result": "success",
         "integration_result": "success",
+        "property_result": "success",
+        "benchmark_result": "success",
+        "release_pr_result": "skipped",
         "publish_result": "success",
         "release_complete": "true",
     }

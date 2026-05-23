@@ -181,6 +181,48 @@ def test_push_skip_release_commit_plans_no_release(monkeypatch, tmp_path):
     assert plan.reason == "head commit contains [skip release]"
 
 
+def test_push_publish_release_commit_plans_publish(monkeypatch, tmp_path):
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "push")
+    monkeypatch.setenv("GITHUB_SHA", "release-sha")
+    current = sync_project_version.read_pyproject_version()
+    event_path = write_event(
+        tmp_path,
+        {"head_commit": {"message": f"chore(release): v{current} [publish release]"}},
+    )
+
+    plan = plan_release.create_plan(event_path)
+
+    assert plan.release_needed == "true"
+    assert plan.next_version == current
+    assert plan.tag == f"v{current}"
+    assert plan.reason == "protected release version PR merged"
+
+
+def test_push_publish_release_commit_accepts_squash_suffix_and_source_pr(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "push")
+    monkeypatch.setenv("GITHUB_SHA", "release-sha")
+    current = sync_project_version.read_pyproject_version()
+    event_path = write_event(
+        tmp_path,
+        {
+            "head_commit": {
+                "message": (
+                    f"chore(release): v{current} [publish release] (#200)\n\n"
+                    "Source PR: #199 https://github.com/stratza/spindlex/pull/199"
+                )
+            },
+        },
+    )
+
+    plan = plan_release.create_plan(event_path)
+
+    assert plan.release_needed == "true"
+    assert plan.source_pr == "199"
+    assert plan.source_pr_url == "https://github.com/stratza/spindlex/pull/199"
+
+
 def test_push_falls_back_to_merge_commit_pr_number(monkeypatch, tmp_path):
     monkeypatch.setenv("GITHUB_EVENT_NAME", "push")
     monkeypatch.setenv("GITHUB_SHA", "merge-sha")

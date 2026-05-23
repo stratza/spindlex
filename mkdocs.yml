@@ -94,6 +94,28 @@ nav:
       - SFTP Recipes: cookbook/sftp_recipes.md
       - Automation: cookbook/automation.md
   - Deployment: deployment.md
+  - Project:
+      - Documentation Ownership: docs-layout.md
+      - Production Usage: production-usage.md
+      - Compatibility: compatibility.md
+      - API Stability: api-stability.md
+      - Release Policy: release-policy.md
+      - Public Roadmap: roadmap.md
+      - Governance: governance.md
+      - Dependency Policy: dependency-policy.md
+      - Repository Settings: repository-settings.md
+      - CI Policy: ci-policy.md
+      - Release Runbook: release-runbook.md
+      - Release Verification: release-verification.md
+      - Vulnerability Response: vulnerability-response.md
+      - Architecture and Security: architecture-security.md
+      - Logging Operations: logging-operations.md
+      - ADRs:
+          - Overview: adr/index.md
+          - Release Policy: adr/0001-release-policy.md
+          - Documentation Layout: adr/0002-docs-layout.md
+          - Supported Platforms: adr/0003-supported-platforms.md
+          - API Stability Boundaries: adr/0004-api-stability-boundaries.md
   - API Reference:
       - Overview: api_reference/index.md
       - Client: api_reference/client.md

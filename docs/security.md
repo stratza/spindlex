@@ -100,7 +100,10 @@ For a full reference of all supported KEX, host key, cipher, and MAC algorithms 
 
 ## Security Policy
 
-For information on how to report vulnerabilities or our disclosure policy, please see our [Responsible Disclosure Policy](https://github.com/stratza/spindlex/blob/main/meta/SECURITY.md).
+For information on how to report vulnerabilities or our disclosure policy, see
+the repository [Security Policy](https://github.com/stratza/spindlex/blob/main/SECURITY.md).
+Maintainer response workflow details are in
+[Vulnerability Response](vulnerability-response.md).
 
 ## Security Scanning and Blocker Policy
 

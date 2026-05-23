@@ -23,6 +23,9 @@ If GitHub Security Advisories are unavailable to you, open a minimal public
 issue requesting a private security contact and do not include exploit details
 in that issue.
 
+Maintainer triage, severity, embargo, advisory, CVE, and patch-release handling
+are documented in [docs/vulnerability-response.md](docs/vulnerability-response.md).
+
 ## What to Include
 
 A useful report should include:
@@ -67,6 +70,10 @@ SpindleX follows these security principles:
   Gitleaks, Trivy, and OpenSSF Scorecard are used where appropriate.
 - **Type safety**: Type hints and static checks are used to prevent classes of
   logic errors.
+
+The broader security model and trust boundaries are documented in
+[docs/security.md](docs/security.md) and
+[docs/architecture-security.md](docs/architecture-security.md).
 
 ## Minimal Threat Model
 

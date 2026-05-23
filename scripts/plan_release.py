@@ -21,6 +21,10 @@ from validate_pr_body import validate_body
 RELEASE_BUMPS = {"patch", "minor", "major"}
 NO_RELEASE_TYPES = {"docs", "refactor", "test", "none"}
 DIRECT_RELEASE_TYPES = RELEASE_BUMPS | NO_RELEASE_TYPES
+PUBLISH_RELEASE_PATTERN = re.compile(
+    r"^chore\(release\): v(?P<version>\d+\.\d+\.\d+) \[publish release\](?:\s+\(#\d+\))?"
+)
+SOURCE_PR_PATTERN = re.compile(r"Source PR:\s+#(?P<number>\d+)\s+(?P<url>\S+)")
 
 
 @dataclass(frozen=True)
@@ -159,6 +163,40 @@ def _plan_from_release_type(
     )
 
 
+def _plan_from_protected_release_commit(
+    *,
+    current_version: str,
+    source_sha: str,
+    message: str,
+) -> ReleasePlan:
+    match = PUBLISH_RELEASE_PATTERN.search(message)
+    if match is None:
+        raise ValueError("Release commit message does not include a publish version.")
+    version = match.group("version")
+    validate_version(version)
+    if version != current_version:
+        raise ValueError(
+            "Release commit version does not match pyproject.toml: "
+            f"{version!r} != {current_version!r}"
+        )
+    source_match = SOURCE_PR_PATTERN.search(message)
+    source_pr = source_match.group("number") if source_match else ""
+    source_pr_url = source_match.group("url") if source_match else ""
+    return ReleasePlan(
+        release_needed="true",
+        release_type="patch",
+        change_type="release",
+        current_version=current_version,
+        next_version=current_version,
+        tag=f"v{current_version}",
+        dry_run="false",
+        source_pr=source_pr,
+        source_pr_url=source_pr_url,
+        source_sha=source_sha,
+        reason="protected release version PR merged",
+    )
+
+
 def _plan_from_pr_body(
     *,
     body: str,
@@ -241,6 +279,12 @@ def create_plan(event_path: Path) -> ReleasePlan:
         message = ""
         if isinstance(head_commit, dict):
             message = str(head_commit.get("message") or "")
+        if "[publish release]" in message:
+            return _plan_from_protected_release_commit(
+                current_version=current_version,
+                source_sha=source_sha,
+                message=message,
+            )
         if "[skip release]" in message:
             return _plan_from_release_type(
                 release_type="none",
