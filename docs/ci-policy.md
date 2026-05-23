@@ -27,7 +27,9 @@ runs and skipped release-only jobs from cluttering PR status.
 
 Scheduled security, CodeQL, compatibility, integration, property tests, and
 benchmarks may be advisory during beta unless they are called by the PR or
-release orchestrator.
+release orchestrator. CodeQL and the full security scan are called by the
+`main` push release orchestrator so post-merge code is scanned without launching
+parallel workflows.
 
 ## Release-Blocking Checks
 
@@ -47,12 +49,14 @@ Workflows use concurrency groups and avoid overlapping expensive jobs. Release
 validation runs jobs one after another:
 
 1. plan
-2. compatibility matrix
-3. integration
-4. property tests
-5. benchmark baseline
-6. build and artifact verification
-7. publish
+2. CodeQL
+3. full security scan
+4. compatibility matrix
+5. integration
+6. property tests
+7. benchmark baseline
+8. build and artifact verification
+9. publish
 
 The compatibility matrix itself is also serialized: Ubuntu versions run in one
 job, then Windows, then macOS.

@@ -119,9 +119,10 @@ The repository uses layered automated checks:
 
 PR gates block high-confidence fast findings such as Bandit failures, Semgrep
 `ERROR` findings, vulnerable runtime dependencies, and committed secrets. The
-full security workflow runs on schedule and on demand so it does not compete
-with PR or release runner capacity. Supported tools upload SARIF to GitHub code
-scanning.
+full CodeQL and security workflows run on schedule, on demand, and through the
+sequential `main` push release orchestrator so post-merge code is scanned
+without competing with PR or release runner capacity. Supported tools upload
+SARIF to GitHub code scanning.
 
 ### Release-Blocking Findings
 

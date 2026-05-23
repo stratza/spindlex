@@ -70,10 +70,43 @@ jobs:
             echo "- reason: ${{ steps.plan.outputs.reason }}"
           } >> "$GITHUB_STEP_SUMMARY"
 
+  main-codeql:
+    name: Main push CodeQL
+    needs: plan
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    uses: ./.github/workflows/codeql.yml
+
+  main-security:
+    name: Main push security
+    needs: main-codeql
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      security-events: write
+    uses: ./.github/workflows/security.yml
+
   compatibility-matrix:
     name: Release compatibility matrix
-    needs: plan
-    if: needs.plan.outputs.release_needed == 'true'
+    needs:
+      - plan
+      - main-codeql
+      - main-security
+    if: >
+      always() &&
+      needs.plan.outputs.release_needed == 'true' &&
+      (
+        github.event_name != 'push' ||
+        (
+          needs['main-codeql'].result == 'success' &&
+          needs['main-security'].result == 'success'
+        )
+      )
     permissions:
       actions: read
       contents: read
@@ -404,6 +437,8 @@ jobs:
     name: Release failure tracking
     needs:
       - plan
+      - main-codeql
+      - main-security
       - compatibility-matrix
       - integration
       - property-tests
@@ -441,10 +476,12 @@ jobs:
             --source-sha "${{ needs.plan.outputs.source_sha }}" \
             --release-type "${{ needs.plan.outputs.release_type }}" \
             --planned-version "${{ needs.plan.outputs.next_version }}" \
-            --compatibility-result "${{ needs.compatibility-matrix.result }}" \
+            --codeql-result "${{ needs['main-codeql'].result }}" \
+            --security-result "${{ needs['main-security'].result }}" \
+            --compatibility-result "${{ needs['compatibility-matrix'].result }}" \
             --integration-result "${{ needs.integration.result }}" \
-            --property-result "${{ needs.property-tests.result }}" \
-            --benchmark-result "${{ needs.benchmark-baseline.result }}" \
-            --release-pr-result "${{ needs.create-release-pr.result }}" \
+            --property-result "${{ needs['property-tests'].result }}" \
+            --benchmark-result "${{ needs['benchmark-baseline'].result }}" \
+            --release-pr-result "${{ needs['create-release-pr'].result }}" \
             --publish-result "${{ needs.publish.result }}" \
             --release-complete "${{ needs.publish.outputs.release_complete }}"

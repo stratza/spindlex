@@ -317,6 +317,8 @@ def release_record(
 def handle_release(args: argparse.Namespace) -> int:
     client = GitHubClient(args.repository, args.token)
     results = {
+        "codeql": args.codeql_result,
+        "security": args.security_result,
         "compatibility-matrix": args.compatibility_result,
         "integration": args.integration_result,
         "property-tests": args.property_result,
@@ -327,6 +329,16 @@ def handle_release(args: argparse.Namespace) -> int:
 
     if "cancelled" in results.values():
         print("Release failure tracking skipped for cancelled workflow.")
+        return 0
+
+    if args.codeql_result != "success":
+        record = release_record(args, "release-blocked", "codeql")
+        ensure_issue(client, record)
+        return 0
+
+    if args.security_result != "success":
+        record = release_record(args, "release-blocked", "security")
+        ensure_issue(client, record)
         return 0
 
     if args.compatibility_result != "success":
@@ -437,6 +449,8 @@ def build_parser() -> argparse.ArgumentParser:
     release.add_argument("--source-sha", required=True)
     release.add_argument("--release-type", required=True)
     release.add_argument("--planned-version", required=True)
+    release.add_argument("--codeql-result", required=True)
+    release.add_argument("--security-result", required=True)
     release.add_argument("--compatibility-result", required=True)
     release.add_argument("--integration-result", required=True)
     release.add_argument("--property-result", required=True)
