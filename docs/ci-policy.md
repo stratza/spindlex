@@ -1,25 +1,33 @@
 # CI and Required Check Policy
 
 SpindleX uses GitHub-hosted free-tier runners. Workflows should avoid consuming
-unnecessary parallel capacity and should prefer sequential jobs unless parallel
-fan-out is needed for compatibility evidence.
+unnecessary parallel capacity. PR and release validation run through one
+orchestrating workflow at a time so runners are consumed sequentially.
 
 ## PR Checks
 
-The required merge check is `quality-gate`. It aggregates the PR validation
-surface and is the status required by the `main-protected-pr-gate` ruleset.
+The required merge check is `quality-gate`. It is the final status in the PR
+orchestrator and is required by the `main-protected-pr-gate` ruleset.
 
 The PR gate runs in phases:
 
 1. PR metadata validation.
 2. Lint, type check, unit tests, docs build, security-fast, workflow lint, and
    script compile checks.
-3. Aggregate `quality-gate`.
+3. Compatibility matrix.
+4. Docker OpenSSH/Dropbear integration.
+5. Bounded property tests.
+6. Aggregate `quality-gate`.
+
+Compatibility, integration, and property workflows are reusable workflows. They
+do not trigger independently on PRs or `main` pushes, which prevents duplicate
+runs and skipped release-only jobs from cluttering PR status.
 
 ## Advisory Checks
 
-Scheduled security, compatibility, integration, property tests, and benchmarks
-may be advisory during beta unless they are called by the release gate.
+Scheduled security, CodeQL, compatibility, integration, property tests, and
+benchmarks may be advisory during beta unless they are called by the PR or
+release orchestrator.
 
 ## Release-Blocking Checks
 
@@ -35,8 +43,8 @@ Before publishing release artifacts, these must pass:
 
 ## Free-Tier Runner Policy
 
-Workflows should use concurrency groups and avoid overlapping expensive jobs.
-Where possible, release validation runs jobs one after another:
+Workflows use concurrency groups and avoid overlapping expensive jobs. Release
+validation runs jobs one after another:
 
 1. plan
 2. compatibility matrix
@@ -46,7 +54,8 @@ Where possible, release validation runs jobs one after another:
 6. build and artifact verification
 7. publish
 
-Compatibility fan-out is allowed only where the matrix itself is the evidence.
+The compatibility matrix itself is also serialized: Ubuntu versions run in one
+job, then Windows, then macOS.
 
 ## Promotion Rules
 

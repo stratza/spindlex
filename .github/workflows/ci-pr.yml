@@ -14,8 +14,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  quality-gate:
-    name: quality-gate
+  pr-quality:
+    name: PR quality
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -79,4 +79,49 @@ jobs:
         run: python -m py_compile scripts/*.py
 
       - name: Summary
-        run: echo "PR gate passed."
+        run: echo "PR quality checks passed."
+
+  compatibility-matrix:
+    name: PR compatibility matrix
+    needs: pr-quality
+    uses: ./.github/workflows/ci-matrix.yml
+
+  integration:
+    name: PR integration
+    needs: compatibility-matrix
+    uses: ./.github/workflows/integration.yml
+
+  property-tests:
+    name: PR property tests
+    needs: integration
+    uses: ./.github/workflows/property.yml
+
+  quality-gate:
+    name: quality-gate
+    needs:
+      - pr-quality
+      - compatibility-matrix
+      - integration
+      - property-tests
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify sequential PR gates
+        env:
+          PR_QUALITY_RESULT: ${{ needs.pr-quality.result }}
+          COMPATIBILITY_RESULT: ${{ needs.compatibility-matrix.result }}
+          INTEGRATION_RESULT: ${{ needs.integration.result }}
+          PROPERTY_RESULT: ${{ needs.property-tests.result }}
+        run: |
+          if [ "$PR_QUALITY_RESULT" != "success" ] ||
+             [ "$COMPATIBILITY_RESULT" != "success" ] ||
+             [ "$INTEGRATION_RESULT" != "success" ] ||
+             [ "$PROPERTY_RESULT" != "success" ]; then
+            echo "PR quality: $PR_QUALITY_RESULT"
+            echo "Compatibility matrix: $COMPATIBILITY_RESULT"
+            echo "Integration: $INTEGRATION_RESULT"
+            echo "Property tests: $PROPERTY_RESULT"
+            exit 1
+          fi
+
+          echo "All sequential PR gates passed."

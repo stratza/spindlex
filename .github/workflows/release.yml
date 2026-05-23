@@ -3,22 +3,6 @@ name: Release
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
-    types: [opened, synchronize, reopened, ready_for_review]
-    paths:
-      - ".github/workflows/release.yml"
-      - ".github/workflows/ci-matrix.yml"
-      - ".github/workflows/integration.yml"
-      - ".github/ISSUE_TEMPLATE/**"
-      - "scripts/extract_release_notes.py"
-      - "scripts/plan_release.py"
-      - "scripts/sync_project_version.py"
-      - "scripts/track_workflow_failure.py"
-      - "scripts/validate_pr_body.py"
-      - "tests/scripts/**"
-      - "pyproject.toml"
-      - "spindlex/_version.py"
   workflow_dispatch:
     inputs:
       dry_run:

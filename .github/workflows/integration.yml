@@ -1,28 +1,6 @@
 name: Integration
 
 on:
-  pull_request:
-    branches: [main]
-    types: [opened, synchronize, reopened, ready_for_review]
-    paths:
-      - "spindlex/**"
-      - "tests/**"
-      - "scripts/**"
-      - ".github/ISSUE_TEMPLATE/**"
-      - "pyproject.toml"
-      - ".github/workflows/ci-matrix.yml"
-      - ".github/workflows/integration.yml"
-      - ".github/workflows/release.yml"
-  push:
-    branches: [main]
-    paths:
-      - "spindlex/**"
-      - "tests/**"
-      - "scripts/**"
-      - "pyproject.toml"
-      - ".github/workflows/ci-matrix.yml"
-      - ".github/workflows/integration.yml"
-      - ".github/workflows/release.yml"
   schedule:
     - cron: "47 3 * * *"
   workflow_dispatch:

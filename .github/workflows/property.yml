@@ -1,23 +1,6 @@
 name: Property Tests
 
 on:
-  pull_request:
-    branches: [main]
-    types: [opened, synchronize, reopened, ready_for_review]
-    paths:
-      - "spindlex/protocol/**"
-      - "spindlex/hostkeys/**"
-      - "tests/protocol/**"
-      - "pyproject.toml"
-      - ".github/workflows/property.yml"
-  push:
-    branches: [main]
-    paths:
-      - "spindlex/protocol/**"
-      - "spindlex/hostkeys/**"
-      - "tests/protocol/**"
-      - "pyproject.toml"
-      - ".github/workflows/property.yml"
   schedule:
     - cron: "12 4 * * 2"
   workflow_dispatch:
