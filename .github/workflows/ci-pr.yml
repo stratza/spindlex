@@ -108,10 +108,10 @@ jobs:
     steps:
       - name: Verify sequential PR gates
         env:
-          PR_QUALITY_RESULT: ${{ needs.pr-quality.result }}
-          COMPATIBILITY_RESULT: ${{ needs.compatibility-matrix.result }}
+          PR_QUALITY_RESULT: ${{ needs['pr-quality'].result }}
+          COMPATIBILITY_RESULT: ${{ needs['compatibility-matrix'].result }}
           INTEGRATION_RESULT: ${{ needs.integration.result }}
-          PROPERTY_RESULT: ${{ needs.property-tests.result }}
+          PROPERTY_RESULT: ${{ needs['property-tests'].result }}
         run: |
           if [ "$PR_QUALITY_RESULT" != "success" ] ||
              [ "$COMPATIBILITY_RESULT" != "success" ] ||
