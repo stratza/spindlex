@@ -24,4 +24,3 @@ claims.
 ## Related
 
 - [Compatibility](../compatibility.md)
-- Issue `#165`

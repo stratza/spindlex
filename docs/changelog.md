@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Summary
+This maintainer-facing readiness entry documents the repository lifecycle work
+that is pending release assignment. It does not represent a published package
+version by itself.
+
+### Added
+*   Public project policy docs for production usage, compatibility, API stability, release policy, governance, dependency handling, repository settings, CI policy, release operations, release verification, vulnerability response, architecture/security boundaries, logging operations, and public roadmap tracking.
+*   Architecture Decision Records for release policy, documentation layout, supported platforms, and API stability boundaries.
+*   Root GitHub entry points for contributing and support so GitHub, Read the Docs, and repository visitors all route to the maintained documentation source.
+
+### Changed
+*   Restructured GitHub Actions so PR validation runs through one sequential orchestrator and expensive reusable workflows do not launch independently on PRs or `main` pushes.
+*   Moved post-merge CodeQL and full security scanning into the sequential release orchestrator for `main` pushes, preserving security coverage while avoiding parallel free-tier runner contention.
+*   Documented the protected release-version PR flow, artifact integrity expectations, and maintainer release runbook.
+*   Replaced the oversized `meta/CONTRIBUTING.md` copy with a short pointer to the maintained public contributor guide.
+
+### Verification
+*   Read the Docs continues to build from `.readthedocs.yaml` through `mkdocs.yml`; newly added public docs are explicitly surfaced in the MkDocs navigation rather than being included by the Read the Docs config directly.
+
 ## [0.7.0] - 2026-05-16
 
 ### Added

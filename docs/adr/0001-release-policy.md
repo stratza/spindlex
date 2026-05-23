@@ -33,4 +33,3 @@ because it controls release planning.
 - [Release policy](../release-policy.md)
 - [Release runbook](../release-runbook.md)
 - [Artifact verification](../release-verification.md)
-- Issues `#144`, `#157`, `#158`, `#159`

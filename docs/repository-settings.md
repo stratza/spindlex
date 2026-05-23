@@ -43,4 +43,4 @@ Last audited for the v1 readiness work:
 ## Manual Follow-Up
 
 When a setting cannot be changed in a PR, record the expected value here and
-confirm it in the `#152` issue before closing.
+confirm it in the relevant maintainer checklist before closing the work.

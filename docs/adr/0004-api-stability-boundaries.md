@@ -25,4 +25,3 @@ as part of the compatibility contract.
 ## Related
 
 - [API stability](../api-stability.md)
-- Issue `#155`

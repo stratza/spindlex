@@ -15,8 +15,8 @@ Current beta work focuses on:
 
 ## v1.0 Release Candidate
 
-The `1.0.0` release candidate starts only after the pre-v1 readiness issues are
-complete or explicitly accepted:
+The `1.0.0` release candidate starts only after the readiness checklist is
+complete or explicitly accepted by maintainers:
 
 - public production usage, compatibility, and API stability docs
 - release, artifact verification, and support policy docs

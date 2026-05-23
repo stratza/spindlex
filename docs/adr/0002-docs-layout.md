@@ -22,4 +22,3 @@ user-facing surface. Root and `meta/` files should link instead of duplicating.
 ## Related
 
 - [Documentation ownership](../docs-layout.md)
-- Issue `#151`
