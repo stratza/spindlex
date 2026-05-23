@@ -1,39 +1,26 @@
-version: '3.8'
-
 services:
   openssh-server:
-    image: linuxserver/openssh-server:latest
-    container_name: spindlex-integration-server
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-      - USER_PASSWORD=password123
-      - USER_NAME=testuser
-      - PASSWORD_ACCESS=true
+    build:
+      context: .
+      dockerfile: openssh.Dockerfile
     ports:
-      - 2222
-    volumes:
-      - ./config:/config
+      - 22
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "2222"]
+      test: ["CMD", "nc", "-z", "127.0.0.1", "22"]
       interval: 5s
       timeout: 5s
       retries: 5
 
   dropbear-server:
-    image: luvletter2333/dropbear:latest
-    container_name: spindlex-dropbear-server
-    environment:
-      - USERNAME=testuser
-      - PASSWORD=password123
+    build:
+      context: .
+      dockerfile: dropbear.Dockerfile
     ports:
-      - 2223:22
+      - 22
     healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "22"]
+      test: ["CMD", "nc", "-z", "127.0.0.1", "22"]
       interval: 5s
       timeout: 5s
       retries: 5
     restart: unless-stopped
-

@@ -24,6 +24,7 @@ DIRECT_RELEASE_TYPES = RELEASE_BUMPS | NO_RELEASE_TYPES
 PUBLISH_RELEASE_PATTERN = re.compile(
     r"^chore\(release\): v(?P<version>\d+\.\d+\.\d+) \[publish release\](?:\s+\(#\d+\))?"
 )
+RELEASE_BRANCH_PATTERN = re.compile(r"^release/v(?P<version>\d+\.\d+\.\d+)$")
 SOURCE_PR_PATTERN = re.compile(r"Source PR:\s+#(?P<number>\d+)\s+(?P<url>\S+)")
 
 
@@ -117,6 +118,34 @@ def _merge_message_pr_number(message: str) -> int | None:
     return int(match.group("number")) if match else None
 
 
+def _protected_release_commit_version(message: str) -> str | None:
+    first_line = message.splitlines()[0] if message else ""
+    match = PUBLISH_RELEASE_PATTERN.search(first_line)
+    return match.group("version") if match else None
+
+
+def _is_trusted_protected_release_pr(
+    pr: dict[str, Any] | None, *, version: str, source_sha: str
+) -> bool:
+    if not pr or not pr.get("merged_at"):
+        return False
+    if str(pr.get("merge_commit_sha") or "") != source_sha:
+        return False
+
+    head = pr.get("head") if isinstance(pr.get("head"), dict) else {}
+    base = pr.get("base") if isinstance(pr.get("base"), dict) else {}
+    head_ref = str(head.get("ref") or "")
+    base_ref = str(base.get("ref") or "")
+    branch_match = RELEASE_BRANCH_PATTERN.fullmatch(head_ref)
+    if branch_match is None or branch_match.group("version") != version:
+        return False
+    if base_ref and base_ref != "main":
+        return False
+
+    body = str(pr.get("body") or "")
+    return SOURCE_PR_PATTERN.search(body) is not None
+
+
 def _fallback_merged_pull_request_from_message(
     *, repository: str, message: str, sha: str, token: str
 ) -> dict[str, Any] | None:
@@ -168,8 +197,10 @@ def _plan_from_protected_release_commit(
     current_version: str,
     source_sha: str,
     message: str,
+    pr_body: str = "",
 ) -> ReleasePlan:
-    match = PUBLISH_RELEASE_PATTERN.search(message)
+    first_line = message.splitlines()[0] if message else ""
+    match = PUBLISH_RELEASE_PATTERN.search(first_line)
     if match is None:
         raise ValueError("Release commit message does not include a publish version.")
     version = match.group("version")
@@ -179,7 +210,9 @@ def _plan_from_protected_release_commit(
             "Release commit version does not match pyproject.toml: "
             f"{version!r} != {current_version!r}"
         )
-    source_match = SOURCE_PR_PATTERN.search(message)
+    source_match = SOURCE_PR_PATTERN.search(message) or SOURCE_PR_PATTERN.search(
+        pr_body
+    )
     source_pr = source_match.group("number") if source_match else ""
     source_pr_url = source_match.group("url") if source_match else ""
     return ReleasePlan(
@@ -279,12 +312,6 @@ def create_plan(event_path: Path) -> ReleasePlan:
         message = ""
         if isinstance(head_commit, dict):
             message = str(head_commit.get("message") or "")
-        if "[publish release]" in message:
-            return _plan_from_protected_release_commit(
-                current_version=current_version,
-                source_sha=source_sha,
-                message=message,
-            )
         if "[skip release]" in message:
             return _plan_from_release_type(
                 release_type="none",
@@ -308,6 +335,16 @@ def create_plan(event_path: Path) -> ReleasePlan:
                 message=message,
                 sha=source_sha,
                 token=token,
+            )
+        protected_version = _protected_release_commit_version(message)
+        if protected_version and _is_trusted_protected_release_pr(
+            pr, version=protected_version, source_sha=source_sha
+        ):
+            return _plan_from_protected_release_commit(
+                current_version=current_version,
+                source_sha=source_sha,
+                message=message,
+                pr_body=str(pr.get("body") or ""),
             )
         if pr is None:
             return _plan_from_release_type(

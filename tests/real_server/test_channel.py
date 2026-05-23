@@ -68,6 +68,13 @@ def test_channel_close_behavior(ssh_client):
 
 
 def test_multiple_channels_real(ssh_client):
+    if getattr(ssh_client, "_test_server_type", "") == "dropbear":
+        pytest.skip("Dropbear does not support concurrent session channels here.")
+
+    remote_version = getattr(ssh_client.get_transport(), "_remote_version", "")
+    if "dropbear" in remote_version.lower():
+        pytest.skip("Dropbear does not support concurrent session channels here.")
+
     transport = ssh_client.get_transport()
     c1 = transport.open_channel("session")
     c2 = transport.open_channel("session")

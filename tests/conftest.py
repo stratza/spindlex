@@ -1,6 +1,7 @@
 import os
 import socket
 import time
+from dataclasses import dataclass
 
 import pytest
 
@@ -24,6 +25,27 @@ SSH_KEY_PATH = os.getenv("SSH_KEY_PATH", "")
 _EXTERNAL_SERVER_AVAILABLE = bool(SSH_HOST and SSH_USER)
 
 
+@dataclass(frozen=True)
+class SSHServer:
+    host: str
+    port: int
+    user: str
+    password: str
+    server_type: str
+
+    def __iter__(self):
+        yield self.host
+        yield self.port
+        yield self.user
+        yield self.password
+
+    def __len__(self):
+        return 4
+
+    def __getitem__(self, index):
+        return (self.host, self.port, self.user, self.password)[index]
+
+
 def pytest_configure(config):
     config.addinivalue_line(
         "markers", "real_server: requires a live SSH server (Docker or .env)"
@@ -32,6 +54,17 @@ def pytest_configure(config):
         "markers",
         "integration: end-to-end integration tests run against a Docker SSH server",
     )
+
+
+@pytest.fixture(autouse=True)
+def isolated_real_ssh_home(monkeypatch, tmp_path, request):
+    """Keep Docker SSH host keys out of the user's real home directory."""
+    if request.node.get_closest_marker(
+        "real_server"
+    ) or request.node.get_closest_marker("integration"):
+        home = tmp_path / "home"
+        home.mkdir()
+        monkeypatch.setenv("HOME", str(home))
 
 
 # ---------------------------------------------------------------------------
@@ -58,7 +91,7 @@ def docker_compose_file(pytestconfig):
 
 
 @pytest.fixture(scope="session", params=_get_ssh_server_params())
-def ssh_server(request, docker_ip=None, docker_services=None, pytestconfig=None):
+def ssh_server(request):
     """
     Ensure an SSH server is available.
     Supports OpenSSH and Dropbear via Docker.
@@ -68,13 +101,15 @@ def ssh_server(request, docker_ip=None, docker_services=None, pytestconfig=None)
     if _EXTERNAL_SERVER_AVAILABLE:
         # If external server is provided, we only test against it once
         # (and assume it's compatible with OpenSSH tests)
-        return SSH_HOST, SSH_PORT, SSH_USER, SSH_PASSWORD
+        return SSHServer(SSH_HOST, SSH_PORT, SSH_USER, SSH_PASSWORD, "external")
 
+    docker_ip = request.getfixturevalue("docker_ip")
+    docker_services = request.getfixturevalue("docker_services")
     if not docker_services:
         pytest.skip("No SSH server configured and Docker not available")
 
     service_name = "openssh-server" if server_type == "openssh" else "dropbear-server"
-    internal_port = 2222 if server_type == "openssh" else 22
+    internal_port = 22
 
     port = docker_services.port_for(service_name, internal_port)
 
@@ -89,7 +124,7 @@ def ssh_server(request, docker_ip=None, docker_services=None, pytestconfig=None)
     docker_services.wait_until_responsive(timeout=120.0, pause=2.0, check=check)
     time.sleep(15)
 
-    return docker_ip, port, "testuser", "password123"
+    return SSHServer(docker_ip, port, "testuser", "password123", server_type)
 
 
 @pytest.fixture
@@ -102,5 +137,6 @@ def ssh_client(ssh_server):
     client = SSHClient()
     client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
     client.connect(host, port=port, username=user, password=password)
+    client._test_server_type = getattr(ssh_server, "server_type", "external")
     yield client
     client.close()

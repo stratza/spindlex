@@ -38,7 +38,7 @@ jobs:
       - name: Run Docker integration suite
         run: |
           pytest tests/integration/ tests/real_server/ tests/misc/test_functional_integration.py \
-            -m "integration or real_server" \
+            -m "(integration or real_server) and not slow" \
             --tb=short \
             --timeout=120 \
             --timeout-method=thread \

@@ -120,6 +120,7 @@ class TestCoverageBoost:
     def test_public_key_auth_logic(self, ssh_server):
         host, port, user, _ = ssh_server
         from spindlex.auth.publickey import PublicKeyAuth
+        from spindlex.protocol.messages import UserAuthFailureMessage
         from spindlex.transport.transport import Transport
 
         sock = socket.create_connection((host, port))
@@ -128,9 +129,8 @@ class TestCoverageBoost:
             t.start_client()
             key = Ed25519Key.generate()
             auth = PublicKeyAuth(t)
-            try:
+            with patch.object(t, "_expect_message") as mock_expect:
+                mock_expect.return_value = UserAuthFailureMessage(["password"], False)
                 auth.authenticate(user, key)
-            except Exception:
-                pass
         finally:
             t.close()

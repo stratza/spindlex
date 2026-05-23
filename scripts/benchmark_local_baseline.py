@@ -24,6 +24,7 @@ sys.path.insert(0, str(REPO_ROOT))
 import spindlex  # noqa: E402
 from spindlex import AsyncSSHClient, SSHClient  # noqa: E402
 from spindlex.hostkeys.policy import AutoAddPolicy  # noqa: E402
+from spindlex.hostkeys.storage import HostKeyStorage  # noqa: E402
 
 
 @dataclass(frozen=True)
@@ -95,8 +96,8 @@ def start_targets(skip_docker: bool) -> list[Target]:
         ]
 
     compose = docker_compose_command()
-    run(compose + ["-f", "tests/integration/docker-compose.yml", "up", "-d"])
-    openssh_port = compose_port(compose, "openssh-server", 2222)
+    run(compose + ["-f", "tests/integration/docker-compose.yml", "up", "-d", "--build"])
+    openssh_port = compose_port(compose, "openssh-server", 22)
     dropbear_port = compose_port(compose, "dropbear-server", 22)
     targets = [
         Target("openssh", "127.0.0.1", openssh_port),
@@ -126,8 +127,16 @@ def timed(label: str, iterations: int, operation: Callable[[], Any]) -> dict[str
     }
 
 
+def host_key_storage(target: Target) -> HostKeyStorage:
+    path = Path(tempfile.gettempdir()) / (
+        f"spindlex-benchmark-known-hosts-{target.name}-{os.getpid()}"
+    )
+    return HostKeyStorage(str(path))
+
+
 def connect(target: Target) -> SSHClient:
     client = SSHClient()
+    client.set_host_key_storage(host_key_storage(target))
     client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
     client.connect(
         target.host,
@@ -141,6 +150,7 @@ def connect(target: Target) -> SSHClient:
 
 async def async_connect_exec(target: Target) -> None:
     client = AsyncSSHClient()
+    client.set_host_key_storage(host_key_storage(target))
     client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
     try:
         await client.connect(

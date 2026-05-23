@@ -21,6 +21,12 @@ version by itself.
 *   Moved post-merge CodeQL and full security scanning into the sequential release orchestrator for `main` pushes, preserving security coverage while avoiding parallel free-tier runner contention.
 *   Documented the protected release-version PR flow, artifact integrity expectations, and maintainer release runbook.
 *   Replaced the oversized `meta/CONTRIBUTING.md` copy with a short pointer to the maintained public contributor guide.
+*   Rebuilt the Docker integration stack around locally maintained OpenSSH and Dropbear services so real-server workflow tests can run without relying on a removed public Dropbear image.
+
+### Fixed
+*   Limited protected release-publish detection to the canonical first commit-message line so `[publish release]` text in a merge body cannot accidentally enter the release-publish path.
+*   Restricted protected release-publish mode to merged PRs from the generated `release/vX.Y.Z` branch with source PR metadata, so regular PR titles cannot trigger the publish path.
+*   Prevented Docker SSH integration tests and local benchmarks from sharing host-key files across OpenSSH, Dropbear, or the developer's real home directory.
 
 ### Verification
 *   Read the Docs continues to build from `.readthedocs.yaml` through `mkdocs.yml`; newly added public docs are explicitly surfaced in the MkDocs navigation rather than being included by the Read the Docs config directly.

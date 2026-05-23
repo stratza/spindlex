@@ -32,16 +32,18 @@ def docker_compose_file(pytestconfig):
 
 
 @pytest.fixture(scope="session")
-def ssh_server(docker_ip=None, docker_services=None):
+def ssh_server(request):
     """Ensure that SSH server is up and responsive."""
     if EXTERNAL_HOST:
         # Use external server if configured
         return EXTERNAL_HOST, EXTERNAL_PORT
 
+    docker_ip = request.getfixturevalue("docker_ip")
+    docker_services = request.getfixturevalue("docker_services")
     if not docker_services:
         pytest.skip("No SSH server configured and Docker not available")
 
-    port = docker_services.port_for("openssh-server", 2222)
+    port = docker_services.port_for("openssh-server", 22)
 
     def check():
         try:
