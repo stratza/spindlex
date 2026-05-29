@@ -1,0 +1,16 @@
+misconfigurations:
+  - id: DS-0002
+    paths:
+      - tests/integration/dropbear.Dockerfile
+      - tests/integration/openssh.Dockerfile
+    statement: Test-only SSH daemon fixtures must run privileged daemon setup.
+  - id: DS-0004
+    paths:
+      - tests/integration/dropbear.Dockerfile
+      - tests/integration/openssh.Dockerfile
+    statement: Test-only SSH daemon fixtures intentionally expose SSH for integration tests.
+  - id: DS-0026
+    paths:
+      - tests/integration/dropbear.Dockerfile
+      - tests/integration/openssh.Dockerfile
+    statement: Test-only SSH daemon fixtures are short-lived services managed by pytest-docker.

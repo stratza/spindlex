@@ -73,7 +73,7 @@ docs = [
     "mkdocstrings[python]>=0.22.0",
     "mkdocs-minify-plugin>=0.6.0",
     "mkdocs-git-revision-date-localized-plugin>=1.2.0",
-    "pymdown-extensions>=10.16.1",
+    "pymdown-extensions>=10.21.3",
     "pygments>=2.20.0",
 ]
 test = [

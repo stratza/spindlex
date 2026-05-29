@@ -27,6 +27,8 @@ version by itself.
 *   Limited protected release-publish detection to the canonical first commit-message line so `[publish release]` text in a merge body cannot accidentally enter the release-publish path.
 *   Restricted protected release-publish mode to merged PRs from the generated `release/vX.Y.Z` branch with source PR metadata, so regular PR titles cannot trigger the publish path.
 *   Prevented Docker SSH integration tests and local benchmarks from sharing host-key files across OpenSSH, Dropbear, or the developer's real home directory.
+*   Raised the documentation dependency floor to `pymdown-extensions>=10.21.3`, pinned the Alpine test image digest, and documented path-scoped Trivy ignores for intentional SSH test-fixture Dockerfile findings.
+*   Folded the open Dependabot GitHub Actions pin updates into the release-scan fix: `actions/checkout` 6.0.2, `astral-sh/setup-uv` 8.1.0, `codecov/codecov-action` 6.0.1, `github/codeql-action` 4.36.0, and `ossf/scorecard-action` 2.4.3.
 
 ### Verification
 *   Read the Docs continues to build from `.readthedocs.yaml` through `mkdocs.yml`; newly added public docs are explicitly surfaced in the MkDocs navigation rather than being included by the Read the Docs config directly.
