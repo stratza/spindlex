@@ -218,15 +218,22 @@ jobs:
       contents: write
       pull-requests: write
     steps:
+      - id: release-token
+        name: Create release app token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
+          token: ${{ steps.release-token.outputs.token }}
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.11"
       - name: Open protected release-version PR
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.release-token.outputs.token }}
           TAG: ${{ needs.plan.outputs.tag }}
           NEXT_VERSION: ${{ needs.plan.outputs.next_version }}
           SOURCE_PR: ${{ needs.plan.outputs.source_pr }}
@@ -239,21 +246,31 @@ jobs:
           fi
 
           branch="release/$TAG"
+          branch_exists=false
           if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
-            echo "::notice::Release branch $branch already exists."
+            echo "::notice::Release branch $branch already exists; checking for an open PR."
+            branch_exists=true
+          fi
+
+          pr_number="$(gh pr list --head "$branch" --state open --json number --jq '.[0].number // ""')"
+          if [ -n "$pr_number" ]; then
+            url="$(gh pr list --head "$branch" --state open --json url --jq '.[0].url')"
+            echo "::notice::Release PR #$pr_number already exists: $url"
             exit 0
           fi
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -b "$branch"
-          python scripts/sync_project_version.py --version "$NEXT_VERSION"
-          python scripts/sync_project_version.py --check
-          git add pyproject.toml spindlex/_version.py
-          git commit \
-            -m "chore(release): $TAG [publish release]" \
-            -m "Source PR: #$SOURCE_PR $SOURCE_PR_URL"
-          git push origin "$branch"
+          if [ "$branch_exists" = "false" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git checkout -b "$branch"
+            python scripts/sync_project_version.py --version "$NEXT_VERSION"
+            python scripts/sync_project_version.py --check
+            git add pyproject.toml spindlex/_version.py
+            git commit \
+              -m "chore(release): $TAG [publish release]" \
+              -m "Source PR: #$SOURCE_PR $SOURCE_PR_URL"
+            git push origin "$branch"
+          fi
 
           cat > release-pr-body.md <<EOF
           ## Description
