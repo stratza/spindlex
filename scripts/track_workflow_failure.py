@@ -317,13 +317,28 @@ def release_record(
 def handle_release(args: argparse.Namespace) -> int:
     client = GitHubClient(args.repository, args.token)
     results = {
+        "codeql": args.codeql_result,
+        "security": args.security_result,
         "compatibility-matrix": args.compatibility_result,
         "integration": args.integration_result,
+        "property-tests": args.property_result,
+        "benchmark-baseline": args.benchmark_result,
+        "release-pr": args.release_pr_result,
         "publish": args.publish_result,
     }
 
     if "cancelled" in results.values():
         print("Release failure tracking skipped for cancelled workflow.")
+        return 0
+
+    if args.codeql_result != "success":
+        record = release_record(args, "release-blocked", "codeql")
+        ensure_issue(client, record)
+        return 0
+
+    if args.security_result != "success":
+        record = release_record(args, "release-blocked", "security")
+        ensure_issue(client, record)
         return 0
 
     if args.compatibility_result != "success":
@@ -333,6 +348,21 @@ def handle_release(args: argparse.Namespace) -> int:
 
     if args.integration_result != "success":
         record = release_record(args, "release-blocked", "integration")
+        ensure_issue(client, record)
+        return 0
+
+    if args.property_result != "success":
+        record = release_record(args, "release-blocked", "property-tests")
+        ensure_issue(client, record)
+        return 0
+
+    if args.benchmark_result != "success":
+        record = release_record(args, "release-blocked", "benchmark-baseline")
+        ensure_issue(client, record)
+        return 0
+
+    if args.release_pr_result == "failure":
+        record = release_record(args, "release-blocked", "release-pr")
         ensure_issue(client, record)
         return 0
 
@@ -419,8 +449,13 @@ def build_parser() -> argparse.ArgumentParser:
     release.add_argument("--source-sha", required=True)
     release.add_argument("--release-type", required=True)
     release.add_argument("--planned-version", required=True)
+    release.add_argument("--codeql-result", required=True)
+    release.add_argument("--security-result", required=True)
     release.add_argument("--compatibility-result", required=True)
     release.add_argument("--integration-result", required=True)
+    release.add_argument("--property-result", required=True)
+    release.add_argument("--benchmark-result", required=True)
+    release.add_argument("--release-pr-result", required=True)
     release.add_argument("--publish-result", required=True)
     release.add_argument("--release-complete", default="")
     release.set_defaults(func=handle_release)

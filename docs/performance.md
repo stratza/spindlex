@@ -16,15 +16,20 @@ SpindleX is engineered for speed, security, and protocol efficiency. Key perform
 
 ### Benchmark Scripts
 
-SpindleX ships two benchmark scripts in `scripts/`:
+SpindleX ships repeatable benchmark scripts in `scripts/`:
 
 - **`benchmark_ciphers.py`** - compares upload throughput across all supported ciphers (ChaCha20-Poly1305, AES-256/192/128-CTR) against other SSH libraries on a live server configured in `.env`.
 - **`benchmark_production.py`** - full protocol correctness and performance sweep: verifies every cipher, MAC, KEX, and host-key algorithm negotiates and transfers data correctly, then reports timing.
+- **`benchmark_local_baseline.py`** - zero-cost Docker-backed baseline against local OpenSSH and Dropbear services. It writes JSON artifacts for handshake, command execution, SFTP upload/download, and sync/async paths.
 
 ```bash
 python scripts/benchmark_ciphers.py
 python scripts/benchmark_production.py
+python scripts/benchmark_local_baseline.py --output benchmark-results/local.json
 ```
+
+The local baseline records environment metadata and should be used for comparing
+project changes over time, not for universal performance claims.
 
 ### Packet-Level Profiler
 

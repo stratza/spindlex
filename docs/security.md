@@ -100,7 +100,10 @@ For a full reference of all supported KEX, host key, cipher, and MAC algorithms 
 
 ## Security Policy
 
-For information on how to report vulnerabilities or our disclosure policy, please see our [Responsible Disclosure Policy](https://github.com/stratza/spindlex/blob/main/meta/SECURITY.md).
+For information on how to report vulnerabilities or our disclosure policy, see
+the repository [Security Policy](https://github.com/stratza/spindlex/blob/main/SECURITY.md).
+Maintainer response workflow details are in
+[Vulnerability Response](vulnerability-response.md).
 
 ## Security Scanning and Blocker Policy
 
@@ -116,8 +119,10 @@ The repository uses layered automated checks:
 
 PR gates block high-confidence fast findings such as Bandit failures, Semgrep
 `ERROR` findings, vulnerable runtime dependencies, and committed secrets. The
-full security workflow runs on `main`, on schedule, and on demand. Supported
-tools upload SARIF to GitHub code scanning.
+full CodeQL and security workflows run on schedule, on demand, and through the
+sequential `main` push release orchestrator so post-merge code is scanned
+without competing with PR or release runner capacity. Supported tools upload
+SARIF to GitHub code scanning.
 
 ### Release-Blocking Findings
 

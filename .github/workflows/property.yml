@@ -1,0 +1,28 @@
+name: Property Tests
+
+on:
+  schedule:
+    - cron: "12 4 * * 2"
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: property-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  property-tests:
+    name: Bounded property tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11"
+      - run: uv pip install --system -e ".[test]"
+      - run: pytest tests/protocol/test_property_protocol_boundaries.py --timeout=120 --timeout-method=thread

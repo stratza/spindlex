@@ -1,11 +1,10 @@
 name: Security
 
 on:
-  push:
-    branches: [main]
   schedule:
     - cron: "17 2 * * 0"
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   actions: read
@@ -47,6 +46,8 @@ jobs:
 
   dependency-audit:
     name: Dependency Audit
+    needs: semgrep
+    if: always()
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -89,6 +90,8 @@ jobs:
 
   gitleaks:
     name: Gitleaks
+    needs: dependency-audit
+    if: always()
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -116,6 +119,8 @@ jobs:
 
   trivy:
     name: Trivy Filesystem
+    needs: gitleaks
+    if: always()
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -141,7 +146,8 @@ jobs:
 
   scorecard:
     name: OpenSSF Scorecard
-    if: github.ref == 'refs/heads/main'
+    needs: trivy
+    if: always() && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       actions: read

@@ -7,12 +7,22 @@ updates:
     labels:
       - "dependencies"
     groups:
+      runtime-dependencies:
+        patterns:
+          - "cryptography"
+          - "typing-extensions"
       dev-dependencies:
         patterns:
           - "pytest*"
+          - "hypothesis"
           - "ruff"
           - "mypy"
           - "tox"
+      docs-dependencies:
+        patterns:
+          - "mkdocs*"
+          - "pymdown-extensions"
+          - "pygments"
 
   - package-ecosystem: "github-actions"
     directory: "/"

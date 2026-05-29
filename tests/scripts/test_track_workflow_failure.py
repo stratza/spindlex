@@ -159,8 +159,13 @@ def release_args(**overrides):
         "source_sha": "abc123",
         "release_type": "patch",
         "planned_version": "0.6.7",
+        "codeql_result": "success",
+        "security_result": "success",
         "compatibility_result": "success",
         "integration_result": "success",
+        "property_result": "success",
+        "benchmark_result": "success",
+        "release_pr_result": "skipped",
         "publish_result": "success",
         "release_complete": "true",
     }
@@ -193,3 +198,29 @@ def test_handle_release_does_not_close_when_publish_skipped_existing_tag(monkeyp
     assert result == 0
     assert client.closed == []
     assert client.comments == []
+
+
+def test_handle_release_tracks_codeql_failure_before_release_gates(monkeypatch):
+    monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+    client = FakeClient()
+    monkeypatch.setattr(track_workflow_failure, "GitHubClient", lambda *_: client)
+
+    result = track_workflow_failure.handle_release(
+        release_args(codeql_result="failure", compatibility_result="skipped")
+    )
+
+    assert result == 0
+    assert "codeql" in client.created[0]["body"]
+
+
+def test_handle_release_tracks_security_failure_before_release_gates(monkeypatch):
+    monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+    client = FakeClient()
+    monkeypatch.setattr(track_workflow_failure, "GitHubClient", lambda *_: client)
+
+    result = track_workflow_failure.handle_release(
+        release_args(security_result="failure", compatibility_result="skipped")
+    )
+
+    assert result == 0
+    assert "security" in client.created[0]["body"]

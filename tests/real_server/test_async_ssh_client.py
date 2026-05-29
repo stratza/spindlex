@@ -31,6 +31,9 @@ async def test_async_ssh_client_exec(ssh_server):
 
 @pytest.mark.asyncio
 async def test_async_ssh_client_concurrent_exec(ssh_server):
+    if getattr(ssh_server, "server_type", "") == "dropbear":
+        pytest.skip("Dropbear does not support concurrent session channels here.")
+
     host, port, user, password = ssh_server
     async with AsyncSSHClient() as client:
         client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))

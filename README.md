@@ -15,7 +15,7 @@
 
 <br />
 
-<a href="#-quick-start"><b><font color="#bb86fc">Quick Start</font></b></a> • <a href="https://spindlex.readthedocs.io/"><b><font color="#bb86fc">Documentation</font></b></a> • <a href="meta/SECURITY.md"><b><font color="#bb86fc">Security</font></b></a> • <a href="meta/CONTRIBUTING.md"><b><font color="#bb86fc">Contributing</font></b></a>
+<a href="#-quick-start"><b><font color="#bb86fc">Quick Start</font></b></a> • <a href="https://spindlex.readthedocs.io/"><b><font color="#bb86fc">Documentation</font></b></a> • <a href="SECURITY.md"><b><font color="#bb86fc">Security</font></b></a> • <a href="CONTRIBUTING.md"><b><font color="#bb86fc">Contributing</font></b></a>
 
 </div>
 
@@ -26,7 +26,7 @@
 **SpindleX** is a modern SSH protocol implementation for Python 3.9+. It is designed for high-performance automation and secure file transfers, providing a clean alternative to legacy SSH libraries.
 
 > [!NOTE]
-> **0.7.x - ChaCha20-Poly1305 & SFTP throughput era.** This release line adds full `chacha20-poly1305@openssh.com` support as the preferred cipher, adaptive SFTP write chunks via `limits@openssh.com` (up to 255 KB), and a hardened async transport. Review [meta/SECURITY.md](meta/SECURITY.md) before deploying in production-facing workflows and pin exact versions.
+> **0.7.x - ChaCha20-Poly1305 & SFTP throughput era.** This release line adds full `chacha20-poly1305@openssh.com` support as the preferred cipher, adaptive SFTP write chunks via `limits@openssh.com` (up to 255 KB), and a hardened async transport. Review [SECURITY.md](SECURITY.md), [production usage expectations](docs/production-usage.md), and [compatibility policy](docs/compatibility.md) before deploying in production-facing workflows.
 
 ### 🔥 Key Features
 
@@ -139,13 +139,13 @@ SpindleX is optimized for high-throughput environments. The 0.7.x line brings SF
 - **AEAD Preferred**: `chacha20-poly1305@openssh.com` is the default cipher - authentication is integral, no separate MAC.
 - **Terrapin Defense**: Strict-KEX (`kex-strict-c-v00@openssh.com`) enabled, sequence numbers reset after NEWKEYS.
 - **Modern Defaults**: Ed25519, ECDSA, ChaCha20-Poly1305, and AES-CTR only. SHA-1 and CBC mode are excluded.
-- **Full Policy**: See [meta/SECURITY.md](meta/SECURITY.md) for vulnerability reporting and security standards.
+- **Full Policy**: See [SECURITY.md](SECURITY.md) for vulnerability reporting and [Security Guide](docs/security.md) for operational security guidance.
 
 ---
 
 ## 🤝 Contributing
 
-Contributions are welcome. See `meta/CONTRIBUTING.md` for guidelines.
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the GitHub entry point and [docs/contributing.md](docs/contributing.md) for the maintained guide.
 
 Distributed under the **MIT License**. See `LICENSE` for more information.
 
