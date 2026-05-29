@@ -24,6 +24,7 @@ version by itself.
 *   Rebuilt the Docker integration stack around locally maintained OpenSSH and Dropbear services so real-server workflow tests can run without relying on a removed public Dropbear image.
 
 ### Fixed
+*   Switched protected release-version PR creation to the release GitHub App token and made the step retry PR creation when the release branch already exists without an open PR.
 *   Limited protected release-publish detection to the canonical first commit-message line so `[publish release]` text in a merge body cannot accidentally enter the release-publish path.
 *   Restricted protected release-publish mode to merged PRs from the generated `release/vX.Y.Z` branch with source PR metadata, so regular PR titles cannot trigger the publish path.
 *   Prevented Docker SSH integration tests and local benchmarks from sharing host-key files across OpenSSH, Dropbear, or the developer's real home directory.
