@@ -54,7 +54,9 @@ def finalize_changelog(content: str, *, version: str, release_date: str) -> str:
 
         unreleased_end = _section_end(lines, unreleased_index)
         version_end = _section_end(lines, version_index)
-        unreleased_body = _trim_blank_edges(lines[unreleased_index + 1 : unreleased_end])
+        unreleased_body = _trim_blank_edges(
+            lines[unreleased_index + 1 : unreleased_end]
+        )
         version_body = _trim_blank_edges(lines[version_index + 1 : version_end])
         combined_body = unreleased_body.copy()
         if combined_body and version_body:
