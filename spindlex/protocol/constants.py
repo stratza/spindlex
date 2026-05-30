@@ -20,6 +20,9 @@ MSG_DEBUG = 4
 MSG_SERVICE_REQUEST = 5
 MSG_SERVICE_ACCEPT = 6
 
+# Extension negotiation (RFC 8308)
+MSG_EXT_INFO = 7
+
 # Key Exchange Messages (RFC 4253)
 MSG_KEXINIT = 20
 MSG_NEWKEYS = 21
@@ -97,7 +100,7 @@ SSH_OPEN_RESOURCE_SHORTAGE = 4
 SSH_EXTENDED_DATA_STDERR = 1
 
 # Authentication Method Names
-AUTH_PASSWORD = "password"  # noqa: S105  # nosec B105 - SSH protocol method name, not a credential
+AUTH_PASSWORD = "password"  # noqa: S105  # nosec B105 - SSH protocol method name, not a credential  # fmt: skip
 AUTH_PUBLICKEY = "publickey"
 AUTH_HOSTBASED = "hostbased"
 AUTH_KEYBOARD_INTERACTIVE = "keyboard-interactive"
@@ -393,6 +396,7 @@ __all__ = [
     "MSG_CHANNEL_WINDOW_ADJUST",
     "MSG_DEBUG",
     "MSG_DISCONNECT",
+    "MSG_EXT_INFO",
     "MSG_GLOBAL_REQUEST",
     "MSG_IGNORE",
     "MSG_KEXDH_INIT",

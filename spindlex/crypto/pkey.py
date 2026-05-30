@@ -11,7 +11,6 @@ import struct
 import warnings
 from typing import Any, Optional
 
-from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, ed25519, padding, rsa
 from cryptography.hazmat.primitives.asymmetric.utils import (
@@ -326,11 +325,11 @@ class Ed25519Key(PKey):
         try:
             if b"BEGIN OPENSSH PRIVATE KEY" in key_data:
                 self._key = serialization.load_ssh_private_key(
-                    key_data, password=password, backend=default_backend()
+                    key_data, password=password
                 )
             else:
                 self._key = serialization.load_pem_private_key(
-                    key_data, password=password, backend=default_backend()
+                    key_data, password=password
                 )
 
             if not isinstance(self._key, ed25519.Ed25519PrivateKey):
@@ -566,11 +565,11 @@ class ECDSAKey(PKey):
         try:
             if b"BEGIN OPENSSH PRIVATE KEY" in key_data:
                 self._key = serialization.load_ssh_private_key(
-                    key_data, password=password, backend=default_backend()
+                    key_data, password=password
                 )
             else:
                 self._key = serialization.load_pem_private_key(
-                    key_data, password=password, backend=default_backend()
+                    key_data, password=password
                 )
             if not isinstance(self._key, ec.EllipticCurvePrivateKey):
                 raise CryptoException("Key is not ECDSA private key")
@@ -728,7 +727,7 @@ class ECDSAKey(PKey):
             curve_name = "nistp521"
 
         key = cls(curve_name=curve_name)
-        key._key = ec.generate_private_key(key.curve, backend=default_backend())
+        key._key = ec.generate_private_key(key.curve)
         return key
 
     def save_to_file(self, filename: str, password: Optional[str] = None) -> None:
@@ -841,9 +840,7 @@ class RSAKey(PKey):
             CryptoException: If key loading fails
         """
         try:
-            self._key = serialization.load_pem_private_key(
-                key_data, password=password, backend=default_backend()
-            )
+            self._key = serialization.load_pem_private_key(key_data, password=password)
             if not isinstance(self._key, rsa.RSAPrivateKey):
                 raise CryptoException("Key is not RSA private key")
         except Exception as e:
@@ -891,7 +888,7 @@ class RSAKey(PKey):
 
             # Create RSA public key
             public_numbers = rsa.RSAPublicNumbers(e, n)
-            self._key = public_numbers.public_key(backend=default_backend())
+            self._key = public_numbers.public_key()
         except Exception as e:
             raise CryptoException(f"Failed to load RSA public key: {e}") from e
 
@@ -985,9 +982,7 @@ class RSAKey(PKey):
     ) -> "RSAKey":
         """Generate a new RSA key pair."""
         key = cls()
-        key._key = rsa.generate_private_key(
-            public_exponent=65537, key_size=bits, backend=default_backend()
-        )
+        key._key = rsa.generate_private_key(public_exponent=65537, key_size=bits)
         return key
 
     def save_to_file(self, filename: str, password: Optional[str] = None) -> None:

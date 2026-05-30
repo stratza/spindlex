@@ -56,6 +56,10 @@ class AutoAddPolicy(MissingHostKeyPolicy):
         if not accept_risk:
             import warnings
 
+            self._logger.warning(
+                "AutoAddPolicy is insecure and disables MITM protection. "
+                "Pass accept_risk=True to silence this warning."
+            )
             warnings.warn(
                 "AutoAddPolicy is insecure and disables MITM protection. "
                 "In future versions, accept_risk=True will be mandatory.",
@@ -120,10 +124,12 @@ class RejectPolicy(MissingHostKeyPolicy):
 
 class WarningPolicy(MissingHostKeyPolicy):
     """
-    Log warning but accept unknown host keys.
+    Warn and persist unknown host keys (Trust On First Use).
 
-    This policy logs a warning about unknown host keys but
-    allows the connection to proceed. Use with caution.
+    Logs a warning about unknown host keys and persists them to storage
+    so subsequent connections are verified. This is TOFU behavior: the
+    first connection is trusted unconditionally, with no MITM protection
+    for that initial handshake. Use with caution in untrusted networks.
     """
 
     def __init__(self) -> None:

@@ -264,3 +264,14 @@ ignore = [
 # ([tool.isort]) so the two tools do not disagree about first-party
 # imports (blank line between ``import pytest`` and ``from spindlex...``).
 known-first-party = ["spindlex"]
+
+[tool.isort]
+# Mirror ruff's formatter output so standalone isort agrees with ruff format.
+profile = "black"
+line_length = 88
+known_first_party = ["spindlex"]
+src_paths = ["spindlex", "tests"]
+
+[tool.black]
+line-length = 88
+target-version = ["py39", "py310", "py311", "py312", "py313"]

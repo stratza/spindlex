@@ -35,9 +35,9 @@ class AsyncChannel(Channel):
         self._recv_queue: asyncio.Queue[Any] = asyncio.Queue()
         self._closed_event = asyncio.Event()
 
-        # Override parent's deque buffers with bytes for async
-        self._recv_buffer: bytes = b""
-        self._stderr_buffer: bytes = b""
+        # Override parent's deque buffers with flat bytes for async I/O path
+        self._recv_buffer = b""
+        self._stderr_buffer = b""
         self._buffer_lock = threading.Lock()
 
     def _handle_close(self) -> None:

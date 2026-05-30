@@ -61,6 +61,7 @@ from ..protocol.constants import (
     MSG_CHANNEL_WINDOW_ADJUST,
     MSG_DEBUG,
     MSG_DISCONNECT,
+    MSG_EXT_INFO,
     MSG_GLOBAL_REQUEST,
     MSG_IGNORE,
     MSG_KEXDH_INIT,
@@ -72,6 +73,7 @@ from ..protocol.constants import (
     MSG_SERVICE_ACCEPT,
     MSG_SERVICE_REQUEST,
     MSG_USERAUTH_FAILURE,
+    MSG_USERAUTH_PK_OK,
     MSG_USERAUTH_REQUEST,
     MSG_USERAUTH_SUCCESS,
     PACKET_LENGTH_SIZE,
@@ -121,6 +123,8 @@ _CIPHER_BLOCK_SIZES = {
     "aes192-ctr": 16,
     "aes256-ctr": 16,
 }
+
+_AEAD_CIPHERS: frozenset[str] = frozenset(["chacha20-poly1305@openssh.com"])
 
 
 class PacketProfiler:
@@ -282,6 +286,8 @@ class Transport:
         self._logger = logging.getLogger(__name__)
         self._strict_kex = False
         self._stop_event = threading.Event()
+        self._kex_thread: Optional[threading.Thread] = None
+        self._server_key: Optional[Any] = None
 
         self._buffer_size = 32768
         env_buffer_size = os.environ.get("SPINDLEX_BUFFER_SIZE")
@@ -1500,7 +1506,7 @@ class Transport:
         with self._lock:
             self._active = False
             self._stop_event.set()
-            kex_thread = getattr(self, "_kex_thread", None)
+            kex_thread = self._kex_thread
             channels_snapshot = list(self._channels.values())
             sock = self._socket
 
@@ -1670,7 +1676,7 @@ class Transport:
             # _check_rekey / _send_packet observers see a consistent snapshot.
             with self._lock:
                 self._kex_in_progress = False
-                self._kex_thread = None  # type: ignore[assignment]
+                self._kex_thread = None
                 self._bytes_since_rekey = 0
                 self._last_rekey_time = time.time()
                 self._kex_condition.notify_all()
@@ -1863,8 +1869,7 @@ class Transport:
             # ALWAYS increment sequence number for EVERY packet received
             self._sequence_number_in = (self._sequence_number_in + 1) & 0xFFFFFFFF
 
-            # 7 = MSG_EXT_INFO (RFC 8308)
-            if msg.msg_type in [MSG_IGNORE, MSG_DEBUG, 7]:
+            if msg.msg_type in [MSG_IGNORE, MSG_DEBUG, MSG_EXT_INFO]:
                 return HandledMessage() if single_pump else None  # type: ignore[return-value]
 
             if msg.msg_type == MSG_DISCONNECT:
@@ -1918,7 +1923,7 @@ class Transport:
                 if (
                     self._kex_in_progress
                     and not getattr(self, "_is_async", False)
-                    and threading.current_thread() != getattr(self, "_kex_thread", None)
+                    and threading.current_thread() != self._kex_thread
                 ):
                     # We should not be here if called from _recv_message or _expect_message
                     # as they have their own yielding loops, but for safety:
@@ -1975,8 +1980,7 @@ class Transport:
                     # If no rekeying or we are the rekeying thread, proceed to read
                     if (
                         not self._kex_in_progress
-                        or threading.current_thread()
-                        == getattr(self, "_kex_thread", None)
+                        or threading.current_thread() == self._kex_thread
                     ):
                         break
 
@@ -2021,8 +2025,7 @@ class Transport:
                     # If no rekeying or we are the rekeying thread, proceed to read
                     if (
                         not self._kex_in_progress
-                        or threading.current_thread()
-                        == getattr(self, "_kex_thread", None)
+                        or threading.current_thread() == self._kex_thread
                     ):
                         break
 
@@ -2182,7 +2185,8 @@ class Transport:
     def _encrypt_packet(self, packet: bytes) -> bytes:
         """Encrypt SSH packet and add MAC if needed."""
         if getattr(self, "_cipher_out_active", None) == "chacha20-poly1305@openssh.com":
-            assert self._chacha20_key_out is not None
+            if self._chacha20_key_out is None:
+                raise TransportException("ChaCha20 outbound key not initialised")
             return self._crypto_backend.chacha20_poly1305_encrypt(
                 self._chacha20_key_out,
                 self._sequence_number_out,
@@ -2236,7 +2240,6 @@ class Transport:
         # active encryption cipher) not the negotiated _cipher_c2s, because
         # NEWKEYS is sent before encryption is activated and must use standard
         # alignment even though _cipher_c2s may already be set to chacha20.
-        _AEAD_CIPHERS = frozenset(["chacha20-poly1305@openssh.com"])
         active_cipher = getattr(self, "_cipher_out_active", None)
         length_overhead = 0 if active_cipher in _AEAD_CIPHERS else PACKET_LENGTH_SIZE
         padding_length = block_size - (
@@ -2277,7 +2280,8 @@ class Transport:
                 if not self._active:
                     return b""
                 raise TransportException("Short read while receiving packet length")
-            assert self._chacha20_key_in is not None
+            if self._chacha20_key_in is None:
+                raise TransportException("ChaCha20 inbound key not initialised")
             plain_length = self._crypto_backend.chacha20_poly1305_decrypt_length(
                 self._chacha20_key_in, self._sequence_number_in, enc_length
             )
@@ -2394,9 +2398,12 @@ class Transport:
         #   short, non-blocking buffer slices.
         # * ``self._read_lock`` serializes the actual blocking ``socket.recv``
         #   call so two threads cannot race the kernel for the same socket.
-        # We do NOT hold ``self._read_lock`` while consuming from the buffer:
-        # any thread that already has buffered bytes available can return
-        # without contending with a peer that is blocked in ``recv``.
+        # Fast path: if the buffer already has enough bytes, consume under
+        # ``self._lock`` only — no need to acquire ``_read_lock`` at all.
+        # Slow path: acquire ``_read_lock``, re-check the buffer (another
+        # thread may have filled it while we waited), then block in recv().
+        # Buffer consumption in the slow path therefore happens under both
+        # ``_read_lock`` and ``self._lock``.
         while True:
             with self._lock:
                 if len(self._packet_buffer) >= length:
@@ -2536,8 +2543,7 @@ class Transport:
                     # Client is just querying if the key is acceptable
                     if self._server_interface.check_auth_publickey(username, key):
                         # Send PK_OK to indicate key is acceptable
-                        # MSG_USERAUTH_PK_OK = 60
-                        pk_ok = Message(60)
+                        pk_ok = Message(MSG_USERAUTH_PK_OK)
                         pk_ok._data.extend(write_string(algo_name))
                         pk_ok._data.extend(write_string(key_blob))
                         self._send_message(pk_ok)

@@ -334,10 +334,7 @@ class TestDHPublicKeyGuard:
         mock_pub.public_numbers.return_value = mock_pub_numbers
         mock_priv.public_key.return_value = mock_pub
 
-        with (
-            patch("spindlex.transport.kex.dh") as mock_dh_module,
-            patch("spindlex.transport.kex.default_backend"),
-        ):
+        with patch("spindlex.transport.kex.dh") as mock_dh_module:
             mock_params = MagicMock()
             mock_params.generate_private_key.return_value = mock_priv
             mock_dh_module.DHParameterNumbers.return_value.parameters.return_value = (

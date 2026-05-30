@@ -247,6 +247,20 @@ class HostKeyStorage:
         """
         return self._keys.get(hostname, [])
 
+    def copy_from(self, other: "HostKeyStorage") -> None:
+        """
+        Merge all keys from another storage instance into this one.
+
+        Args:
+            other: Source storage whose keys are merged into self
+        """
+        for hostname, keys in other._keys.items():
+            if hostname not in self._keys:
+                self._keys[hostname] = []
+            for key in keys:
+                if key not in self._keys[hostname]:
+                    self._keys[hostname].append(key)
+
     def remove(self, hostname: str, key: Optional[PKey] = None) -> bool:
         """
         Remove host key(s) for hostname.

@@ -194,7 +194,7 @@ class AsyncSSHClient:
                     # Exponential backoff with jitter: 0.2s, 0.4s, 0.8s...
                     import random
 
-                    wait = (0.2 * (2**attempt)) + (random.random() * 0.1)  # noqa: S311 # nosec
+                    wait = (0.2 * (2**attempt)) + (random.random() * 0.1)  # noqa: S311 # nosec  # fmt: skip
                     self._logger.debug(
                         f"Connection attempt {attempt + 1} failed: {e}. Retrying in {wait:.2f}s..."
                     )
