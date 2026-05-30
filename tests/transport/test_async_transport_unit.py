@@ -88,9 +88,11 @@ class TestAsyncTransportUnit:
     @pytest.mark.asyncio
     async def test_recv_version_async_no_reader_raises(self, transport):
         with pytest.raises(TransportException, match="Transport not initialized"):
-            await transport.recv_version_async() if hasattr(
-                transport, "recv_version_async"
-            ) else await transport._recv_version_async()
+            (
+                await transport.recv_version_async()
+                if hasattr(transport, "recv_version_async")
+                else await transport._recv_version_async()
+            )
 
     @pytest.mark.asyncio
     async def test_send_message_bridge_from_other_thread(self, transport):

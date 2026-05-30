@@ -154,7 +154,7 @@ class AsyncTransport(Transport):
             self._recv_kexinit()
             self._kex.start_kex()
         finally:
-            self._kex_thread = None  # type: ignore[assignment]
+            self._kex_thread = None
             # Reset progress flag
             self._kex_in_progress = False
 

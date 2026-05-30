@@ -7,7 +7,6 @@ and Diffie-Hellman for secure session key establishment.
 
 from typing import Any, Optional
 
-from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import dh
 
@@ -102,10 +101,12 @@ class KeyExchange:
             CryptoException: If key exchange fails
         """
         try:
-            # Get peer KEXINIT from transport (should already be exchanged)
+            # Transport layer must complete KEXINIT exchange before calling start_kex().
             if not self._transport._peer_kexinit:
-                self._send_kexinit()
-                self._receive_kexinit()
+                raise CryptoException(
+                    "Peer KEXINIT not received — transport must exchange KEXINIT "
+                    "before invoking KeyExchange.start_kex()"
+                )
 
             peer_kexinit_blob = self._transport._peer_kexinit.pack()
             our_kexinit_blob = self._transport._client_kexinit_blob
@@ -261,78 +262,75 @@ class KeyExchange:
 
     def _perform_dh_group14_sha256(self) -> None:
         """Perform Diffie-Hellman Group 14 SHA256 key exchange."""
-        try:
-            # Generate DH parameters
-            parameters = dh.DHParameterNumbers(
-                self.DH_GROUP14_P, self.DH_GROUP14_G
-            ).parameters(default_backend())
+        # Generate DH parameters
+        parameters = dh.DHParameterNumbers(
+            self.DH_GROUP14_P, self.DH_GROUP14_G
+        ).parameters()
 
-            # Generate private key
-            self._dh_private_key = parameters.generate_private_key()
+        # Generate private key
+        self._dh_private_key = parameters.generate_private_key()
 
-            # Get public key
-            dh_public_key = self._dh_private_key.public_key()
-            public_numbers = dh_public_key.public_numbers()
+        # Get public key
+        dh_public_key = self._dh_private_key.public_key()
+        public_numbers = dh_public_key.public_numbers()
 
-            # Store public key value
-            self._dh_public_key = public_numbers.y
-            self._dh_public_key_mpint = write_mpint(public_numbers.y)
+        # Store public key value
+        self._dh_public_key = public_numbers.y
+        self._dh_public_key_mpint = write_mpint(public_numbers.y)
 
-            # Ensure the public key is positive (SSH requirement)
-            if self._dh_public_key <= 0:
-                raise CryptoException("Invalid DH public key: must be positive")
+        # Ensure the public key is positive (SSH requirement)
+        if self._dh_public_key <= 0:
+            raise CryptoException("Invalid DH public key: must be positive")
 
-            # Send KEXDH_INIT message
-            kexdh_init = Message(MSG_KEXDH_INIT)
-            assert self._dh_public_key is not None
-            kexdh_init.add_mpint(self._dh_public_key)
-            self._transport._send_message(kexdh_init)
+        # Send KEXDH_INIT message
+        kexdh_init = Message(MSG_KEXDH_INIT)
+        if self._dh_public_key is None:
+            raise CryptoException("DH public key not generated")
+        kexdh_init.add_mpint(self._dh_public_key)
+        self._transport._send_message(kexdh_init)
 
-            # Receive KEXDH_REPLY
-            reply_msg = self._transport._expect_message(MSG_KEXDH_REPLY)
+        # Receive KEXDH_REPLY
+        reply_msg = self._transport._expect_message(MSG_KEXDH_REPLY)
 
-            # Parse KEXDH_REPLY
-            offset = 0
-            server_host_key_blob, offset = read_string(reply_msg._data, offset)
+        # Parse KEXDH_REPLY
+        offset = 0
+        server_host_key_blob, offset = read_string(reply_msg._data, offset)
 
-            # Extract server's DH public key (f)
-            server_public_int, offset = read_mpint(reply_msg._data, offset)
+        # Extract server's DH public key (f)
+        server_public_int, offset = read_mpint(reply_msg._data, offset)
 
-            # Encode f as mpint for exchange hash (RFC 4253 §8)
-            server_dh_public_blob = write_mpint(server_public_int)
+        # Encode f as mpint for exchange hash (RFC 4253 §8)
+        server_dh_public_blob = write_mpint(server_public_int)
 
-            signature_blob, offset = read_string(reply_msg._data, offset)
+        signature_blob, offset = read_string(reply_msg._data, offset)
 
-            # Store host key blob for transport
-            self._transport._server_host_key_blob = server_host_key_blob
+        # Store host key blob for transport
+        self._transport._server_host_key_blob = server_host_key_blob
 
-            # Validate server's public key
-            if server_public_int <= 1 or server_public_int >= self.DH_GROUP14_P - 1:
-                raise CryptoException("Invalid server DH public key")
+        # Validate server's public key
+        if server_public_int <= 1 or server_public_int >= self.DH_GROUP14_P - 1:
+            raise CryptoException("Invalid server DH public key")
 
-            # Compute shared secret
-            server_public_numbers = dh.DHPublicNumbers(
-                server_public_int, parameters.parameter_numbers()
-            )
-            server_public_key = server_public_numbers.public_key(default_backend())
+        # Compute shared secret
+        server_public_numbers = dh.DHPublicNumbers(
+            server_public_int, parameters.parameter_numbers()
+        )
+        server_public_key = server_public_numbers.public_key()
 
-            shared_secret_int = self._dh_private_key.exchange(server_public_key)
-            self._shared_secret = write_mpint(int.from_bytes(shared_secret_int, "big"))
+        shared_secret_int = self._dh_private_key.exchange(server_public_key)
+        self._shared_secret = write_mpint(int.from_bytes(shared_secret_int, "big"))
 
-            # Compute exchange hash
-            self._compute_exchange_hash(
-                server_host_key_blob, server_dh_public_blob, signature_blob
-            )
+        # Compute exchange hash
+        self._compute_exchange_hash(
+            server_host_key_blob, server_dh_public_blob, signature_blob
+        )
 
-            # Set session ID (first exchange hash)
-            if self._session_id is None:
-                self._session_id = self._exchange_hash
+        # Set session ID (first exchange hash)
+        if self._session_id is None:
+            self._session_id = self._exchange_hash
 
-            # Verify server signature
-            self._verify_server_signature(server_host_key_blob, signature_blob)
-
-        except Exception:
-            raise
+        # Verify server signature
+        self._verify_server_signature(server_host_key_blob, signature_blob)
 
     def _verify_server_signature(
         self, server_host_key_blob: bytes, signature_blob: bytes
@@ -342,7 +340,8 @@ class KeyExchange:
 
         try:
             server_key = PKey.from_string(server_host_key_blob)
-            assert self._exchange_hash is not None
+            if self._exchange_hash is None:
+                raise CryptoException("Exchange hash not computed")
             if not server_key.verify(signature_blob, self._exchange_hash):
                 raise CryptoException("Server host key signature verification failed")
         except Exception as e:
@@ -372,7 +371,7 @@ class KeyExchange:
                 )
 
             # Generate ECDH key pair
-            self._ecdh_private_key = ec.generate_private_key(curve, default_backend())
+            self._ecdh_private_key = ec.generate_private_key(curve)
             public_key = self._ecdh_private_key.public_key()
 
             # Get public key in uncompressed format
@@ -447,12 +446,18 @@ class KeyExchange:
         hash_data = bytearray()
 
         # Client version string
-        client_version = self._transport._client_version or "SSH-2.0-SpindleX_1.0"
-        hash_data.extend(write_string(client_version))
+        if self._transport._client_version is None:
+            raise CryptoException(
+                "Client version string not set for ECDH exchange hash"
+            )
+        hash_data.extend(write_string(self._transport._client_version))
 
         # Server version string
-        server_version = self._transport._server_version or "SSH-2.0-Unknown"
-        hash_data.extend(write_string(server_version))
+        if self._transport._server_version is None:
+            raise CryptoException(
+                "Server version string not set for ECDH exchange hash"
+            )
+        hash_data.extend(write_string(self._transport._server_version))
 
         # Client KEXINIT
         if self._client_kexinit is None:
@@ -528,7 +533,9 @@ class KeyExchange:
             )
 
             # 6. Sign exchange hash
-            signature_blob = self._sign_exchange_hash(self._exchange_hash)  # type: ignore[arg-type]
+            if self._exchange_hash is None:
+                raise CryptoException("Exchange hash not computed")
+            signature_blob = self._sign_exchange_hash(self._exchange_hash)
 
             # 7. Send KEX_ECDH_REPLY
             reply_msg = Message(MSG_KEX_ECDH_REPLY)
@@ -554,7 +561,7 @@ class KeyExchange:
             # 2. Generate DH parameters and private key
             parameters = dh.DHParameterNumbers(
                 self.DH_GROUP14_P, self.DH_GROUP14_G
-            ).parameters(default_backend())
+            ).parameters()
             self._dh_private_key = parameters.generate_private_key()
 
             # 3. Get server public key (f)
@@ -567,7 +574,7 @@ class KeyExchange:
             client_public_numbers = dh.DHPublicNumbers(
                 client_public_key_int, parameters.parameter_numbers()
             )
-            client_public_key_obj = client_public_numbers.public_key(default_backend())
+            client_public_key_obj = client_public_numbers.public_key()
             shared_secret_int = self._dh_private_key.exchange(client_public_key_obj)
             self._shared_secret = write_mpint(int.from_bytes(shared_secret_int, "big"))
 
@@ -584,7 +591,9 @@ class KeyExchange:
             )
 
             # 7. Sign exchange hash
-            signature_blob = self._sign_exchange_hash(self._exchange_hash)  # type: ignore[arg-type]
+            if self._exchange_hash is None:
+                raise CryptoException("Exchange hash not computed")
+            signature_blob = self._sign_exchange_hash(self._exchange_hash)
 
             # 8. Send MSG_KEXDH_REPLY (31)
             reply_msg = Message(MSG_KEXDH_REPLY)
@@ -626,7 +635,7 @@ class KeyExchange:
             client_public_key_blob, _ = read_string(init_msg._data, 0)
 
             # 2. Generate server ECDH key pair
-            self._ecdh_private_key = ec.generate_private_key(curve, default_backend())
+            self._ecdh_private_key = ec.generate_private_key(curve)
             server_public_key = self._ecdh_private_key.public_key()
             self._ecdh_public_key_bytes = server_public_key.public_bytes(
                 encoding=serialization.Encoding.X962,
@@ -658,7 +667,8 @@ class KeyExchange:
             )
 
             # 6. Sign exchange hash
-            assert self._exchange_hash is not None
+            if self._exchange_hash is None:
+                raise CryptoException("Exchange hash not computed")
             signature_blob = self._sign_exchange_hash(self._exchange_hash)
 
             # 7. Send KEX_ECDH_REPLY
@@ -756,19 +766,29 @@ class KeyExchange:
         self, server_host_key: bytes, client_public_key: bytes, server_public_key: bytes
     ) -> None:
         """Compute the exchange hash H for Curve25519."""
+        if self._transport._client_version is None:
+            raise CryptoException(
+                "Client version string not set for Curve25519 exchange hash"
+            )
+        if self._transport._server_version is None:
+            raise CryptoException(
+                "Server version string not set for Curve25519 exchange hash"
+            )
+        if self._client_kexinit is None:
+            raise CryptoException("Missing client KEXINIT for Curve25519 exchange hash")
+        if self._server_kexinit is None:
+            raise CryptoException("Missing server KEXINIT for Curve25519 exchange hash")
+        if self._shared_secret is None:
+            raise CryptoException("Missing shared secret for Curve25519 exchange hash")
         hash_data = bytearray()
-        hash_data.extend(
-            write_string(self._transport._client_version or "SSH-2.0-SpindleX_1.0")
-        )
-        hash_data.extend(
-            write_string(self._transport._server_version or "SSH-2.0-Unknown")
-        )
-        hash_data.extend(write_string(self._client_kexinit))  # type: ignore[arg-type]
-        hash_data.extend(write_string(self._server_kexinit))  # type: ignore[arg-type]
+        hash_data.extend(write_string(self._transport._client_version))
+        hash_data.extend(write_string(self._transport._server_version))
+        hash_data.extend(write_string(self._client_kexinit))
+        hash_data.extend(write_string(self._server_kexinit))
         hash_data.extend(write_string(server_host_key))
         hash_data.extend(write_string(client_public_key))
         hash_data.extend(write_string(server_public_key))
-        hash_data.extend(self._shared_secret)  # type: ignore[arg-type]
+        hash_data.extend(self._shared_secret)
 
         self._exchange_hash = default_crypto_backend.hash_data(
             "sha256", bytes(hash_data)
@@ -789,12 +809,14 @@ class KeyExchange:
         hash_data = bytearray()
 
         # Client version string
-        client_version = self._transport._client_version or "SSH-2.0-SpindleX_1.0"
-        hash_data.extend(write_string(client_version))
+        if self._transport._client_version is None:
+            raise CryptoException("Client version string not set for DH exchange hash")
+        hash_data.extend(write_string(self._transport._client_version))
 
         # Server version string
-        server_version = self._transport._server_version or "SSH-2.0-Unknown"
-        hash_data.extend(write_string(server_version))
+        if self._transport._server_version is None:
+            raise CryptoException("Server version string not set for DH exchange hash")
+        hash_data.extend(write_string(self._transport._server_version))
 
         # Client KEXINIT
         if self._client_kexinit is None:
@@ -970,15 +992,27 @@ class KeyExchange:
 
     def generate_keys(self) -> tuple[bytes, bytes, bytes, bytes]:
         """
-        Generate session keys from shared secret.
+        Return session keys derived during key exchange.
+
+        .. deprecated::
+            Access keys via the Transport object after key exchange completes.
+            This method will be removed in v1.0.
 
         Returns:
             Tuple of (encryption_key_c2s, encryption_key_s2c, mac_key_c2s, mac_key_s2c)
 
         Raises:
-            CryptoException: If key generation fails
+            CryptoException: If key exchange has not been completed yet
         """
-        if not all(
+        import warnings
+
+        warnings.warn(
+            "KeyExchange.generate_keys() is deprecated and will be removed in v1.0. "
+            "Access keys via the Transport object after key exchange completes.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        if not hasattr(self, "_encryption_key_c2s") or not all(
             [
                 self._encryption_key_c2s,
                 self._encryption_key_s2c,

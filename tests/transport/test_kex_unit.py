@@ -473,23 +473,8 @@ class TestStartKex:
         kex, transport = make_kex()
         transport._peer_kexinit = None  # not yet exchanged
 
-        with (
-            patch.object(kex, "_send_kexinit") as mock_send,
-            patch.object(kex, "_receive_kexinit") as mock_recv,
-            patch.object(kex, "_negotiate_algorithms"),
-            patch.object(kex, "_perform_client_kex"),
-            patch.object(kex, "_generate_session_keys"),
-            patch.object(kex, "_send_newkeys"),
-            patch.object(kex, "_receive_newkeys"),
-        ):
-            # After _receive_kexinit is called, simulate peer_kexinit being set
-            def set_peer(*a, **kw):
-                transport._peer_kexinit = _make_peer_kexinit()
-
-            mock_recv.side_effect = set_peer
+        with pytest.raises(CryptoException, match="Peer KEXINIT not received"):
             kex.start_kex()
-            mock_send.assert_called_once()
-            mock_recv.assert_called_once()
 
     def test_start_kex_skips_kexinit_when_peer_already_set(self):
         kex, transport = make_kex()
@@ -580,7 +565,6 @@ class TestDhGroup14Sha256Client:
 
         with (
             patch("spindlex.transport.kex.dh") as mock_dh_module,
-            patch("spindlex.transport.kex.default_backend"),
             patch.object(kex, "_verify_server_signature"),
         ):
             mock_params = MagicMock()
@@ -606,7 +590,6 @@ class TestDhGroup14Sha256Client:
 
         with (
             patch("spindlex.transport.kex.dh") as mock_dh_module,
-            patch("spindlex.transport.kex.default_backend"),
             patch.object(kex, "_verify_server_signature"),
         ):
             mock_params = MagicMock()
@@ -632,7 +615,6 @@ class TestDhGroup14Sha256Client:
 
         with (
             patch("spindlex.transport.kex.dh") as mock_dh_module,
-            patch("spindlex.transport.kex.default_backend"),
             patch.object(kex, "_verify_server_signature"),
         ):
             mock_params = MagicMock()
@@ -660,7 +642,6 @@ class TestDhGroup14Sha256Client:
 
         with (
             patch("spindlex.transport.kex.dh") as mock_dh_module,
-            patch("spindlex.transport.kex.default_backend"),
             patch.object(kex, "_verify_server_signature"),
         ):
             mock_params = MagicMock()
@@ -684,10 +665,7 @@ class TestDhGroup14Sha256Client:
         reply = _make_dh_reply_msg(b"hostkey", 1, b"sig")
         transport._expect_message.return_value = reply
 
-        with (
-            patch("spindlex.transport.kex.dh") as mock_dh_module,
-            patch("spindlex.transport.kex.default_backend"),
-        ):
+        with patch("spindlex.transport.kex.dh") as mock_dh_module:
             mock_params = MagicMock()
             mock_params.generate_private_key.return_value = mock_priv
             mock_params.parameter_numbers.return_value = MagicMock()
@@ -723,7 +701,6 @@ class TestEcdhNistp256Client:
 
         with (
             patch("cryptography.hazmat.primitives.asymmetric.ec") as mock_ec_module,
-            patch("spindlex.transport.kex.default_backend"),
             patch("spindlex.transport.kex.serialization"),
             patch.object(kex, "_verify_server_signature"),
         ):
@@ -748,7 +725,6 @@ class TestEcdhNistp256Client:
 
         with (
             patch("cryptography.hazmat.primitives.asymmetric.ec") as mock_ec_module,
-            patch("spindlex.transport.kex.default_backend"),
             patch("spindlex.transport.kex.serialization"),
             patch.object(kex, "_verify_server_signature"),
         ):

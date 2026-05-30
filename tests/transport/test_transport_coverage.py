@@ -125,3 +125,26 @@ class TestTransportCoverage:
         msg = ChannelCloseMessage(1)
         t._handle_channel_close(msg)
         chan._handle_close.assert_called_once()
+
+
+class TestChaCha20KeyGuards:
+    def test_encrypt_raises_when_chacha20_key_out_is_none(self):
+        t = _make_transport()
+        t._cipher_out_active = "chacha20-poly1305@openssh.com"
+        t._chacha20_key_out = None
+        with pytest.raises(
+            TransportException, match="ChaCha20 outbound key not initialised"
+        ):
+            t._encrypt_packet(b"data")
+
+    def test_recv_packet_raises_when_chacha20_key_in_is_none(self):
+        from unittest.mock import patch as _patch
+
+        t = _make_transport()
+        t._cipher_in_active = "chacha20-poly1305@openssh.com"
+        t._chacha20_key_in = None
+        with _patch.object(t, "_recv_bytes", return_value=b"\x00\x00\x00\x04"):
+            with pytest.raises(
+                TransportException, match="ChaCha20 inbound key not initialised"
+            ):
+                t._recv_packet()

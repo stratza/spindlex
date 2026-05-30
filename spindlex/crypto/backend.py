@@ -10,7 +10,6 @@ import struct
 from typing import Any, Protocol
 
 from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, hmac
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.poly1305 import Poly1305
@@ -102,9 +101,8 @@ class CryptographyBackend:
     for modern, secure cryptographic operations.
     """
 
-    # Hash algorithm mapping
+    # Hash algorithm mapping — SHA-1 intentionally excluded (weak, not negotiated)
     HASH_ALGORITHMS = {
-        "sha1": hashes.SHA1,
         "sha256": hashes.SHA256,
         "sha384": hashes.SHA384,
         "sha512": hashes.SHA512,
@@ -120,7 +118,7 @@ class CryptographyBackend:
 
     def __init__(self) -> None:
         """Initialize cryptography backend."""
-        self.backend = default_backend()
+        pass
 
     def generate_random(self, length: int) -> bytes:
         """
@@ -145,7 +143,7 @@ class CryptographyBackend:
         Hash data using specified algorithm.
 
         Args:
-            algorithm: Hash algorithm name (sha1, sha256, sha512)
+            algorithm: Hash algorithm name (sha256, sha384, sha512)
             data: Data to hash
 
         Returns:
@@ -162,7 +160,7 @@ class CryptographyBackend:
             data_bytes = bytes(data)
 
             hash_class = self.HASH_ALGORITHMS[algorithm]
-            digest = hashes.Hash(hash_class(), backend=self.backend)  # type: ignore[abstract]
+            digest = hashes.Hash(hash_class())  # type: ignore[abstract]
             digest.update(data_bytes)
             return digest.finalize()
         except CryptoException:
@@ -195,7 +193,7 @@ class CryptographyBackend:
             if algorithm in ["aes128-ctr", "aes192-ctr", "aes256-ctr"]:
                 cipher_algo = algorithms.AES(key_bytes)
                 mode = modes.CTR(iv_bytes)
-                cipher = Cipher(cipher_algo, mode, backend=self.backend)
+                cipher = Cipher(cipher_algo, mode)
                 encryptor = cipher.encryptor()
                 return bytes(encryptor.update(data_bytes) + encryptor.finalize())
             else:
@@ -228,7 +226,7 @@ class CryptographyBackend:
             if algorithm in ["aes128-ctr", "aes192-ctr", "aes256-ctr"]:
                 cipher_algo = algorithms.AES(key_bytes)
                 mode = modes.CTR(iv_bytes)
-                cipher = Cipher(cipher_algo, mode, backend=self.backend)
+                cipher = Cipher(cipher_algo, mode)
                 decryptor = cipher.decryptor()
                 return bytes(decryptor.update(data_bytes) + decryptor.finalize())
             else:
@@ -259,7 +257,7 @@ class CryptographyBackend:
             if algorithm in ["aes128-ctr", "aes192-ctr", "aes256-ctr"]:
                 cipher_algo = algorithms.AES(key_bytes)
                 mode = modes.CTR(iv_bytes)
-                return Cipher(cipher_algo, mode, backend=self.backend)
+                return Cipher(cipher_algo, mode)
             else:
                 raise CryptoException(
                     f"Streaming cipher not supported for: {algorithm}"
@@ -291,7 +289,7 @@ class CryptographyBackend:
             data_bytes = bytes(data)
 
             hash_class = self.MAC_ALGORITHMS[algorithm]
-            h = hmac.HMAC(key_bytes, hash_class(), backend=self.backend)  # type: ignore
+            h = hmac.HMAC(key_bytes, hash_class())  # type: ignore
             h.update(data_bytes)
             return bytes(h.finalize())
         except Exception as e:
@@ -360,13 +358,13 @@ class CryptographyBackend:
             )
 
             # Hash the initial data
-            digest = hashes.Hash(hash_class(), backend=self.backend)  # type: ignore[abstract]
+            digest = hashes.Hash(hash_class())  # type: ignore[abstract]
             digest.update(initial_data)
             key_material = digest.finalize()
 
             # Extend key material if needed
             while len(key_material) < key_length:
-                digest = hashes.Hash(hash_class(), backend=self.backend)  # type: ignore[abstract]
+                digest = hashes.Hash(hash_class())  # type: ignore[abstract]
                 digest.update(shared_secret_bytes + exchange_hash_bytes + key_material)
                 key_material += digest.finalize()
 

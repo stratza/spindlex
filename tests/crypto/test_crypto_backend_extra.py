@@ -39,3 +39,17 @@ def test_backend_decrypt_length_passthrough():
     # Should return data as is for all ciphers now
     data = b"1234"
     assert backend.decrypt_length("aes256-ctr", b"k" * 32, b"iv" * 16, data) == data
+
+
+def test_backend_hash_data_wraps_unexpected_exception():
+    """hash_data wraps non-CryptoException errors in CryptoException."""
+    from unittest.mock import MagicMock, patch
+
+    from cryptography.hazmat.primitives import hashes
+
+    backend = CryptographyBackend()
+    mock_digest = MagicMock()
+    mock_digest.update.side_effect = RuntimeError("digest exploded")
+    with patch.object(hashes, "Hash", return_value=mock_digest):
+        with pytest.raises(CryptoException, match="Hash operation failed"):
+            backend.hash_data("sha256", b"data")

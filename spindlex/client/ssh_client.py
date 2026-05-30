@@ -22,6 +22,7 @@ from ..exceptions import (
 )
 from ..hostkeys.policy import MissingHostKeyPolicy, RejectPolicy
 from ..hostkeys.storage import HostKeyStorage
+from ..protocol.constants import SSH_STRING_ENCODING
 from ..transport.channel import Channel
 from ..transport.transport import Transport
 
@@ -104,7 +105,7 @@ class ChannelFile:
             raise ValueError("File not opened for writing")
 
         if isinstance(data, str):
-            data = data.encode("utf-8")
+            data = data.encode(SSH_STRING_ENCODING)
 
         return self._channel.send(data)
 
@@ -165,7 +166,7 @@ class ChannelFile:
             result.extend(char)
             if char == b"\n":
                 break
-        return result.decode("utf-8", errors="replace")
+        return result.decode(SSH_STRING_ENCODING, errors="replace")
 
     @property
     def channel(self) -> "Channel":
@@ -264,12 +265,10 @@ class SSHClient:
         Args:
             filename: Path to save known_hosts
         """
-        # If storage doesn't exist or filename is different, create new storage
-        if not self._host_key_storage or self._host_key_storage._filename != filename:
-            old_storage = self._host_key_storage
-            self._host_key_storage = HostKeyStorage(filename)
-            if old_storage:
-                self._host_key_storage._keys = old_storage._keys
+        if self._host_key_storage._filename != filename:
+            new_storage = HostKeyStorage(filename)
+            new_storage.copy_from(self._host_key_storage)
+            self._host_key_storage = new_storage
 
         self._host_key_storage.save()
 
@@ -326,6 +325,16 @@ class SSHClient:
         """
         if self._transport and self._transport.active:
             raise SSHException("Already connected")
+
+        if compress:
+            from ..exceptions import ConfigurationException
+
+            raise ConfigurationException("Compression is not yet supported")
+
+        if gss_kex:
+            from ..exceptions import ConfigurationException
+
+            raise ConfigurationException("GSSAPI key exchange is not yet supported")
 
         self._hostname = hostname
         self._port = port

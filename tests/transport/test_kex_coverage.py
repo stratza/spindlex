@@ -138,6 +138,24 @@ class TestComputeEcdhExchangeHashGuards:
         with pytest.raises(CryptoException, match="Missing shared secret for ECDH"):
             kex._compute_ecdh_exchange_hash(b"hostkey", b"serverpub", b"sig")
 
+    def test_raises_when_client_version_is_none(self):
+        kex = self._base_kex()
+        _set_kexinit_blobs(kex)
+        kex._transport._client_version = None
+        with pytest.raises(
+            CryptoException, match="Client version string not set for ECDH"
+        ):
+            kex._compute_ecdh_exchange_hash(b"hostkey", b"serverpub", b"sig")
+
+    def test_raises_when_server_version_is_none(self):
+        kex = self._base_kex()
+        _set_kexinit_blobs(kex)
+        kex._transport._server_version = None
+        with pytest.raises(
+            CryptoException, match="Server version string not set for ECDH"
+        ):
+            kex._compute_ecdh_exchange_hash(b"hostkey", b"serverpub", b"sig")
+
     def test_override_client_pub_key_works(self):
         """client_ecdh_public_key parameter overrides self._ecdh_public_key_bytes."""
         kex = self._base_kex()
@@ -209,6 +227,93 @@ class TestComputeExchangeHashGuards:
             client_dh_public_mpint=write_mpint(99),
         )
         assert kex._exchange_hash is not None
+
+    def test_raises_when_client_version_is_none(self):
+        kex = self._base_kex()
+        _set_kexinit_blobs(kex)
+        kex._transport._client_version = None
+        with pytest.raises(
+            CryptoException, match="Client version string not set for DH"
+        ):
+            kex._compute_exchange_hash(b"hostkey", b"serverpub", b"sig")
+
+    def test_raises_when_server_version_is_none(self):
+        kex = self._base_kex()
+        _set_kexinit_blobs(kex)
+        kex._transport._server_version = None
+        with pytest.raises(
+            CryptoException, match="Server version string not set for DH"
+        ):
+            kex._compute_exchange_hash(b"hostkey", b"serverpub", b"sig")
+
+
+# ---------------------------------------------------------------------------
+# _compute_curve25519_exchange_hash guard paths
+# ---------------------------------------------------------------------------
+
+
+class TestComputeCurve25519ExchangeHashGuards:
+    def _base_kex(self) -> KeyExchange:
+        kex, _ = _make_kex()
+        from spindlex.protocol.utils import write_mpint
+
+        kex._shared_secret = write_mpint(99)
+        return kex
+
+    def test_raises_when_client_version_is_none(self):
+        kex = self._base_kex()
+        _set_kexinit_blobs(kex)
+        kex._transport._client_version = None
+        with pytest.raises(
+            CryptoException, match="Client version string not set for Curve25519"
+        ):
+            kex._compute_curve25519_exchange_hash(
+                b"hostkey", b"\x04" + b"\xaa" * 32, b"serverpub"
+            )
+
+    def test_raises_when_server_version_is_none(self):
+        kex = self._base_kex()
+        _set_kexinit_blobs(kex)
+        kex._transport._server_version = None
+        with pytest.raises(
+            CryptoException, match="Server version string not set for Curve25519"
+        ):
+            kex._compute_curve25519_exchange_hash(
+                b"hostkey", b"\x04" + b"\xaa" * 32, b"serverpub"
+            )
+
+    def test_raises_when_client_kexinit_is_none(self):
+        kex = self._base_kex()
+        kex._client_kexinit = None
+        kex._server_kexinit = b"\x02" * 16
+        with pytest.raises(
+            CryptoException, match="Missing client KEXINIT for Curve25519"
+        ):
+            kex._compute_curve25519_exchange_hash(
+                b"hostkey", b"\x04" + b"\xaa" * 32, b"serverpub"
+            )
+
+    def test_raises_when_server_kexinit_is_none(self):
+        kex = self._base_kex()
+        kex._client_kexinit = b"\x01" * 16
+        kex._server_kexinit = None
+        with pytest.raises(
+            CryptoException, match="Missing server KEXINIT for Curve25519"
+        ):
+            kex._compute_curve25519_exchange_hash(
+                b"hostkey", b"\x04" + b"\xaa" * 32, b"serverpub"
+            )
+
+    def test_raises_when_shared_secret_is_none(self):
+        kex = self._base_kex()
+        _set_kexinit_blobs(kex)
+        kex._shared_secret = None
+        with pytest.raises(
+            CryptoException, match="Missing shared secret for Curve25519"
+        ):
+            kex._compute_curve25519_exchange_hash(
+                b"hostkey", b"\x04" + b"\xaa" * 32, b"serverpub"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -334,10 +439,7 @@ class TestDHPublicKeyGuard:
         mock_pub.public_numbers.return_value = mock_pub_numbers
         mock_priv.public_key.return_value = mock_pub
 
-        with (
-            patch("spindlex.transport.kex.dh") as mock_dh_module,
-            patch("spindlex.transport.kex.default_backend"),
-        ):
+        with patch("spindlex.transport.kex.dh") as mock_dh_module:
             mock_params = MagicMock()
             mock_params.generate_private_key.return_value = mock_priv
             mock_dh_module.DHParameterNumbers.return_value.parameters.return_value = (
