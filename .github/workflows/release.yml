@@ -20,6 +20,11 @@ on:
           - minor
           - major
           - none
+      recover_published_version:
+        description: "Complete tag and GitHub Release for a version already published to PyPI."
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -99,6 +104,10 @@ jobs:
       - main-security
     if: >
       always() &&
+      (
+        github.event_name != 'workflow_dispatch' ||
+        inputs.recover_published_version == ''
+      ) &&
       needs.plan.outputs.release_needed == 'true' &&
       (
         github.event_name != 'push' ||
@@ -194,6 +203,112 @@ jobs:
             dist-integrity/*
           if-no-files-found: error
 
+  recover-published-release:
+    name: Recover published release
+    if: github.event_name == 'workflow_dispatch' && inputs.recover_published_version != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - id: release-token
+        name: Create release app token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          token: ${{ steps.release-token.outputs.token }}
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11"
+      - name: Install build tooling
+        run: uv pip install --system build twine
+      - id: recovery
+        name: Validate recovery target
+        env:
+          RECOVERY_VERSION: ${{ inputs.recover_published_version }}
+        run: |
+          version="${RECOVERY_VERSION#v}"
+          tag="v$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+          python scripts/sync_project_version.py --check
+          python - <<'PY'
+          import os
+          import tomllib
+
+          version = os.environ["RECOVERY_VERSION"].removeprefix("v")
+          with open("pyproject.toml", "rb") as pyproject:
+              current = tomllib.load(pyproject)["project"]["version"]
+          if current != version:
+              raise SystemExit(
+                  f"Recovery version {version!r} does not match pyproject.toml {current!r}."
+              )
+          PY
+          python scripts/extract_release_notes.py --version "$version" --output release-notes.md
+      - name: Verify PyPI version already exists
+        env:
+          VERSION: ${{ steps.recovery.outputs.version }}
+        run: |
+          python - <<'PY'
+          import os
+          import urllib.error
+          import urllib.request
+
+          version = os.environ["VERSION"]
+          url = f"https://pypi.org/pypi/spindlex/{version}/json"
+          try:
+              with urllib.request.urlopen(url, timeout=30):
+                  print(f"PyPI version {version} exists.")
+          except urllib.error.HTTPError as exc:
+              if exc.code == 404:
+                  raise SystemExit(f"PyPI version {version} does not exist.")
+              raise
+          PY
+      - name: Build and validate recovery artifacts
+        run: |
+          python -m build
+          python -m twine check dist/*
+          python scripts/generate_release_integrity.py --dist dist --output-dir dist-integrity
+      - id: release
+        name: Create missing tag and GitHub Release
+        env:
+          GH_TOKEN: ${{ steps.release-token.outputs.token }}
+          TAG: ${{ steps.recovery.outputs.tag }}
+        run: |
+          {
+            echo ""
+            echo "---"
+            echo ""
+            echo "Recovery run for package artifacts already published to PyPI."
+            echo ""
+            echo "**Full Changelog:** https://github.com/${{ github.repository }}/blob/main/docs/changelog.md"
+          } >> release-notes.md
+
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "::notice::Tag $TAG already exists; continuing to GitHub Release check."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$TAG" -m "Release $TAG"
+            git push origin "$TAG"
+          fi
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::notice::GitHub Release $TAG already exists."
+            exit 0
+          fi
+
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes-file release-notes.md \
+            dist/* \
+            dist-integrity/*
+
   create-release-pr:
     name: Create release-version PR
     needs:
@@ -259,13 +374,24 @@ jobs:
             exit 0
           fi
 
-          if [ "$branch_exists" = "false" ]; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if [ "$branch_exists" = "true" ]; then
+            git fetch origin "$branch"
+            git checkout -B "$branch" "origin/$branch"
+            python scripts/sync_project_version.py --check
+          else
             git checkout -b "$branch"
             python scripts/sync_project_version.py --version "$NEXT_VERSION"
             python scripts/sync_project_version.py --check
-            git add pyproject.toml spindlex/_version.py
+          fi
+
+          python scripts/finalize_changelog_release.py --version "$NEXT_VERSION"
+          git add docs/changelog.md pyproject.toml spindlex/_version.py
+          if git diff --cached --quiet; then
+            echo "::notice::Release branch $branch already has current release metadata."
+          else
             git commit \
               -m "chore(release): $TAG [publish release]" \
               -m "Source PR: #$SOURCE_PR $SOURCE_PR_URL"
@@ -348,17 +474,8 @@ jobs:
         run: uv pip install --system build twine
       - id: prepare
         name: Validate release commit
-        env:
-          TAG: ${{ needs.plan.outputs.tag }}
         run: |
-          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
-            echo "publish_needed=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Tag $TAG already exists; skipping duplicate release."
-            exit 0
-          fi
-
           python scripts/sync_project_version.py --check
-
           echo "publish_needed=true" >> "$GITHUB_OUTPUT"
       - name: Build and validate distributions
         if: steps.prepare.outputs.publish_needed == 'true'
@@ -425,9 +542,6 @@ jobs:
           SOURCE_PR_URL: ${{ needs.plan.outputs.source_pr_url }}
           RELEASE_TYPE: ${{ needs.plan.outputs.release_type }}
         run: |
-          git tag -a "$TAG" -m "Release $TAG"
-          git push origin "$TAG"
-
           python scripts/extract_release_notes.py \
             --version "${{ needs.plan.outputs.next_version }}" \
             --output release-notes.md
@@ -441,6 +555,21 @@ jobs:
             echo ""
             echo "**Full Changelog:** https://github.com/${{ github.repository }}/blob/main/docs/changelog.md"
           } >> release-notes.md
+
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "::notice::Tag $TAG already exists; continuing to GitHub Release check."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$TAG" -m "Release $TAG"
+            git push origin "$TAG"
+          fi
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::notice::GitHub Release $TAG already exists."
+            echo "release_complete=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           gh release create "$TAG" \
             --title "$TAG" \

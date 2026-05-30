@@ -6,10 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+*   Made the protected publish job idempotent after partial PyPI uploads, added a manual recovery mode for already-published versions, configured Git identity before annotated tag creation, and finalized changelog sections for both new and recovered release-version PR branches before release-note extraction.
+
+## [0.7.1] - 2026-05-29
+
 ### Summary
 This maintainer-facing readiness entry documents the repository lifecycle work
-that is pending release assignment. It does not represent a published package
-version by itself.
+released in 0.7.1.
 
 ### Added
 *   Public project policy docs for production usage, compatibility, API stability, release policy, governance, dependency handling, repository settings, CI policy, release operations, release verification, vulnerability response, architecture/security boundaries, logging operations, and public roadmap tracking.
