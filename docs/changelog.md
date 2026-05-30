@@ -11,6 +11,28 @@ This maintainer-facing readiness entry documents the repository lifecycle work
 that is pending release assignment. It does not represent a published package
 version by itself.
 
+## [0.7.2] - Unreleased
+
+### Changed
+*   Removed SHA-1 from `CryptographyBackend.HASH_ALGORITHMS` — SHA-1 now raises `CryptoException` if requested, enforcing the no-SHA-1 security invariant at the backend layer.
+*   Replaced all `default_backend()` calls (`kex.py`, `backend.py`, `pkey.py`) with the implicit default introduced in `cryptography>=36.0.0`, eliminating deprecation warnings.
+*   Moved `_AEAD_CIPHERS` frozenset to module level in `transport.py` — was being re-allocated on every `_build_packet()` call.
+*   Version-string silent fallbacks in `_compute_ecdh_exchange_hash`, `_compute_curve25519_exchange_hash`, and `_compute_exchange_hash` replaced with explicit `CryptoException` guards — a missing version string now fails loudly instead of producing a wrong exchange hash.
+*   Dead `try: … except Exception: raise` wrapper removed from `_perform_dh_group14_sha256`.
+*   `KeyExchange.generate_keys()` deprecated with `DeprecationWarning`; will be removed in v1.0.
+*   `WarningPolicy` docstring corrected to accurately describe TOFU behaviour; `AutoAddPolicy` now emits a `logger.warning` alongside the existing `UserWarning`.
+*   Hardcoded `"utf-8"` literals in `ssh_client.py` replaced with `SSH_STRING_ENCODING`.
+*   Added `[tool.isort]` and `[tool.black]` configs to `pyproject.toml` so both tools align with ruff's formatting style.
+
+### Fixed
+*   `MSG_EXT_INFO = 7` added to `protocol/constants.py`; magic literals `7` and `60` in `transport.py` replaced with named constants (`MSG_EXT_INFO`, `MSG_USERAUTH_PK_OK`).
+*   Dead KEX fallback in `KeyExchange.start_kex()` replaced with an explicit `CryptoException` — the old path would have sent a spurious second `KEXINIT` in server mode.
+*   `assert` statements in crypto and KEX paths replaced with explicit `if … raise CryptoException` guards, which survive Python's `-O` optimisation flag.
+*   `_kex_thread` and `_server_key` declared in `Transport.__init__` — previously only set via `getattr` fallbacks, causing undeclared-attribute mypy warnings.
+*   Misleading `_recv_bytes` lock-ordering comment updated to accurately describe the fast-path vs slow-path locking behaviour.
+*   `SSHClient.save_host_keys()` no longer accesses private `_filename` and `_keys` attributes of `HostKeyStorage`; new `HostKeyStorage.copy_from()` method provides the correct encapsulated API.
+*   `SSHClient.connect()` now raises `ConfigurationException` immediately for `compress=True` and `gss_kex=True` rather than silently ignoring them.
+
 ### Added
 *   Public project policy docs for production usage, compatibility, API stability, release policy, governance, dependency handling, repository settings, CI policy, release operations, release verification, vulnerability response, architecture/security boundaries, logging operations, and public roadmap tracking.
 *   Architecture Decision Records for release policy, documentation layout, supported platforms, and API stability boundaries.
