@@ -114,3 +114,35 @@ class TestHostKeyStorage:
 
         # Test unsupported type
         assert storage._create_key_from_type_and_data("unknown-type", b"data") is None
+
+
+class TestCopyFrom:
+    def test_copy_from_merges_new_hostname(self, tmp_path):
+        src = HostKeyStorage(str(tmp_path / "src"))
+        dst = HostKeyStorage(str(tmp_path / "dst"))
+        key = MagicMock(spec=Ed25519Key)
+        src.add("host1", key)
+        dst.copy_from(src)
+        assert dst.get_all("host1") == [key]
+
+    def test_copy_from_skips_duplicate_keys(self, tmp_path):
+        src = HostKeyStorage(str(tmp_path / "src"))
+        dst = HostKeyStorage(str(tmp_path / "dst"))
+        key = MagicMock(spec=Ed25519Key)
+        src.add("host1", key)
+        dst.add("host1", key)  # already present
+        dst.copy_from(src)
+        assert dst.get_all("host1") == [key]  # not duplicated
+
+    def test_copy_from_appends_new_key_to_existing_hostname(self, tmp_path):
+        src = HostKeyStorage(str(tmp_path / "src"))
+        dst = HostKeyStorage(str(tmp_path / "dst"))
+        key1 = MagicMock(spec=Ed25519Key)
+        key2 = MagicMock(spec=Ed25519Key)
+        dst.add("host1", key1)
+        src.add("host1", key2)
+        dst.copy_from(src)
+        all_keys = dst.get_all("host1")
+        assert key1 in all_keys
+        assert key2 in all_keys
+        assert len(all_keys) == 2

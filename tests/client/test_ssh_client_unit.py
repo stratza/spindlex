@@ -1245,3 +1245,34 @@ class TestAuthenticateKeyFilenameSkippedWhenPkeyAlreadySet:
         with patch("spindlex.client.ssh_client.PKey") as mock_pkey_cls:
             client._authenticate("user", pkey=pkey, key_filename="/path/key")
             mock_pkey_cls.from_private_key_file.assert_not_called()
+
+
+# ===========================================================================
+# SSHClient.save_host_keys - copy_from branch
+# ===========================================================================
+
+
+class TestSaveHostKeys:
+    def test_save_host_keys_same_filename_saves_directly(self, tmp_path):
+        client = SSHClient()
+        filename = str(tmp_path / "known_hosts")
+        client._host_key_storage._filename = filename
+        with patch.object(client._host_key_storage, "save") as mock_save:
+            client.save_host_keys(filename)
+            mock_save.assert_called_once()
+
+    def test_save_host_keys_different_filename_copies_and_saves(self, tmp_path):
+        from spindlex.hostkeys.storage import HostKeyStorage
+
+        client = SSHClient()
+        original_filename = str(tmp_path / "known_hosts_orig")
+        new_filename = str(tmp_path / "known_hosts_new")
+        client._host_key_storage._filename = original_filename
+
+        new_storage = MagicMock(spec=HostKeyStorage)
+        with patch(
+            "spindlex.client.ssh_client.HostKeyStorage", return_value=new_storage
+        ):
+            client.save_host_keys(new_filename)
+            new_storage.copy_from.assert_called_once()
+            new_storage.save.assert_called_once()
