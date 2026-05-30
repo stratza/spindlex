@@ -348,7 +348,7 @@ jobs:
           python-version: "3.11"
       - name: Open protected release-version PR
         env:
-          GH_TOKEN: ${{ steps.release-token.outputs.token }}
+          GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.plan.outputs.tag }}
           NEXT_VERSION: ${{ needs.plan.outputs.next_version }}
           SOURCE_PR: ${{ needs.plan.outputs.source_pr }}
