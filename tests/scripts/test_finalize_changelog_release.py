@@ -56,6 +56,38 @@ def test_finalize_changelog_is_idempotent_for_existing_version():
     assert updated == content
 
 
+def test_finalize_changelog_dates_existing_unreleased_version_section():
+    content = """# Changelog
+
+## [Unreleased]
+
+### Fixed
+*   Release workflow fix.
+
+## [0.7.1] - 2026-05-29
+
+### Fixed
+*   Older fix.
+
+## [0.7.2] - Unreleased
+
+### Changed
+*   Security hardening.
+
+## [0.7.0] - 2026-05-16
+"""
+
+    updated = finalize_changelog_release.finalize_changelog(
+        content, version="0.7.2", release_date="2026-05-30"
+    )
+
+    assert "## [Unreleased]\n\n## [0.7.2] - 2026-05-30" in updated
+    assert updated.index("## [0.7.2]") < updated.index("## [0.7.1]")
+    assert "*   Release workflow fix." in updated
+    assert "*   Security hardening." in updated
+    assert "## [0.7.2] - Unreleased" not in updated
+
+
 def test_finalize_changelog_requires_unreleased_heading():
     try:
         finalize_changelog_release.finalize_changelog(

@@ -6,16 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-05-30
+
 ### Fixed
 *   Made the protected publish job idempotent after partial PyPI uploads, added a manual recovery mode for already-published versions, configured Git identity before annotated tag creation, and finalized changelog sections for both new and recovered release-version PR branches before release-note extraction.
-
-## [0.7.1] - 2026-05-29
-
-### Summary
-This maintainer-facing readiness entry documents the repository lifecycle work
-released in 0.7.1.
-
-## [0.7.2] - Unreleased
 
 ### Changed
 *   Removed SHA-1 from `CryptographyBackend.HASH_ALGORITHMS` — SHA-1 now raises `CryptoException` if requested, enforcing the no-SHA-1 security invariant at the backend layer.
@@ -59,6 +53,12 @@ released in 0.7.1.
 
 ### Verification
 *   Read the Docs continues to build from `.readthedocs.yaml` through `mkdocs.yml`; newly added public docs are explicitly surfaced in the MkDocs navigation rather than being included by the Read the Docs config directly.
+
+## [0.7.1] - 2026-05-29
+
+### Summary
+This maintainer-facing readiness entry documents the repository lifecycle work
+released in 0.7.1.
 
 ## [0.7.0] - 2026-05-16
 
