@@ -61,6 +61,16 @@ validation runs jobs one after another:
 The compatibility matrix itself is also serialized: Ubuntu versions run in one
 job, then Windows, then macOS.
 
+Windows and macOS smoke jobs pin explicit GitHub-hosted runner images instead
+of floating `*-latest` labels. Windows validates on `windows-2025-vs2026`, and
+macOS validates on `macos-26`, so hosted-runner image migrations do not change
+the tested platform silently.
+
+GitHub's Automatic Dependency Submission workflow is repository-managed rather
+than checked into `.github/workflows`. The repository-level `.python-version`
+pins that dynamic workflow to Python `3.11`, matching the primary CI and
+release tooling version.
+
 ## Promotion Rules
 
 During beta, new heavy checks can start as manual or scheduled. Before v1 RC,

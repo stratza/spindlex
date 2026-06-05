@@ -22,6 +22,8 @@ Last audited for the v1 readiness work:
 - merge methods: squash and rebase
 - GitHub Actions: enabled, allowed actions set to all
 - SHA pinning enforcement: disabled
+- Automatic Dependency Submission: enabled; Python detection uses the
+  repository `.python-version` file
 - Dependabot alerts: enabled
 - secret scanning: enabled
 - environments: none

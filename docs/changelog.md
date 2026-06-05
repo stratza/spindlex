@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Changed
+*   Updated GitHub Actions pins for Node 24-compatible action releases while keeping full commit-SHA hardening: `actions/checkout` 6.0.3, `actions/setup-python` 6.2.0, `actions/upload-artifact` 7.0.1, `actions/create-github-app-token` 3.2.0, and `github/codeql-action` 4.36.1.
+*   Pinned compatibility smoke runners to `windows-2025-vs2026` and `macos-26`, and added `.python-version` so GitHub's Automatic Dependency Submission uses Python 3.11 instead of the ambient runner `PATH`.
+
 ## [0.7.2] - 2026-05-30
 
 ### Fixed
