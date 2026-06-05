@@ -17,8 +17,8 @@ SpindleX is intended to be OS independent at the library layer.
 | Platform | Current validation |
 | --- | --- |
 | Linux | full unit matrix and Docker-backed SSH/SFTP integration |
-| macOS | Python 3.11 unit smoke coverage |
-| Windows | Python 3.11 unit smoke coverage |
+| macOS | Python 3.11 unit smoke coverage on `macos-26` |
+| Windows | Python 3.11 unit smoke coverage on `windows-2025-vs2026` |
 
 OS independent does not mean every operating-system SSH setup is validated. It
 means the runtime library avoids platform-specific assumptions where practical.

@@ -104,7 +104,7 @@ jobs:
   windows-smoke:
     name: Windows Python 3.11 smoke
     needs: ubuntu-python
-    runs-on: windows-latest
+    runs-on: windows-2025-vs2026
     timeout-minutes: 20
     permissions:
       actions: read
@@ -144,7 +144,7 @@ jobs:
   macos-smoke:
     name: macOS Python 3.11 smoke
     needs: windows-smoke
-    runs-on: macos-latest
+    runs-on: macos-26
     timeout-minutes: 20
     permissions:
       actions: read
