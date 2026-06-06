@@ -1,13 +1,3 @@
-# SpindleX
-
-SpindleX is a typed Python SSHv2 and SFTP library for async automation,
-secure file transfer, port forwarding, and controlled SSH/SFTP server workflows.
-It targets Python 3.9+ and focuses on modern SSH algorithms, strict host key
-verification, minimal runtime dependencies, and a clear public API.
-
-Use SpindleX when you need Python-native SSH/SFTP automation with modern
-security defaults, first-class `asyncio`, and production-facing documentation.
-
 <div align="center">
 
 <img src="https://capsule-render.vercel.app/api?type=waving&amp;color=gradient&amp;customColorList=18,18,18,48,25,52,18,18,18&amp;height=200&amp;section=header&amp;text=SpindleX&amp;fontSize=80&amp;fontColor=bb86fc&amp;fontAlignY=45&amp;desc=High-Performance%20SSH%20and%20SFTP%20for%20Python&amp;descSize=22&amp;descColor=b39ddb&amp;descAlignY=70&amp;animation=fadeIn" width="100%" />
@@ -29,9 +19,18 @@ security defaults, first-class `asyncio`, and production-facing documentation.
 
 </div>
 
+<!--
+SpindleX is a typed Python SSHv2 and SFTP library for async automation, secure
+file transfer, port forwarding, and controlled SSH/SFTP server workflows. It
+targets Python 3.9+ and focuses on modern SSH algorithms, strict host key
+verification, minimal runtime dependencies, first-class asyncio support, and a
+clear public API. Use SpindleX when you need Python-native SSH/SFTP automation
+with modern security defaults and production-facing documentation.
+-->
+
 ---
 
-## Overview
+## ⚡ Overview
 
 **SpindleX** is a modern SSH protocol implementation for Python 3.9+. It is
 designed for high-performance automation and secure file transfers, providing a
@@ -40,7 +39,7 @@ clean alternative to legacy SSH libraries.
 > [!NOTE]
 > **0.7.x - ChaCha20-Poly1305 & SFTP throughput era.** This release line adds full `chacha20-poly1305@openssh.com` support as the preferred cipher, adaptive SFTP write chunks via `limits@openssh.com` (up to 255 KB), and a hardened async transport. Review [SECURITY.md](SECURITY.md), [production usage expectations](docs/production-usage.md), and [compatibility policy](docs/compatibility.md) before deploying in production-facing workflows.
 
-### Key Features
+### 🔥 Key Features
 
 - 🚀 **High Performance**: Adaptive SFTP write chunks up to 255 KB via `limits@openssh.com` negotiation, pipelined transfers, and zero-copy internal buffering.
 - 🔒 **ChaCha20-Poly1305**: Preferred AEAD cipher - no separate MAC pass, full Terrapin-defense strict-KEX, on par with leading SSH libraries.
@@ -52,7 +51,7 @@ clean alternative to legacy SSH libraries.
 
 ---
 
-## Use SpindleX When
+## ✅ Use SpindleX When
 
 - You need SSH command execution or SFTP automation from Python.
 - You want both synchronous and `asyncio` client APIs in one package.
@@ -60,14 +59,14 @@ clean alternative to legacy SSH libraries.
 - You want a small dependency surface backed by the `cryptography` package.
 - You need a library with public production, compatibility, security, and release policies.
 
-## Not the Right Fit When
+## 🚫 Not the Right Fit When
 
 - You need universal compatibility with legacy SSH servers or weak algorithms.
 - You need production use of unknown-host auto-acceptance policies.
 - You need every OpenSSH server feature or appliance-specific SSH behavior.
 - You need a stable `1.0.0` API today; SpindleX is still in beta.
 
-## Why SpindleX?
+## 💎 Why SpindleX?
 
 - 💼 **Business Friendly**: MIT Licensed. Permissive use for commercial and proprietary projects.
 - 📖 **Maintainable Code**: Modular architecture designed for clarity and easier security auditing.
@@ -76,7 +75,7 @@ clean alternative to legacy SSH libraries.
 
 ---
 
-## Positioning
+## 🧭 Positioning
 
 | Need | SpindleX fit |
 |:---|:---|
@@ -92,7 +91,7 @@ protocol behavior over broad legacy compatibility.
 
 ---
 
-## Tech Stack
+## 🛠️ Tech Stack
 
 <div align="left">
 
@@ -108,7 +107,7 @@ protocol behavior over broad legacy compatibility.
 
 ---
 
-## Quick Start
+## 🚀 Quick Start
 
 ### Installation
 
@@ -159,7 +158,7 @@ asyncio.run(main())
 
 ---
 
-## Performance Benchmarks
+## 📊 Performance Benchmarks
 
 SpindleX is optimized for high-throughput environments. The 0.7.x line brings SFTP upload throughput in line with leading SSH libraries and adds ChaCha20-Poly1305 as the preferred cipher.
 
@@ -178,7 +177,7 @@ SpindleX is optimized for high-throughput environments. The 0.7.x line brings SF
 
 ---
 
-## Security
+## 🛡️ Security
 
 - **Verification Enforced**: Host key verification is mandatory by default.
 - **Log Sanitization**: Credentials and sensitive data are automatically filtered from logs.
@@ -189,7 +188,7 @@ SpindleX is optimized for high-throughput environments. The 0.7.x line brings SF
 
 ---
 
-## Documentation
+## 📚 Documentation
 
 - [Quick Start](https://spindlex.readthedocs.io/en/latest/quickstart/)
 - [User Guide](https://spindlex.readthedocs.io/en/latest/user_guide/)
@@ -199,7 +198,7 @@ SpindleX is optimized for high-throughput environments. The 0.7.x line brings SF
 - [Compatibility](https://spindlex.readthedocs.io/en/latest/compatibility/)
 - [Security](https://spindlex.readthedocs.io/en/latest/security/)
 
-## Contributing
+## 🤝 Contributing
 
 Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the GitHub entry point and [docs/contributing.md](docs/contributing.md) for the maintained guide.
 

@@ -12,13 +12,13 @@ license = "MIT"
 license-files = ["LICENSE"]
 authors = [
     {name = "Stratza Labs"},
-    {name = "David Azani"},
-    {name = "Adi Roth"}
+    {name = "David Azani", email = "david@stratza.com"},
+    {name = "Adi Roth", email = "adi@stratza.com"}
 ]
 maintainers = [
     {name = "Stratza Labs"},
-    {name = "David Azani"},
-    {name = "Adi Roth"}
+    {name = "David Azani", email = "david@stratza.com"},
+    {name = "Adi Roth", email = "adi@stratza.com"}
 ]
 keywords = ["ssh", "sftp", "client", "server", "cryptography", "security", "automation", "devops", "asyncio", "high-performance", "remote-execution", "file-transfer", "modern-ssh", "secure-shell"]
 classifiers = [
