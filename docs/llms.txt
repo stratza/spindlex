@@ -1,0 +1,48 @@
+# SpindleX
+
+SpindleX is a typed Python SSHv2 and SFTP library for async automation,
+secure file transfer, port forwarding, and controlled SSH/SFTP server workflows.
+
+Install:
+
+```bash
+pip install spindlex
+```
+
+Primary links:
+
+- Documentation: https://spindlex.readthedocs.io/
+- Source: https://github.com/stratza/spindlex
+- PyPI: https://pypi.org/project/spindlex/
+- Changelog: https://github.com/stratza/spindlex/blob/main/docs/changelog.md
+- Security policy: https://github.com/stratza/spindlex/security/policy
+
+Core public APIs:
+
+- `spindlex.SSHClient`
+- `spindlex.AsyncSSHClient`
+- `spindlex.SFTPClient`
+- `spindlex.AsyncSFTPClient`
+- `spindlex.SSHServer`
+- `spindlex.SFTPServer`
+- `spindlex.SSHServerManager`
+
+Key docs:
+
+- Quick Start: /quickstart/
+- User Guide: /user_guide/
+- SFTP Guide: /user_guide/sftp/
+- Cookbook: /cookbook/
+- API Reference: /api_reference/
+- Security: /security/
+- Compatibility: /compatibility/
+- Production Usage: /production-usage/
+
+Security summary:
+
+- Unknown host keys are rejected by default.
+- Users should load and manage trusted host keys explicitly.
+- Modern algorithms are preferred.
+- Legacy weak algorithms are excluded from normal negotiation.
+- `AutoAddPolicy` is only for disposable test environments.
+

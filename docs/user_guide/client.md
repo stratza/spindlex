@@ -30,8 +30,8 @@ The SSH client is the primary interface for connecting to SSH servers and execut
 
     # AsyncSSHClient uses a similar configuration but is designed for asyncio
     async with AsyncSSHClient() as client:
-        # Configuration is often handled during connect
-        pass
+        # Default policy is RejectPolicy - load ~/.ssh/known_hosts first.
+        client.get_host_keys().load()
     ```
 
 ## Connection Methods
@@ -204,6 +204,7 @@ Local port forwarding allows you to forward a port on your local machine to a po
 
     async def main():
         async with AsyncSSHClient() as client:
+            client.get_host_keys().load()
             await client.connect('jump-host.example.com', username='user')
             
             # Forward local port 8080 to remote-server.internal:80

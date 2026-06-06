@@ -12,13 +12,13 @@ license = "MIT"
 license-files = ["LICENSE"]
 authors = [
     {name = "Stratza Labs"},
-    {name = "David Azani", email = "david@stratza.com"},
-    {name = "Adi Roth", email = "adi@stratza.com"}
+    {name = "David Azani"},
+    {name = "Adi Roth"}
 ]
 maintainers = [
     {name = "Stratza Labs"},
-    {name = "David Azani", email = "david@stratza.com"},
-    {name = "Adi Roth", email = "adi@stratza.com"}
+    {name = "David Azani"},
+    {name = "Adi Roth"}
 ]
 keywords = ["ssh", "sftp", "client", "server", "cryptography", "security", "automation", "devops", "asyncio", "high-performance", "remote-execution", "file-transfer", "modern-ssh", "secure-shell"]
 classifiers = [
@@ -92,6 +92,8 @@ Documentation = "https://spindlex.readthedocs.io/"
 Repository = "https://github.com/stratza/spindlex"
 Issues = "https://github.com/stratza/spindlex/issues"
 Changelog = "https://github.com/stratza/spindlex/blob/main/docs/changelog.md"
+Security = "https://github.com/stratza/spindlex/security/policy"
+Source = "https://github.com/stratza/spindlex"
 
 [project.scripts]
 spindlex-keygen = "spindlex.tools.keygen:main"

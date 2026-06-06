@@ -1,6 +1,9 @@
 # SpindleX
 
-Welcome to SpindleX's documentation! SpindleX is a modern, high-performance SSHv2 and SFTP client/server library.
+SpindleX is a typed Python SSHv2 and SFTP library for async automation,
+secure file transfer, port forwarding, and controlled SSH/SFTP server workflows.
+It targets Python 3.9+ and focuses on modern SSH algorithms, strict host key
+verification, minimal runtime dependencies, and a clear public API.
 
 [![PR Gate](https://img.shields.io/github/actions/workflow/status/stratza/spindlex/ci-pr.yml?branch=main&style=flat-square&label=PR%20Gate)](https://github.com/stratza/spindlex/actions/workflows/ci-pr.yml)
 [![Compatibility](https://img.shields.io/github/actions/workflow/status/stratza/spindlex/ci-matrix.yml?branch=main&style=flat-square&label=Compatibility)](https://github.com/stratza/spindlex/actions/workflows/ci-matrix.yml)
@@ -53,12 +56,13 @@ pip install spindlex
 
     async def run():
         async with AsyncSSHClient() as client:
+            client.get_host_keys().load()
             await client.connect('example.com', username='user')
             stdin, stdout, stderr = await client.exec_command('ls -la')
             print(await stdout.read())
 
     asyncio.run(run())
-```
+    ```
 
 ## Navigation
 

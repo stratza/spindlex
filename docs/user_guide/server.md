@@ -43,13 +43,11 @@ class MySSHServer(SSHServer):
 Use `SSHServerManager` to bind the server to a port and start accepting connections.
 
 ```python
-import socket
 from spindlex import SSHServerManager
 from spindlex.crypto import PKey
 
 # Load or generate server host key
 server_key = PKey.generate(key_type='ed25519')
-```
 
 # Initialize interface and manager
 interface = MySSHServer()

@@ -38,6 +38,7 @@ with SSHClient() as client:
 from spindlex import SSHClient
 
 with SSHClient() as client:
+    client.get_host_keys().load()
     client.connect('server.example.com', username='admin')
     
     with client.open_sftp() as sftp:
@@ -73,6 +74,7 @@ def run_sudo(client, command, password):
     return stdout.read().decode()
 
 with SSHClient() as client:
+    client.get_host_keys().load()
     client.connect('server01', username='admin')
     result = run_sudo(client, "apt-get update", "my-secret-pass")
     print(result)
@@ -89,6 +91,7 @@ from spindlex import AsyncSSHClient
 async def run_on_server(hostname, command):
     try:
         async with AsyncSSHClient() as client:
+            client.get_host_keys().load()
             await client.connect(hostname, username='admin')
             stdin, stdout, stderr = await client.exec_command(command)
             
@@ -118,6 +121,7 @@ Connect to a target host through a bastion (jump) host.
 from spindlex import SSHClient
 
 with SSHClient() as bastion:
+    bastion.get_host_keys().load()
     bastion.connect('bastion.example.com', username='gatekeeper')
     
     # Open a direct channel to the internal target through the bastion
@@ -129,6 +133,7 @@ with SSHClient() as bastion:
 
     # Connect to target using the channel as a socket
     with SSHClient() as target:
+        target.get_host_keys().load()
         target.connect(
             'internal-target.lan', 
             username='admin', 
@@ -146,6 +151,7 @@ Stream remote log files to your local console in real-time.
 from spindlex import SSHClient
 
 with SSHClient() as client:
+    client.get_host_keys().load()
     client.connect('prod-app-01', username='devops')
     
     stdin, stdout, stderr = client.exec_command('tail -f /var/log/nginx/access.log')
@@ -167,6 +173,7 @@ For high-security or high-compliance environments, you can tighten the rekeying 
 from spindlex import SSHClient
 
 with SSHClient() as client:
+    client.get_host_keys().load()
     client.connect('secure-host', username='audit-user')
     
     # Rekey every 100MB or every 15 minutes
@@ -207,6 +214,7 @@ def interactive_handler(title, instructions, prompts):
     return answers
 
 with SSHClient() as client:
+    client.get_host_keys().load()
     # This will trigger the interactive_handler if the server requests it
     client.connect(
         'mfa-enabled-host', 
@@ -223,6 +231,7 @@ Authenticate using Kerberos tickets (SSO) in enterprise environments.
 from spindlex import SSHClient
 
 with SSHClient() as client:
+    client.get_host_keys().load()
     # Set gss_auth=True to attempt Kerberos authentication
     client.connect(
         'kerberos-host.internal', 
@@ -266,6 +275,7 @@ def backup_config(hostname, remote_path, local_dir):
     local_path = f"{local_dir}/{hostname}_{timestamp}.conf"
     
     with SSHClient() as client:
+        client.get_host_keys().load()
         client.connect(hostname, username='admin')
         with client.open_sftp() as sftp:
             sftp.get(remote_path, local_path)

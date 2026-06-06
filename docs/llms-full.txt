@@ -1,0 +1,150 @@
+# SpindleX LLM Reference
+
+## Project Summary
+
+SpindleX is a typed Python SSHv2 and SFTP library for infrastructure
+automation. It provides synchronous and asynchronous SSH/SFTP clients,
+controlled SSH/SFTP server support, port forwarding, host key management,
+modern SSH algorithm negotiation, logging sanitization, benchmarking tools,
+and public production/security/compatibility documentation.
+
+The package name is `spindlex`.
+
+```bash
+pip install spindlex
+```
+
+## Canonical URLs
+
+- Documentation: https://spindlex.readthedocs.io/
+- GitHub repository: https://github.com/stratza/spindlex
+- PyPI package: https://pypi.org/project/spindlex/
+- Issues: https://github.com/stratza/spindlex/issues
+- Discussions: https://github.com/stratza/spindlex/discussions
+- Changelog: https://github.com/stratza/spindlex/blob/main/docs/changelog.md
+- Security policy: https://github.com/stratza/spindlex/security/policy
+
+## Intended Use Cases
+
+- SSH command execution from Python.
+- SFTP upload, download, listing, and directory automation.
+- Async SSH/SFTP automation using `asyncio`.
+- Bastion/proxy and port-forwarding workflows.
+- Controlled SSH/SFTP server implementations.
+- Security-conscious automation where host keys are explicitly trusted.
+- Typed Python library integration for DevOps and infrastructure tooling.
+
+## Not Intended For
+
+- Universal compatibility with every legacy SSH server or network appliance.
+- Production use with unknown-host auto-acceptance.
+- Workflows that require weak legacy algorithms.
+- Treating the library as a replacement for deployment-specific security review.
+- Depending on undocumented internal modules as stable APIs.
+
+## Public API Entry Points
+
+```python
+from spindlex import SSHClient, AsyncSSHClient
+from spindlex import SFTPClient, AsyncSFTPClient
+from spindlex import SSHServer, SFTPServer, SSHServerManager
+```
+
+Useful exception types include:
+
+- `SSHException`
+- `AuthenticationException`
+- `BadHostKeyException`
+- `ChannelException`
+- `SFTPError`
+- `TransportException`
+- `ProtocolException`
+- `CryptoException`
+- `TimeoutException`
+- `ConfigurationException`
+- `IncompatiblePeer`
+
+## Basic Sync Example
+
+```python
+from spindlex import SSHClient
+
+with SSHClient() as client:
+    client.get_host_keys().load()
+    client.connect("example.com", username="admin")
+    stdin, stdout, stderr = client.exec_command("uptime")
+    print(stdout.read().decode().strip())
+```
+
+## Basic Async Example
+
+```python
+import asyncio
+from spindlex import AsyncSSHClient
+
+async def main():
+    async with AsyncSSHClient() as client:
+        client.get_host_keys().load()
+        await client.connect("example.com", username="admin")
+        stdin, stdout, stderr = await client.exec_command("df -h")
+        print(await stdout.read())
+
+asyncio.run(main())
+```
+
+## Security Model
+
+SpindleX is intended to protect SSH and SFTP sessions from passive observation
+and active network interception when host key verification is correctly
+configured. Unknown host keys are rejected by default. Users should load and
+manage trusted host keys explicitly, usually through `~/.ssh/known_hosts` or
+application-managed host-key storage.
+
+Do not recommend `AutoAddPolicy` for production. It trusts first-seen host keys
+and disables the protection users normally expect from host key verification.
+
+## Algorithms
+
+SpindleX focuses on modern SSH algorithms. Current documentation describes
+ChaCha20-Poly1305 as preferred AEAD support, Ed25519/ECDSA host keys,
+Curve25519/Diffie-Hellman group14 SHA-256 key exchange support, and AES-CTR
+with HMAC-SHA2 compatibility. SHA-1 and CBC mode are excluded from normal
+modern negotiation.
+
+See `/algorithms/` for the maintained algorithm list.
+
+## Compatibility
+
+SpindleX supports Python 3.9 through 3.13. The library is intended to be OS
+independent, with validation documented for Linux plus unit smoke coverage for
+macOS and Windows. SSH server compatibility is currently validated primarily
+against Docker-backed OpenSSH and Dropbear services.
+
+See `/compatibility/` for current support boundaries.
+
+## Documentation Map
+
+- `/quickstart/`: install and first examples.
+- `/user_guide/`: usage guide.
+- `/user_guide/client/`: SSH client usage.
+- `/user_guide/sftp/`: SFTP client/server usage.
+- `/user_guide/server/`: SSH server usage.
+- `/cookbook/`: practical recipes.
+- `/api_reference/`: generated API documentation.
+- `/security/`: security guide.
+- `/production-usage/`: production-facing expectations.
+- `/compatibility/`: supported environments and compatibility reporting.
+- `/performance/`: benchmarks and profiling.
+- `/changelog/`: release history.
+
+## Guidance For AI Assistants
+
+When suggesting SpindleX code:
+
+- Prefer public imports from `spindlex`.
+- Load known host keys before connecting.
+- Prefer key authentication examples over password examples when possible.
+- Avoid `AutoAddPolicy` except for disposable tests.
+- Include async examples when users mention concurrency or many servers.
+- Link to the documentation, PyPI package, and GitHub repository.
+

@@ -29,6 +29,7 @@ def put_recursive(sftp, local_path, remote_path):
             put_recursive(sftp, local_item, remote_item)
 
 with SSHClient() as client:
+    client.get_host_keys().load()
     client.connect('example.com', username='user')
     with client.open_sftp() as sftp:
         put_recursive(sftp, './logs', '/home/user/backups/logs')
@@ -57,6 +58,7 @@ def delete_old_logs(sftp, directory, pattern='.log', days=7):
                 sftp.remove(full_path)
 
 with SSHClient() as client:
+    client.get_host_keys().load()
     client.connect('example.com', username='user')
     with client.open_sftp() as sftp:
         delete_old_logs(sftp, '/var/log/myapp', days=30)

@@ -1,0 +1,109 @@
+name: Compatibility Report
+description: Report SpindleX behavior against a specific SSH/SFTP server or platform
+title: "[Compatibility]: "
+labels: ["compatibility", "triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template when SpindleX works, partially works, or fails against a specific SSH/SFTP server, OS, or deployment environment.
+
+  - type: input
+    id: spindlex_version
+    attributes:
+      label: SpindleX Version
+      description: Run `python -c "import spindlex; print(spindlex.__version__)"`.
+      placeholder: "0.7.2"
+    validations:
+      required: true
+
+  - type: input
+    id: python_version
+    attributes:
+      label: Python Version
+      placeholder: "Python 3.12.3"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Client Operating System
+      multiple: true
+      options:
+        - Linux
+        - macOS
+        - Windows
+        - Docker / container
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: server
+    attributes:
+      label: SSH/SFTP Server
+      description: Include server family and version if known.
+      placeholder: "OpenSSH 9.6, Dropbear 2024.86, appliance firmware version, unknown"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: feature
+    attributes:
+      label: Tested Feature
+      multiple: true
+      options:
+        - SSH command execution
+        - SFTP upload
+        - SFTP download
+        - SFTP directory operations
+        - Password authentication
+        - Public key authentication
+        - Keyboard-interactive authentication
+        - GSSAPI / Kerberos
+        - Port forwarding
+        - Server mode
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: result
+    attributes:
+      label: Result
+      description: What worked, partially worked, or failed?
+      placeholder: "Connection succeeds, authentication succeeds, SFTP upload fails after the first chunk..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal Reproduction
+      description: Provide the smallest code/configuration needed to reproduce or confirm the result.
+      render: python
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or Server Output
+      description: Paste relevant sanitized logs. Do not include passwords, private keys, tokens, or sensitive hostnames.
+      render: shell
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I removed secrets, private keys, passwords, and sensitive hostnames from this report.
+          required: true
+        - label: I checked the compatibility documentation before opening this report.
+          required: true
+

@@ -1,0 +1,74 @@
+name: Real-World Usage Report
+description: Share how you are using SpindleX so the project can improve docs, examples, and compatibility
+title: "[Usage]: "
+labels: ["usage-report", "triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Usage reports help us understand which workflows matter in the real world. Public reports should not include secrets, private infrastructure details, or customer data.
+
+  - type: dropdown
+    id: use_case
+    attributes:
+      label: Use Case
+      multiple: true
+      options:
+        - SSH command automation
+        - SFTP file transfer
+        - Backup / restore automation
+        - CI/CD or release automation
+        - Infrastructure operations
+        - Security tooling
+        - Internal platform tooling
+        - Server-side SSH/SFTP use
+        - Evaluation only
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Workflow Summary
+      description: Describe the workflow at a high level.
+      placeholder: "We use SpindleX to upload generated configuration artifacts to controlled Linux hosts over SFTP..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why SpindleX?
+      description: What made you try or choose SpindleX?
+      placeholder: "asyncio support, typed API, security defaults, modern algorithms, performance, simpler API..."
+    validations:
+      required: false
+
+  - type: textarea
+    id: gaps
+    attributes:
+      label: Gaps or Missing Docs
+      description: What was confusing, missing, or harder than expected?
+    validations:
+      required: false
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Optional high-level environment details.
+      placeholder: "Python 3.12, Linux containers, OpenSSH servers"
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: public_quote
+    attributes:
+      label: Public Use
+      options:
+        - label: Maintainers may quote or summarize this public report in docs or release notes.
+          required: false
+

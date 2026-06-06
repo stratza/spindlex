@@ -71,6 +71,8 @@ pip install spindlex[gssapi]
 
     async def run_command():
         async with AsyncSSHClient() as client:
+            # Default policy is RejectPolicy - load ~/.ssh/known_hosts first.
+            client.get_host_keys().load()
             await client.connect(
                 hostname='example.com',
                 username='myuser',
@@ -118,6 +120,7 @@ pip install spindlex[gssapi]
     from spindlex import SSHClient
 
     with SSHClient() as client:
+        client.get_host_keys().load()  # load ~/.ssh/known_hosts
         client.connect('example.com', username='user', password='pass')
 
         with client.open_sftp() as sftp:
@@ -141,6 +144,7 @@ pip install spindlex[gssapi]
 
     async def transfer_files():
         async with AsyncSSHClient() as client:
+            client.get_host_keys().load()  # load ~/.ssh/known_hosts
             await client.connect('example.com', username='user', password='pass')
             
             async with client.open_sftp() as sftp:
@@ -161,6 +165,7 @@ from spindlex import (
 )
 
 client = SSHClient()
+client.get_host_keys().load()
 
 try:
     client.connect('example.com', username='user', password='wrong')

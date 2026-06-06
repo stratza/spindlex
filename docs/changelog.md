@@ -6,9 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+*   Added public `llms.txt`, `llms-full.txt`, and `robots.txt` docs assets so Read the Docs exposes AI/search-oriented project summaries and crawler guidance.
+*   Added compatibility-report and real-world usage-report issue templates to turn user adoption feedback into structured compatibility, docs, and roadmap inputs.
+
 ### Changed
 *   Updated GitHub Actions pins for Node 24-compatible action releases while keeping full commit-SHA hardening: `actions/checkout` 6.0.3, `actions/setup-python` 6.2.0, `actions/upload-artifact` 7.0.1, `actions/create-github-app-token` 3.2.0, and `github/codeql-action` 4.36.1.
 *   Pinned compatibility smoke runners to `windows-2025-vs2026` and `macos-26`, and added `.python-version` so GitHub's Automatic Dependency Submission uses Python 3.11 instead of the ambient runner `PATH`.
+*   Reworked the README and docs landing page to put a machine-readable SpindleX value proposition, fit/no-fit guidance, documentation links, and safer known-host examples ahead of visual GitHub presentation.
+*   Removed unused `stratza.com` maintainer email metadata from the package configuration and updated citation metadata to match the current 0.7.2 release.
+
+### Fixed
+*   Fixed malformed documentation code fences in the docs landing page and server guide, and aligned quickstart/cookbook snippets with the default strict host-key policy.
 
 ## [0.7.2] - 2026-05-30
 
