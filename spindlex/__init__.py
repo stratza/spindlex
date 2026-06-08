@@ -32,6 +32,8 @@ from .logging.sanitizer import SanitizingFilter as _SanitizingFilter
 from .logging.sanitizer import configure_sanitizing_logging
 from .server.sftp_server import SFTPServer
 from .server.ssh_server import SSHServer, SSHServerManager
+from .transport.async_forwarding import AsyncPortForwardingManager
+from .transport.forwarding import PortForwardingManager
 from .transport.transport import Transport
 
 # Install the sanitizing filter on the spindlex root logger.
@@ -51,6 +53,8 @@ __all__ = [
     "SFTPServer",
     "SSHServerManager",
     "Transport",
+    "PortForwardingManager",
+    "AsyncPortForwardingManager",
     "SSHException",
     "AuthenticationException",
     "BadHostKeyException",

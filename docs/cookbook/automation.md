@@ -19,14 +19,14 @@ with SSHClient() as client:
     client.get_host_keys().load()
 
     client.connect('server.example.com', username='admin', password='password')
-    
+
     # exec_command returns (stdin, stdout, stderr)
     stdin, stdout, stderr = client.exec_command('ls -l /tmp')
-    
+
     # stdout and stderr are iterable and return lines
     for line in stdout:
         print(line.strip())
-        
+
     # Get the exit status (0 usually means success)
     exit_status = stdout.recv_exit_status()
     print(f"Command exited with status: {exit_status}")
@@ -39,14 +39,14 @@ from spindlex import SSHClient
 
 with SSHClient() as client:
     client.connect('server.example.com', username='admin')
-    
+
     with client.open_sftp() as sftp:
         # Upload a file
         sftp.put('local_file.txt', '/home/admin/remote_file.txt')
-        
+
         # Download a file
         sftp.get('/var/log/syslog', 'local_syslog.log')
-        
+
         # List directory
         print("Files in home:")
         for filename in sftp.listdir('/home/admin'):
@@ -65,10 +65,10 @@ def run_sudo(client, command, password):
     Executes a command with sudo, handling the password prompt.
     """
     stdin, stdout, stderr = client.exec_command(f"sudo -S {command}")
-    
+
     # Provide password when sudo asks
     stdin.write(f"{password}\n")
-    
+
     # Read the response
     return stdout.read().decode()
 
@@ -91,11 +91,11 @@ async def run_on_server(hostname, command):
         async with AsyncSSHClient() as client:
             await client.connect(hostname, username='admin')
             stdin, stdout, stderr = await client.exec_command(command)
-            
+
             # AsyncChannelFile is also async iterable
             async for line in stdout:
                 print(f"[{hostname}] {line.strip()}")
-                
+
             status = await stdout.recv_exit_status()
             print(f"[{hostname}] Finished with status {status}")
     except Exception as e:
@@ -119,19 +119,19 @@ from spindlex import SSHClient
 
 with SSHClient() as bastion:
     bastion.connect('bastion.example.com', username='gatekeeper')
-    
+
     # Open a direct channel to the internal target through the bastion
     transport = bastion.get_transport()
     dest_addr = ('internal-target.lan', 22)
-    
+
     # Create a direct-tcpip channel (tunnels TCP to target)
     channel = transport.open_channel("direct-tcpip", dest_addr)
 
     # Connect to target using the channel as a socket
     with SSHClient() as target:
         target.connect(
-            'internal-target.lan', 
-            username='admin', 
+            'internal-target.lan',
+            username='admin',
             sock=channel
         )
         stdin, stdout, stderr = target.exec_command('hostname')
@@ -147,9 +147,9 @@ from spindlex import SSHClient
 
 with SSHClient() as client:
     client.connect('prod-app-01', username='devops')
-    
+
     stdin, stdout, stderr = client.exec_command('tail -f /var/log/nginx/access.log')
-    
+
     print("--- Streaming Remote Logs (Ctrl+C to stop) ---")
     try:
         # ChannelFile is iterable line-by-line
@@ -168,21 +168,21 @@ from spindlex import SSHClient
 
 with SSHClient() as client:
     client.connect('secure-host', username='audit-user')
-    
+
     # Rekey every 100MB or every 15 minutes
     transport = client.get_transport()
     transport.set_rekey_policy(
-        bytes_limit=100 * 1024 * 1024, 
+        bytes_limit=100 * 1024 * 1024,
         time_limit=900
     )
-    
+
     # Continue with secure operations
     # ...
 ```
 
 ## Keyboard-Interactive Authentication {#interactive-auth}
 
-Use a custom handler to respond to server-driven authentication challenges.
+Use a custom handler to respond to server-driven authentication challenges (e.g. MFA/OTP prompts).
 
 ```python
 import getpass
@@ -192,12 +192,14 @@ def interactive_handler(title, instructions, prompts):
     """
     Handles keyboard-interactive challenges.
     'prompts' is a list of (prompt_text, echo_boolean) tuples.
+    Returns a list of answer strings in the same order.
     """
     answers = []
-    print(f"\n--- {title} ---")
+    if title:
+        print(f"\n--- {title} ---")
     if instructions:
         print(instructions)
-        
+
     for text, echo in prompts:
         if echo:
             ans = input(text)
@@ -207,12 +209,44 @@ def interactive_handler(title, instructions, prompts):
     return answers
 
 with SSHClient() as client:
-    # This will trigger the interactive_handler if the server requests it
+    # Pass the handler via keyboard_interactive_handler; it is called
+    # automatically when the server issues a keyboard-interactive challenge.
     client.connect(
-        'mfa-enabled-host', 
-        username='user', 
-        handler=interactive_handler
+        'mfa-enabled-host',
+        username='user',
+        keyboard_interactive_handler=interactive_handler,
     )
+    stdin, stdout, stderr = client.exec_command('whoami')
+    print(stdout.read().decode().strip())
+```
+
+The async equivalent uses the same parameter on `AsyncSSHClient.connect()`:
+
+```python
+import asyncio, getpass
+from spindlex import AsyncSSHClient
+
+def interactive_handler(title, instructions, prompts):
+    answers = []
+    if title:
+        print(f"\n--- {title} ---")
+    if instructions:
+        print(instructions)
+    for text, echo in prompts:
+        answers.append(input(text) if echo else getpass.getpass(text))
+    return answers
+
+async def main():
+    async with AsyncSSHClient() as client:
+        await client.connect(
+            'mfa-enabled-host',
+            username='user',
+            keyboard_interactive_handler=interactive_handler,
+        )
+        stdin, stdout, stderr = await client.exec_command('whoami')
+        print(await stdout.read())
+
+asyncio.run(main())
 ```
 
 ## GSSAPI/Kerberos Authentication {#gssapi-auth}
@@ -225,7 +259,7 @@ from spindlex import SSHClient
 with SSHClient() as client:
     # Set gss_auth=True to attempt Kerberos authentication
     client.connect(
-        'kerberos-host.internal', 
+        'kerberos-host.internal',
         username='jdoe',
         gss_auth=True,
         gss_deleg_creds=True
@@ -244,7 +278,7 @@ import os
 def rotate_key(client, new_key_path):
     with open(new_key_path, 'r') as f:
         new_key = f.read().strip()
-    
+
     # Append new key to authorized_keys
     client.exec_command(f'echo "{new_key}" >> ~/.ssh/authorized_keys')
     print("New key added.")
@@ -264,7 +298,7 @@ from datetime import datetime
 def backup_config(hostname, remote_path, local_dir):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     local_path = f"{local_dir}/{hostname}_{timestamp}.conf"
-    
+
     with SSHClient() as client:
         client.connect(hostname, username='admin')
         with client.open_sftp() as sftp:

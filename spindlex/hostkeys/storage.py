@@ -92,8 +92,9 @@ class HostKeyStorage:
         key_type = parts[1]
         key_data = parts[2]
 
-        # Parse hostnames (can be comma-separated)
-        hostnames = [h.strip() for h in hostnames_part.split(",")]
+        # Parse hostnames (can be comma-separated); normalise to lowercase
+        # because DNS hostnames are case-insensitive.
+        hostnames = [h.strip().lower() for h in hostnames_part.split(",")]
 
         try:
             # Decode base64 key data
@@ -201,6 +202,7 @@ class HostKeyStorage:
             hostname: Server hostname
             key: Host key to store
         """
+        hostname = hostname.lower()
         if hostname not in self._keys:
             self._keys[hostname] = []
 
@@ -224,6 +226,7 @@ class HostKeyStorage:
         Returns:
             Host key if found, None otherwise
         """
+        hostname = hostname.lower()
         if hostname in self._keys and self._keys[hostname]:
             if key_type:
                 # Find matching key type
@@ -245,7 +248,7 @@ class HostKeyStorage:
         Returns:
             List of host keys
         """
-        return self._keys.get(hostname, [])
+        return self._keys.get(hostname.lower(), [])
 
     def copy_from(self, other: "HostKeyStorage") -> None:
         """

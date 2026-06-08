@@ -86,6 +86,26 @@ class Channel:
         """
         return self._timeout
 
+    def fileno(self) -> int:
+        """Return -1: channels have no OS file descriptor.
+
+        Required so that a Channel can be passed as the ``sock`` argument to
+        :class:`~spindlex.transport.transport.Transport` and used as a ProxyJump
+        socket for bastion-host connections.  The transport guards all
+        ``fcntl``/``select`` paths with ``fileno() != -1`` checks, so returning
+        -1 safely bypasses those paths while still allowing ``send``/``recv``
+        to work normally.
+        """
+        return -1
+
+    def getsockname(self) -> tuple[str, int]:
+        """Return a dummy local address; channels have no bound port."""
+        return ("", 0)
+
+    def getpeername(self) -> tuple[str, int]:
+        """Return a dummy remote address; channels carry no peer IP directly."""
+        return ("", 0)
+
     def send(self, data: Union[bytes, str], timeout: Optional[float] = None) -> int:
         """
         Send data through channel.

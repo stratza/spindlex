@@ -10,6 +10,56 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 *   Updated GitHub Actions pins for Node 24-compatible action releases while keeping full commit-SHA hardening: `actions/checkout` 6.0.3, `actions/setup-python` 6.2.0, `actions/upload-artifact` 7.0.1, `actions/create-github-app-token` 3.2.0, and `github/codeql-action` 4.36.1.
 *   Pinned compatibility smoke runners to `windows-2025-vs2026` and `macos-26`, and added `.python-version` so GitHub's Automatic Dependency Submission uses Python 3.11 instead of the ambient runner `PATH`.
 
+## [0.7.3] - 2026-06-08
+
+This release closes all remaining v1.0.0 blockers identified in the pre-release code review. It fixes six confirmed bugs in the async surface, hardens two security-sensitive code paths, completes the async/sync API parity gap, makes ProxyJump connections functional end-to-end, and corrects a broken documentation example that has been present since 0.5.0.
+
+### Fixed
+
+*   **`AsyncSFTPClient.mkdir()` silently ignored the `mode` argument** — `attrs.st_mode` (a local Python `os.stat` field) was assigned instead of `attrs.permissions` (the SFTP wire field). Remote directories were created with no permissions set regardless of the `mode` argument passed by the caller.
+*   **Async host key policy errors swallowed** — when a custom host key policy raised an exception to signal rejection, `AsyncSSHClient._verify_host_key()` logged a warning and continued connecting. It now re-raises as `SSHException`, matching the behavior of the sync `SSHClient` and enforcing fail-closed semantics.
+*   **`AsyncSSHClient.connect()` silently accepted `compress=True`** — the parameter was present in the signature but never validated. The sync client already raises `ConfigurationException`; the async path now does the same.
+*   **RSA host key TOFU matching broken across algorithm name variants** — `ssh-rsa`, `rsa-sha2-256`, and `rsa-sha2-512` refer to the same underlying RSA key pair but were treated as distinct key types during known-host lookup. A key stored as `ssh-rsa` was not recognised when the server later negotiated `rsa-sha2-256`, causing `RejectPolicy` connections to fail for known hosts after a server upgrade.
+*   **`Transport._remote_version` not initialised in `__init__`** — the attribute was only assigned inside `_recv_version()`, so any code path that accessed it before the handshake completed (e.g. exception handlers, logging) raised `AttributeError` instead of a clean `TransportException`.
+*   **`PKey.__eq__` caught all exceptions and returned `False`** — a broad `except Exception: return False` masked programming errors such as key corruption that should propagate. Now only `CryptoException` (covering the expected "no key loaded" uninitialized state) is suppressed; all other exceptions propagate to the caller.
+*   **Host key storage used case-sensitive hostname lookup** — DNS hostnames are case-insensitive, but `HostKeyStorage` stored and matched them exactly as received. `Server.example.com` and `server.example.com` resolved to different storage slots. All hostnames are now normalised to lowercase on `add()`, `get()`, and `get_all()`.
+*   **SFTP limits negotiation caught too broadly** — `SFTPClient._query_limits()` used `except Exception: pass` to suppress failures from servers that do not support `limits@openssh.com`. This also silenced unexpected programming errors. Narrowed to `(SFTPError, SSHException, struct.error, OSError)`.
+*   **`AsyncSSHClient.connect(sock=Channel)` silently misconfigured transport** — passing a `Channel` object as the `sock` argument set `reader, writer = None, None` and skipped the `connect_existing()` call, leaving the transport in a broken state with no error. Now raises `SSHException` immediately with a message directing users to the sync `SSHClient` for ProxyJump connections.
+*   **Keyboard-interactive auth doc example was broken** — `automation.md` showed `client.connect(..., handler=interactive_handler)` but `handler` has never been a parameter of `connect()`. The example would raise `TypeError` at runtime.
+
+### Security
+
+*   **Host key comparison is now constant-time** — `SSHClient._verify_host_key()` and `AsyncSSHClient._verify_host_key()` switched from Python's `==` operator to `hmac.compare_digest()` for host key byte comparison, consistent with how MAC verification is already handled throughout the transport layer.
+
+### Added
+
+*   **`keyboard_interactive_handler` parameter on `connect()`** — both `SSHClient.connect()` and `AsyncSSHClient.connect()` now accept a `keyboard_interactive_handler` callable. When provided, keyboard-interactive authentication is attempted automatically after publickey/password if those methods fail or are absent. The handler receives `(title, instructions, prompts)` where `prompts` is a list of `(text, echo)` tuples and must return a list of answer strings.
+*   **`AsyncSFTPClient.getcwd()`** — mirrors the existing `SFTPClient.getcwd()` for async/sync API parity.
+*   **`SFTPClient.truncate(path, size)` and `AsyncSFTPClient.truncate(path, size)`** — resize or empty a remote file using `SSH_FXP_SETSTAT` with `SSH_FILEXFER_ATTR_SIZE`.
+*   **`Channel.fileno()`, `Channel.getsockname()`, `Channel.getpeername()`** — socket-interface methods on `Channel` that enable a `direct-tcpip` channel to be passed as the `sock=` argument to `SSHClient.connect()` for ProxyJump / bastion-host connections. `fileno()` returns `-1` (no OS file descriptor), which causes the transport's `fileno() != -1` guards to skip cleanly.
+*   **`PortForwardingManager` and `AsyncPortForwardingManager` exported from `spindlex.__init__`** — port forwarding has been a working feature since 0.6.x but the manager classes were not importable from the public package namespace.
+
+### Removed
+
+*   **`KeyExchange.generate_keys()`** — removed as announced in the v0.7.2 deprecation notice. Access session keys via the `Transport` object after key exchange completes.
+
+### Changed
+
+*   **`AsyncSSHClient.connect()` `pkey` type hint** — corrected from `Any | None` to `PKey | None`, matching the sync `SSHClient` and enabling correct IDE autocomplete and mypy checking for callers.
+*   **Pre-commit mypy hook** — updated `mirrors-mypy` rev from `v1.3.0` to `v1.11.0` and replaced the broken `types-all` additional dependency (which pulled in the yanked `types-pkg-resources`) with `cryptography`, which is the only runtime dependency that requires stub resolution.
+
+### Documentation
+
+*   **Keyboard-interactive auth cookbook example** (`docs/cookbook/automation.md`) rewritten to use the new `keyboard_interactive_handler=` parameter on `connect()`. Added an async variant of the example. Both sync and async paths now work as written.
+*   **README ProxyJump claim** updated from "Support for ProxyJump (bastion hosts)" (vague) to "ProxyJump (bastion hosts) via `direct-tcpip` channels and TCP port forwarding" (accurate and explains the mechanism).
+
+### Verification
+
+*   Production readiness benchmark: **53/53 PASS** — zero warnings, zero failures across all sections (protocol correctness, session lifecycle, exec reliability, SFTP integrity, concurrency correctness, failure classification, negotiation determinism, performance stability).
+*   Cipher comparison benchmark: SpindleX handshakes 53–65 ms vs paramiko 87–90 ms vs asyncssh 60–67 ms; SFTP uploads 14–15 ms vs paramiko 54–58 ms vs asyncssh 19–23 ms; SFTP downloads 15–18 ms vs paramiko 356–368 ms vs asyncssh 15–17 ms.
+*   Unit test suite: **1761 passed, 1 skipped, 0 failed**.
+*   Static analysis: ruff — 0 violations; mypy strict — 0 errors (46 source files).
+
 ## [0.7.2] - 2026-05-30
 
 ### Fixed
