@@ -5,6 +5,7 @@ High-level SSH client for establishing connections, executing commands,
 and managing SSH sessions with comprehensive authentication support.
 """
 
+import hmac
 import logging
 import socket
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union
@@ -299,6 +300,9 @@ class SSHClient:
         gss_host: Optional[str] = None,
         rekey_bytes_limit: Optional[int] = None,
         rekey_time_limit: Optional[float] = None,
+        keyboard_interactive_handler: Optional[
+            Callable[[str, str, list[tuple[str, bool]]], list[str]]
+        ] = None,
     ) -> None:
         """
         Connect to SSH server and authenticate.
@@ -319,6 +323,11 @@ class SSHClient:
             gss_host: GSSAPI hostname override
             rekey_bytes_limit: Number of bytes before rekeying (default: 1GB)
             rekey_time_limit: Seconds before rekeying (default: 1 hour)
+            keyboard_interactive_handler: Callback for keyboard-interactive
+                auth challenges.  Receives (title, instructions, prompts) where
+                prompts is a list of (text, echo) tuples; must return a list of
+                answer strings.  When provided, keyboard-interactive is tried
+                after publickey/password if those methods fail or are absent.
 
         Raises:
             SSHException: If connection or authentication fails
@@ -387,6 +396,7 @@ class SSHClient:
                     gss_auth,
                     gss_host,
                     gss_deleg_creds,
+                    keyboard_interactive_handler=keyboard_interactive_handler,
                 )
 
             self._logger.info(f"Successfully connected to {hostname}:{port}")
@@ -441,16 +451,26 @@ class SSHClient:
                 self._logger.debug(f"Found known host key(s) for {hostname}")
                 server_key_bytes = server_key.get_public_key_bytes()
 
-                # Filter known keys by algorithm to avoid false positives for different key types
-                known_keys_of_type = [
-                    k
-                    for k in known_keys
-                    if k.algorithm_name == server_key.algorithm_name
-                ]
+                # RSA keys may be stored under any of three algorithm names
+                # (ssh-rsa, rsa-sha2-256, rsa-sha2-512) that all share the same
+                # underlying public key material. Broaden the filter so a key
+                # stored as ssh-rsa is still recognised when the server presents
+                # rsa-sha2-256, and vice versa.
+                _RSA_ALGORITHMS = {"ssh-rsa", "rsa-sha2-256", "rsa-sha2-512"}
+                if server_key.algorithm_name in _RSA_ALGORITHMS:
+                    known_keys_of_type = [
+                        k for k in known_keys if k.algorithm_name in _RSA_ALGORITHMS
+                    ]
+                else:
+                    known_keys_of_type = [
+                        k
+                        for k in known_keys
+                        if k.algorithm_name == server_key.algorithm_name
+                    ]
 
                 if known_keys_of_type:
                     if not any(
-                        k.get_public_key_bytes() == server_key_bytes
+                        hmac.compare_digest(k.get_public_key_bytes(), server_key_bytes)
                         for k in known_keys_of_type
                     ):
                         raise BadHostKeyException(
@@ -585,6 +605,9 @@ class SSHClient:
         gss_auth: bool = False,
         gss_host: Optional[str] = None,
         gss_deleg_creds: bool = False,
+        keyboard_interactive_handler: Optional[
+            Callable[[str, str, list[tuple[str, bool]]], list[str]]
+        ] = None,
     ) -> None:
         """
         Authenticate with the server.
@@ -655,12 +678,25 @@ class SSHClient:
             except Exception as e:
                 self._logger.debug(f"Password authentication failed: {e}")
 
+        # Try keyboard-interactive if a handler was provided and nothing else worked
+        if keyboard_interactive_handler and not authenticated:
+            try:
+                self._logger.debug(
+                    f"Attempting keyboard-interactive authentication for {username}"
+                )
+                self.auth_keyboard_interactive(username, keyboard_interactive_handler)
+                authenticated = True
+            except Exception as e:
+                self._logger.debug(f"Keyboard-interactive authentication failed: {e}")
+
         if not authenticated:
             auth_methods = []
             if pkey:
                 auth_methods.append("publickey")
             if password:
                 auth_methods.append("password")
+            if keyboard_interactive_handler:
+                auth_methods.append("keyboard-interactive")
 
             raise AuthenticationException(
                 f"Authentication failed for {username} using methods: {', '.join(auth_methods) if auth_methods else 'none'}"

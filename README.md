@@ -34,7 +34,7 @@
 - 🔒 **ChaCha20-Poly1305**: Preferred AEAD cipher - no separate MAC pass, full Terrapin-defense strict-KEX, on par with leading SSH libraries.
 - 🔄 **Native Async**: First-class `asyncio` support via `AsyncSSHClient` and `AsyncSFTPClient`.
 - 🛡️ **Secure by Default**: Modern primitives only - Ed25519, ECDSA, ChaCha20-Poly1305, AES-CTR. Legacy/weak ciphers are not negotiated.
-- 🔗 **Advanced Tunneling**: Support for **ProxyJump** (bastion hosts) and TCP port forwarding.
+- 🔗 **Advanced Tunneling**: ProxyJump (bastion hosts) via `direct-tcpip` channels and TCP port forwarding.
 - 📂 **Recursive SFTP**: Native support for recursive directory uploads and downloads.
 - 🏷️ **Fully Typed**: Comprehensive type hints for IDE integration and static analysis.
 

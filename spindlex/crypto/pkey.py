@@ -166,7 +166,8 @@ class PKey:
             return False
         try:
             return self.get_public_key_bytes() == other.get_public_key_bytes()
-        except Exception:
+        except CryptoException:
+            # One or both keys are uninitialised — treat as not equal.
             return False
 
     @classmethod

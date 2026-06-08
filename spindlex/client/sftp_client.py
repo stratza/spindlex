@@ -12,7 +12,7 @@ import threading
 import time
 from typing import Any, Optional
 
-from ..exceptions import SFTPError
+from ..exceptions import SFTPError, SSHException
 from ..protocol.sftp_constants import (
     SFTP_MAX_PACKET_SIZE,
     SFTP_MAX_READ_SIZE,
@@ -314,8 +314,8 @@ class SFTPClient:
                     )
                     if max_write > 0:
                         self._max_write_len = int(max_write)
-        except Exception:  # nosec B110
-            pass  # non-fatal: fall back to _DEFAULT_MAX_WRITE
+        except (SFTPError, SSHException, struct.error, OSError):
+            pass  # non-fatal: server does not support limits@openssh.com
 
     def _get_next_request_id(self) -> int:
         """Get next request ID for SFTP messages."""
@@ -814,6 +814,39 @@ class SFTPClient:
             if isinstance(e, SFTPError):
                 raise
             raise SFTPError(f"Chmod operation failed: {e}", filename=path)
+
+    def truncate(self, path: str, size: int) -> None:
+        """
+        Truncate (or extend) a remote file to the given size in bytes.
+
+        Args:
+            path: Remote file path
+            size: Target size in bytes (0 empties the file)
+
+        Raises:
+            SFTPError: If the operation fails
+        """
+        try:
+            attrs = SFTPAttributes()
+            attrs.flags = SSH_FILEXFER_ATTR_SIZE
+            attrs.size = size
+
+            request_id = self._get_next_request_id()
+            from ..protocol.sftp_messages import SFTPSetStatMessage
+
+            setstat_msg = SFTPSetStatMessage(request_id, path, attrs)
+            response = self._send_request_and_wait_response(setstat_msg)
+
+            if isinstance(response, SFTPStatusMessage):
+                if response.status_code != SSH_FX_OK:
+                    raise SFTPError.from_status(response.status_code, response.message)
+            else:
+                raise SFTPError("Unexpected response to truncate request")
+
+        except Exception as e:
+            if isinstance(e, SFTPError):
+                raise
+            raise SFTPError(f"Truncate operation failed: {e}", filename=path) from e
 
     def mkdir(self, path: str, mode: int = 0o777) -> None:
         """

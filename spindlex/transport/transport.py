@@ -217,6 +217,7 @@ class Transport:
         self._session_id: Optional[bytes] = None
         self._server_version: Optional[str] = None
         self._client_version: Optional[str] = None
+        self._remote_version: Optional[str] = None
 
         # Crypto state
         self._crypto_backend = default_crypto_backend
@@ -897,6 +898,7 @@ class Transport:
             maximum_packet_size = msg.maximum_packet_size  # type: ignore[attr-defined]
             type_specific_data = msg.type_specific_data  # type: ignore[attr-defined]
 
+            assert sender_channel is not None
             if channel_type == CHANNEL_SESSION:
                 self._handle_session_open(
                     sender_channel, initial_window_size, maximum_packet_size
@@ -2378,7 +2380,7 @@ class Transport:
                 raise TransportException("MAC verification failed")
 
         # Return complete packet
-        return length_data + packet_data
+        return bytes(length_data + packet_data)
 
     def _recv_bytes(self, length: int) -> bytes:
         """
