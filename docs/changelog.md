@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+*   **Migration guide** (`docs/migration/0.x-to-1.0.md`) — covers all breaking changes, removed APIs, changed defaults, host key behavior changes, and sync/async differences between the 0.x beta line and 1.0.0. Required v1.0.0 release-candidate artifact.
+*   **Comparison page** (`docs/comparison.md`) — honest feature matrix and loopback benchmark comparison against Paramiko and AsyncSSH, including unsupported features and known limitations.
+*   **Canary runbook** (`meta/internal/lifecycle/canary-runbook.md`) — documents canary environment setup, test coverage, failure classification, fallback policy, and explicit v1.0.0 fallback approval.
+
 ### Changed
 *   Updated GitHub Actions pins for Node 24-compatible action releases while keeping full commit-SHA hardening: `actions/checkout` 6.0.3, `actions/setup-python` 6.2.0, `actions/upload-artifact` 7.0.1, `actions/create-github-app-token` 3.2.0, and `github/codeql-action` 4.36.1.
 *   Pinned compatibility smoke runners to `windows-2025-vs2026` and `macos-26`, and added `.python-version` so GitHub's Automatic Dependency Submission uses Python 3.11 instead of the ambient runner `PATH`.

@@ -127,6 +127,10 @@ nav:
       - Tools: api_reference/tools.md
       - Logging: api_reference/logging.md
       - Exceptions: api_reference/exceptions.md
+  - Migration:
+      - Overview: migration/index.md
+      - 0.x to 1.0: migration/0.x-to-1.0.md
+  - Comparison: comparison.md
   - Algorithms: algorithms.md
   - Security: security.md
   - Performance: performance.md
