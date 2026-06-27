@@ -4,16 +4,35 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.0] - 2026-06-27
+
+This is the first stable release of SpindleX. It marks the graduation from beta to a production-ready library with a frozen public API surface, full security documentation, a migration guide from the 0.x line, and validated performance benchmarks.
 
 ### Added
-*   **Migration guide** (`docs/migration/0.x-to-1.0.md`) — covers all breaking changes, removed APIs, changed defaults, host key behavior changes, and sync/async differences between the 0.x beta line and 1.0.0. Required v1.0.0 release-candidate artifact.
+*   **Migration guide** (`docs/migration/0.x-to-1.0.md`) — covers all breaking changes, removed APIs, changed defaults, host key behavior changes, and sync/async differences between the 0.x beta line and 1.0.0. A beta user can upgrade without diffing source code.
 *   **Comparison page** (`docs/comparison.md`) — honest feature matrix and loopback benchmark comparison against Paramiko and AsyncSSH, including unsupported features and known limitations.
-*   **Canary runbook** (`meta/internal/lifecycle/canary-runbook.md`) — documents canary environment setup, test coverage, failure classification, fallback policy, and explicit v1.0.0 fallback approval.
+*   **Canary runbook** (`meta/internal/lifecycle/canary-runbook.md`) — canary environment spec, test coverage checklist, failure classification, fallback policy, and explicit v1.0.0 fallback approval.
+
+### Fixed
+*   **Docs examples missing host key loading** — every `SSHClient` and `AsyncSSHClient` example in the user guide, cookbook, and quickstart now calls `client.get_host_keys().load()` before `connect()`. Previously, examples that used the default `RejectPolicy` would fail for any user whose server was not already trusted, and examples that omitted host key loading implicitly recommended connecting without verification. Affected files: `docs/quickstart.md`, `docs/user_guide/client.md`, `docs/user_guide/sftp.md`, `docs/cookbook/automation.md`, `docs/cookbook/sftp_recipes.md`.
+*   **Broken code block in `docs/user_guide/server.md`** — the `SSHServerManager` setup example had a premature closing fence that left `interface = MySSHServer()` and the remainder of the setup outside the code block, rendering as raw Python mixed into prose. Fixed into a single continuous code block. Removed unused `import socket`.
 
 ### Changed
+*   **Version bumped to 1.0.0** — `pyproject.toml` and `spindlex/_version.py` updated from `0.7.3`.
+*   **PyPI project URLs** — added `Security` (`https://github.com/stratza/spindlex/security/policy`) and `Source` (`https://github.com/stratza/spindlex`) to `[project.urls]` in `pyproject.toml` so both links appear on the PyPI project page.
+*   **`check-yaml` pre-commit hook** — added `--unsafe` flag so commits that touch `mkdocs.yml` are not blocked by the hook's inability to parse MkDocs Python YAML tags.
 *   Updated GitHub Actions pins for Node 24-compatible action releases while keeping full commit-SHA hardening: `actions/checkout` 6.0.3, `actions/setup-python` 6.2.0, `actions/upload-artifact` 7.0.1, `actions/create-github-app-token` 3.2.0, and `github/codeql-action` 4.36.1.
 *   Pinned compatibility smoke runners to `windows-2025-vs2026` and `macos-26`, and added `.python-version` so GitHub's Automatic Dependency Submission uses Python 3.11 instead of the ambient runner `PATH`.
+
+### Documentation
+*   `docs/migration/` section added to MkDocs navigation.
+*   `docs/comparison.md` added to MkDocs navigation.
+
+### Verification
+*   Unit test suite: **1761 passed, 1 skipped, 0 failed** (carried from 0.7.3; no runtime changes in this release).
+*   Static analysis: ruff — 0 violations; mypy strict — 0 errors.
+*   Production readiness benchmark: **53/53 PASS** (carried from 0.7.3).
+*   `python -m build && twine check dist/*` — passes (run as part of RC final validation).
 
 ## [0.7.3] - 2026-06-08
 
