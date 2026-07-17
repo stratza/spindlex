@@ -6,8 +6,9 @@ not a claim that every SSH feature or deployment environment is risk-free.
 
 ## Security Status
 
-SpindleX is still pre-`1.0.0` beta software. Treat it as a library under active
-stabilization:
+SpindleX `1.0.0` is the first stable release: the public API surface is frozen
+under semantic versioning. Stable does not mean risk-free — apply the same
+operational discipline you would to any security-sensitive dependency:
 
 * Pin exact versions in production-facing automation.
 * Review changelog entries before upgrading.

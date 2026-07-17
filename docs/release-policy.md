@@ -1,11 +1,11 @@
 # Versioning, Deprecation, and Support Policy
 
-## Before 1.0.0
+## Before 1.0.0 (historical)
 
-SpindleX is in beta. The `0.x` line may still make compatibility-affecting
-changes when needed for protocol correctness, security, or v1 readiness.
+During the `0.x` beta line, compatibility-affecting changes were allowed when
+needed for protocol correctness, security, or v1 readiness.
 
-PR type metadata controls beta release planning:
+PR type metadata controlled beta release planning:
 
 | PR type | Beta release behavior |
 | --- | --- |

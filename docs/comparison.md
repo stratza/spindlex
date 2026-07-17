@@ -24,8 +24,8 @@ superiority. Every library has trade-offs.
 | **ChaCha20-Poly1305** | Yes (preferred) | Yes | Yes |
 | **Compression** | No | Yes (zlib) | Yes (zlib) |
 | **GSSAPI** | Optional (Unix) | Yes | Yes |
-| **SSH server** | Yes (beta) | Yes | Yes |
-| **SFTP server** | Yes (beta) | Yes | Yes |
+| **SSH server** | Yes (controlled environments) | Yes | Yes |
+| **SFTP server** | Yes (controlled environments) | Yes | Yes |
 | **SCP** | No | Yes | No |
 | **Agent forwarding** | No | Yes | Yes |
 | **X11 forwarding** | No | Yes | No |
@@ -143,7 +143,7 @@ These features are intentionally out of scope for SpindleX 1.0:
 
 ## Honest Limitations
 
-SpindleX is a new library and is still beta-stabilizing. Paramiko has been in
+SpindleX `1.0.0` is the project's first stable release. Paramiko has been in
 production for over 15 years. AsyncSSH has been production-used for over 10
 years. SpindleX does not have that track record yet.
 
