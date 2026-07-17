@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+*   **`cryptography` minimum raised to 48.0.1** - versions below 48.0.1 ship wheels bundling a vulnerable OpenSSL ([GHSA-537c-gmf6-5ccf](https://github.com/advisories/GHSA-537c-gmf6-5ccf), high severity). SpindleX previously allowed `>=46.0.7`, so environments pinned inside the vulnerable range could resolve an affected build. This closes the open OpenSSF Scorecard vulnerability alert.
+
 ## [1.0.0] - 2026-07-17
 
 This is the first stable release of SpindleX. It marks the graduation from beta to a production-ready library with a frozen public API surface, full security documentation, a migration guide from the 0.x line, and validated performance benchmarks. It also closes all findings from a full-project pre-release review, including data-integrity fixes in the SFTP transfer paths and port forwarding.
