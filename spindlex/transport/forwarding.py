@@ -145,24 +145,36 @@ class LocalPortForwarder:
                 if not addr_info:
                     raise SSHException(f"Could not resolve bind address: {local_host}")
 
-                # Use the first available address info
-                af, socktype, proto, canonname, sa = addr_info[0]
+                # Try each resolved address until one binds: getaddrinfo may
+                # order an IPv6 entry first (e.g. for "localhost") while
+                # clients connect over IPv4.
+                bind_error: Union[OSError, None] = None
+                for af, socktype, proto, _canonname, sa in addr_info:
+                    # Create listening socket
+                    server_socket = socket.socket(af, socktype, proto)
+                    server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
-                # Create listening socket
-                server_socket = socket.socket(af, socktype, proto)
-                server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                    # For IPv6, try to enable dual-stack if local_host is empty or ::
+                    if af == socket.AF_INET6:
+                        try:
+                            server_socket.setsockopt(
+                                socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0
+                            )
+                        except (AttributeError, OSError):
+                            pass
 
-                # For IPv6, try to enable dual-stack if local_host is empty or ::
-                if af == socket.AF_INET6:
                     try:
-                        server_socket.setsockopt(
-                            socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0
-                        )
-                    except (AttributeError, OSError):
-                        pass
-
-                server_socket.bind(sa)
-                server_socket.listen(socket.SOMAXCONN)
+                        server_socket.bind(sa)
+                        server_socket.listen(socket.SOMAXCONN)
+                        break
+                    except OSError as exc:
+                        bind_error = exc
+                        server_socket.close()
+                        server_socket = None
+                else:
+                    raise bind_error or SSHException(
+                        f"Could not bind to {local_host}:{local_port}"
+                    )
 
                 # Create tunnel object
                 tunnel = ForwardingTunnel(tunnel_id, local_addr, remote_addr, "local")
@@ -346,11 +358,10 @@ class LocalPortForwarder:
                 if not data:
                     break
 
-                # Write data to destination
-                if isinstance(destination, socket.socket):
-                    destination.sendall(data)
-                else:
-                    destination.send(data)
+                # Write data to destination. Channel.send() may send only a
+                # partial chunk (bounded by the remote window and max packet
+                # size), so both socket and Channel must use sendall().
+                destination.sendall(data)
 
         except (OSError, EOFError, SSHException) as e:
             self._logger.info(f"Data relay {relay_id} closed: {e}")
@@ -534,12 +545,18 @@ class RemotePortForwarder:
             origin_addr: Origin address of the connection (may be 2-tuple or 4-tuple)
             dest_addr: Destination address (should match our tunnel)
         """
-        # Find matching tunnel
+        # Find matching tunnel: prefer an exact (address, port) match so that
+        # multiple forwards on the same port with different bind addresses
+        # route correctly; fall back to a port-only match for servers that
+        # report the destination address in a different form.
         tunnel = None
         for t in self._tunnels.values():
-            if t.remote_addr[1] == dest_addr[1]:  # Match by port
-                tunnel = t
-                break
+            if t.remote_addr[1] == dest_addr[1]:
+                if t.remote_addr[0] == dest_addr[0]:
+                    tunnel = t
+                    break
+                if tunnel is None:
+                    tunnel = t
 
         if not tunnel or not tunnel.active:
             self._logger.warning(
@@ -635,11 +652,10 @@ class RemotePortForwarder:
                 if not data:
                     break
 
-                # Write data to destination
-                if isinstance(destination, socket.socket):
-                    destination.sendall(data)
-                else:
-                    destination.send(data)
+                # Write data to destination. Channel.send() may send only a
+                # partial chunk (bounded by the remote window and max packet
+                # size), so both socket and Channel must use sendall().
+                destination.sendall(data)
 
         except (OSError, EOFError, SSHException) as e:
             self._logger.info(f"Data relay {relay_id} closed: {e}")

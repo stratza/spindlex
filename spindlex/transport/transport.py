@@ -265,7 +265,7 @@ class Transport:
         self._kex_in_progress = False
         self._kex = KeyExchange(self)
         self._bytes_since_rekey = 0
-        self._last_rekey_time = time.time()
+        self._last_rekey_time = time.monotonic()
 
         # Timeouts
         self._connect_timeout: float = float(DEFAULT_CONNECT_TIMEOUT)
@@ -1680,7 +1680,7 @@ class Transport:
                 self._kex_in_progress = False
                 self._kex_thread = None
                 self._bytes_since_rekey = 0
-                self._last_rekey_time = time.time()
+                self._last_rekey_time = time.monotonic()
                 self._kex_condition.notify_all()
 
             try:
@@ -1768,7 +1768,7 @@ class Transport:
             # Check byte limit, time limit, or sequence number (rekey every 2^31 packets)
             if (
                 self._bytes_since_rekey >= self._rekey_bytes_limit
-                or (time.time() - self._last_rekey_time) >= self._rekey_time_limit
+                or (time.monotonic() - self._last_rekey_time) >= self._rekey_time_limit
                 or self._sequence_number_out >= REKEY_SEQUENCE_THRESHOLD
                 or self._sequence_number_in >= REKEY_SEQUENCE_THRESHOLD
             ):

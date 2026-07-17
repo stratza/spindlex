@@ -105,6 +105,24 @@ def _make_file_handle(
 
 
 # ---------------------------------------------------------------------------
+# SFTPServer._send_message / _receive_message
+# ---------------------------------------------------------------------------
+
+
+class TestSFTPServerTransport:
+    def test_send_message_sends_all_bytes(self, server, mock_channel):
+        """Responses must use sendall(); Channel.send() may send partially."""
+        msg = SFTPStatusMessage(1, SSH_FX_OK, "ok")
+        server._send_message(msg)
+        mock_channel.sendall.assert_called_once_with(msg.pack())
+
+    def test_receive_message_rejects_oversized_length(self, server, mock_channel):
+        mock_channel.recv_exactly.return_value = (300 * 1024).to_bytes(4, "big")
+        with pytest.raises(SFTPError, match="exceeds maximum"):
+            server._receive_message()
+
+
+# ---------------------------------------------------------------------------
 # SFTPServer.__init__ / _run_server (lines 217-232)
 # ---------------------------------------------------------------------------
 

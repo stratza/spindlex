@@ -153,7 +153,7 @@ class TestLocalPortForwarder:
         source.recv.side_effect = [b"data", b""]
         dest = MagicMock()  # Channel mock
         lpf._relay_data(source, dest, "relay1")
-        dest.send.assert_called_once_with(b"data")
+        dest.sendall.assert_called_once_with(b"data")
 
     def test_relay_data_channel_to_socket(self):
         t = _make_transport()

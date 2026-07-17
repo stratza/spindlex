@@ -108,7 +108,10 @@ class ChannelFile:
         if isinstance(data, str):
             data = data.encode(SSH_STRING_ENCODING)
 
-        return self._channel.send(data)
+        # File-like write() must not drop data: Channel.send() may send only
+        # a partial chunk bounded by the remote window and max packet size.
+        self._channel.sendall(data)
+        return len(data)
 
     def get_exit_status(self) -> int:
         """

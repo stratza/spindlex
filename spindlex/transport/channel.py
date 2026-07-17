@@ -127,7 +127,7 @@ class Channel:
         if isinstance(data, str):
             data = data.encode(SSH_STRING_ENCODING)
 
-        start_time = time.time()
+        start_time = time.monotonic()
 
         # Use effective timeout
         effective_timeout = timeout if timeout is not None else self._timeout
@@ -146,7 +146,7 @@ class Channel:
             while self._remote_window_size <= 0:
                 # Check timeout
                 if effective_timeout is not None:
-                    elapsed = time.time() - start_time
+                    elapsed = time.monotonic() - start_time
                     if elapsed >= effective_timeout:
                         raise ChannelException("Timeout waiting for window space")
                 # Release lock and wait for window adjust or close
@@ -226,7 +226,7 @@ class Channel:
         if nbytes <= 0:
             return b""
 
-        start_time = time.time()
+        start_time = time.monotonic()
         while True:
             with self._lock:
                 # Check if we have data in buffer
@@ -253,7 +253,7 @@ class Channel:
 
                 # Check total timeout
                 if self._timeout is not None:
-                    elapsed = time.time() - start_time
+                    elapsed = time.monotonic() - start_time
                     if elapsed >= self._timeout:
                         raise ChannelException("Timeout receiving data")
 
@@ -269,7 +269,7 @@ class Channel:
             if has_bg_thread:
                 wait_timeout = 0.1
                 if self._timeout is not None:
-                    elapsed = time.time() - start_time
+                    elapsed = time.monotonic() - start_time
                     wait_timeout = max(0, min(0.1, self._timeout - elapsed))
                 self._data_event.wait(timeout=wait_timeout)
                 continue
@@ -280,7 +280,7 @@ class Channel:
                 # channel timeout, _pump() blocks on socket.recv() until a
                 # packet arrives - which is what we want.
                 if self._timeout is not None:
-                    elapsed = time.time() - start_time
+                    elapsed = time.monotonic() - start_time
                     remaining = self._timeout - elapsed
                     if remaining <= 0:
                         raise ChannelException("Timeout receiving data")
@@ -474,10 +474,10 @@ class Channel:
             return self.get_exit_status()
 
         # No background receive thread - pump until exit status arrives.
-        start_time = time.time()
+        start_time = time.monotonic()
         while self._exit_status is None and not self._closed:
             if effective_timeout is not None:
-                elapsed = time.time() - start_time
+                elapsed = time.monotonic() - start_time
                 if elapsed >= effective_timeout:
                     raise ChannelException("Timeout waiting for exit status")
             try:
@@ -543,7 +543,7 @@ class Channel:
         if not want_reply:
             return True
 
-        start_time = time.time()
+        start_time = time.monotonic()
         while True:
             with self._lock:
                 if self._request_success is not None:
@@ -554,7 +554,7 @@ class Channel:
                     )
 
             if self._timeout is not None:
-                elapsed = time.time() - start_time
+                elapsed = time.monotonic() - start_time
                 if elapsed >= self._timeout:
                     raise ChannelException(
                         "Timeout waiting for channel request response"
@@ -565,7 +565,7 @@ class Channel:
             if has_bg_thread:
                 wait_timeout = 0.1
                 if self._timeout is not None:
-                    elapsed = time.time() - start_time
+                    elapsed = time.monotonic() - start_time
                     wait_timeout = max(0, min(0.1, self._timeout - elapsed))
                 self._request_event.wait(timeout=wait_timeout)
                 continue
@@ -617,7 +617,7 @@ class Channel:
         if nbytes <= 0:
             return b""
 
-        start_time = time.time()
+        start_time = time.monotonic()
         while True:
             with self._lock:
                 if self._closed:
@@ -647,7 +647,7 @@ class Channel:
 
                 # Check total timeout
                 if self._timeout is not None:
-                    elapsed = time.time() - start_time
+                    elapsed = time.monotonic() - start_time
                     if elapsed >= self._timeout:
                         raise ChannelException("Timeout receiving stderr data")
 
@@ -661,14 +661,14 @@ class Channel:
             if has_bg_thread:
                 wait_timeout = 0.1
                 if self._timeout is not None:
-                    elapsed = time.time() - start_time
+                    elapsed = time.monotonic() - start_time
                     wait_timeout = max(0, min(0.1, self._timeout - elapsed))
                 self._data_event.wait(timeout=wait_timeout)
                 continue
 
             try:
                 if self._timeout is not None:
-                    elapsed = time.time() - start_time
+                    elapsed = time.monotonic() - start_time
                     remaining = self._timeout - elapsed
                     if remaining <= 0:
                         raise ChannelException("Timeout receiving stderr data")
@@ -780,7 +780,10 @@ class Channel:
             bytes_to_add: Bytes to add to remote window
         """
         with self._lock:
-            self._remote_window_size += bytes_to_add
+            # RFC 4254 section 5.2: the window must not exceed 2^32 - 1.
+            self._remote_window_size = min(
+                self._remote_window_size + bytes_to_add, 0xFFFFFFFF
+            )
             self._window_event.set()
 
     def _handle_request_success(self) -> None:
@@ -921,7 +924,12 @@ class Channel:
             # Unknown request type
             return False
 
-        except Exception:
+        except Exception as e:
+            # Malformed request data or a failing server callback must not
+            # kill the transport loop, but it must not be silent either.
+            self._logger.warning(
+                f"Channel request {request_type!r} handling failed: {e}"
+            )
             return False
 
     def _handle_exit_signal(

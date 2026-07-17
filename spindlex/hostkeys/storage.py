@@ -275,6 +275,8 @@ class HostKeyStorage:
         Returns:
             True if any keys were removed
         """
+        # DNS hostnames are case-insensitive; keys are stored lowercase.
+        hostname = hostname.lower()
         if hostname not in self._keys:
             return False
 

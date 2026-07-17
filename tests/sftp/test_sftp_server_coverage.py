@@ -131,8 +131,8 @@ class TestSFTPHandleReadOSError:
 
 class TestSendMessageError:
     def test_send_message_oserror_raises_sftp_error(self, server):
-        """Channel send raises OSError → wrapped in SFTPError."""
-        server._channel.send.side_effect = OSError("broken pipe")
+        """Channel send raises OSError â†’ wrapped in SFTPError."""
+        server._channel.sendall.side_effect = OSError("broken pipe")
         msg = SFTPStatusMessage(1, SSH_FX_OK, "")
         with pytest.raises(SFTPError, match="Failed to send SFTP message"):
             server._send_message(msg)
@@ -234,7 +234,7 @@ class TestHandleMessageUnknown:
         assert sent.status_code == SSH_FX_OP_UNSUPPORTED
 
     def test_handle_message_unknown_no_request_id_no_send(self, server):
-        """Unknown message with no request_id → no message sent."""
+        """Unknown message with no request_id â†’ no message sent."""
         mock_msg = MagicMock(spec=SFTPMessage)
         mock_msg.request_id = None
 
@@ -250,7 +250,7 @@ class TestHandleMessageUnknown:
 
 class TestHandleOpenMorePaths:
     def test_open_generic_oserror(self, server, temp_root):
-        """Generic OSError (not FileNotFound/Permission/Exists) → SSH_FX_FAILURE (line 594)."""
+        """Generic OSError (not FileNotFound/Permission/Exists) â†’ SSH_FX_FAILURE (line 594)."""
         msg = SFTPOpenMessage(16, "genericerr.txt", SSH_FXF_READ, SFTPAttributes())
         err = OSError("disk full")
         with patch("builtins.open", side_effect=err):
@@ -319,7 +319,7 @@ class TestHandleStatOuter:
 
 class TestHandleLstatOuter:
     def test_lstat_outer_oserror_handler(self, server):
-        """OSError in outer block → SSH_FX_FAILURE (lines 796-799)."""
+        """OSError in outer block â†’ SSH_FX_FAILURE (lines 796-799)."""
         msg = SFTPStatMessage(11, "test.txt")
         with patch.object(server, "_resolve_path", side_effect=OSError("unexpected")):
             with patch.object(server, "_send_message") as send:
@@ -355,7 +355,7 @@ class TestHandleFstatOuter:
 
 class TestHandleSetstatErrors:
     def test_setstat_sftp_error_handler(self, server):
-        """SFTPError from resolve_path → handler (lines 885-888)."""
+        """SFTPError from resolve_path â†’ handler (lines 885-888)."""
         msg = SFTPSetStatMessage(20, "../../outside.txt", SFTPAttributes())
         with patch.object(server, "_send_message") as send:
             server._handle_setstat(msg)
@@ -363,7 +363,7 @@ class TestHandleSetstatErrors:
         assert sent.status_code == SSH_FX_PERMISSION_DENIED
 
     def test_setstat_outer_oserror_handler(self, server):
-        """Unexpected OSError → outer handler (lines 900-903)."""
+        """Unexpected OSError â†’ outer handler (lines 900-903)."""
         msg = SFTPSetStatMessage(21, "test.txt", SFTPAttributes())
         with patch.object(server, "_resolve_path", side_effect=OSError("unexpected")):
             with patch.object(server, "_send_message") as send:
@@ -379,7 +379,7 @@ class TestHandleSetstatErrors:
 
 class TestHandleOpendirErrors:
     def test_opendir_sftp_error_handler(self, server):
-        """SFTPError from resolve_path → handler (lines 941-943 / 967-972)."""
+        """SFTPError from resolve_path â†’ handler (lines 941-943 / 967-972)."""
         msg = SFTPOpenDirMessage(10, "../../outside")
         with patch.object(server, "_send_message") as send:
             server._handle_opendir(msg)
@@ -387,7 +387,7 @@ class TestHandleOpendirErrors:
         assert sent.status_code == SSH_FX_PERMISSION_DENIED
 
     def test_opendir_outer_oserror_handler(self, server):
-        """Unexpected OSError → outer handler (lines 973-976)."""
+        """Unexpected OSError â†’ outer handler (lines 973-976)."""
         msg = SFTPOpenDirMessage(11, ".")
         with patch.object(server, "_resolve_path", side_effect=OSError("unexpected")):
             with patch.object(server, "_send_message") as send:
@@ -403,7 +403,7 @@ class TestHandleOpendirErrors:
 
 class TestHandleReaddirOuter:
     def test_readdir_outer_oserror(self, server):
-        """Unexpected OSError during readdir → failure (lines 1018-1020)."""
+        """Unexpected OSError during readdir â†’ failure (lines 1018-1020)."""
         h = SFTPHandle(b"dh_outer", "/dir", 0, file_obj=None)
         h.dir_entries = []
         h.dir_index = 0
@@ -426,7 +426,7 @@ class TestHandleReaddirOuter:
 
 class TestHandleMkdirErrors:
     def test_mkdir_sftp_error_handler(self, server):
-        """SFTPError from resolve_path → handler (lines 1079-1084)."""
+        """SFTPError from resolve_path â†’ handler (lines 1079-1084)."""
         msg = SFTPMkdirMessage(20, "../../outside", SFTPAttributes())
         with patch.object(server, "_send_message") as send:
             server._handle_mkdir(msg)
@@ -434,7 +434,7 @@ class TestHandleMkdirErrors:
         assert sent.status_code == SSH_FX_PERMISSION_DENIED
 
     def test_mkdir_outer_oserror_handler(self, server):
-        """Unexpected OSError → outer handler (lines 1085-1088)."""
+        """Unexpected OSError â†’ outer handler (lines 1085-1088)."""
         msg = SFTPMkdirMessage(21, "testdir", SFTPAttributes())
         with patch.object(server, "_resolve_path", side_effect=OSError("unexpected")):
             with patch.object(server, "_send_message") as send:
@@ -450,7 +450,7 @@ class TestHandleMkdirErrors:
 
 class TestHandleRmdirErrors:
     def test_rmdir_sftp_error_handler(self, server):
-        """SFTPError from resolve_path → handler."""
+        """SFTPError from resolve_path â†’ handler."""
         msg = SFTPRmdirMessage(10, "../../outside")
         with patch.object(server, "_send_message") as send:
             server._handle_rmdir(msg)
@@ -458,7 +458,7 @@ class TestHandleRmdirErrors:
         assert sent.status_code == SSH_FX_PERMISSION_DENIED
 
     def test_rmdir_outer_oserror_handler(self, server):
-        """Unexpected OSError → outer handler (lines 1139-1142)."""
+        """Unexpected OSError â†’ outer handler (lines 1139-1142)."""
         msg = SFTPRmdirMessage(11, "somedir")
         with patch.object(server, "_resolve_path", side_effect=OSError("unexpected")):
             with patch.object(server, "_send_message") as send:
@@ -474,7 +474,7 @@ class TestHandleRmdirErrors:
 
 class TestHandleRemoveOuter:
     def test_remove_outer_oserror_handler(self, server):
-        """Unexpected OSError → outer handler (lines 1187-1190)."""
+        """Unexpected OSError â†’ outer handler (lines 1187-1190)."""
         msg = SFTPRemoveMessage(10, "somefile.txt")
         with patch.object(server, "_resolve_path", side_effect=OSError("unexpected")):
             with patch.object(server, "_send_message") as send:
@@ -490,7 +490,7 @@ class TestHandleRemoveOuter:
 
 class TestHandleRenameErrors:
     def test_rename_sftp_error_handler(self, server):
-        """SFTPError from resolve_path → handler (lines 1240-1245)."""
+        """SFTPError from resolve_path â†’ handler (lines 1240-1245)."""
         msg = SFTPRenameMessage(10, "../../outside.txt", "dest.txt")
         with patch.object(server, "_send_message") as send:
             server._handle_rename(msg)
@@ -498,7 +498,7 @@ class TestHandleRenameErrors:
         assert sent.status_code == SSH_FX_PERMISSION_DENIED
 
     def test_rename_outer_oserror_handler(self, server):
-        """Unexpected OSError → outer handler (lines 1246-1249)."""
+        """Unexpected OSError â†’ outer handler (lines 1246-1249)."""
         msg = SFTPRenameMessage(11, "src.txt", "dst.txt")
         with patch.object(server, "_resolve_path", side_effect=OSError("unexpected")):
             with patch.object(server, "_send_message") as send:
@@ -514,7 +514,7 @@ class TestHandleRenameErrors:
 
 class TestHandleRealpathOuter:
     def test_realpath_outer_oserror_handler(self, server):
-        """Unexpected OSError → outer handler (lines 1285-1288)."""
+        """Unexpected OSError â†’ outer handler (lines 1285-1288)."""
         msg = SFTPRealPathMessage(10, "test")
         with patch.object(server, "_resolve_path", side_effect=OSError("unexpected")):
             with patch.object(server, "_send_message") as send:

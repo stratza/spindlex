@@ -18,6 +18,20 @@ This is the first stable release of SpindleX. It marks the graduation from beta 
 *   **Broken code block in `docs/user_guide/server.md`** — the `SSHServerManager` setup example had a premature closing fence that left `interface = MySSHServer()` and the remainder of the setup outside the code block, rendering as raw Python mixed into prose. Fixed into a single continuous code block. Removed unused `import socket`.
 *   **Closing a local port forwarding tunnel could leak the listening port** — `LocalPortForwarder.close_tunnel()` closed the server socket without waking the accept thread. On Linux, `close()` does not interrupt a thread blocked in `accept()`, so the blocked call kept a reference to the socket and the local port stayed bound until the process exited. The socket is now `shutdown()` before `close()`, which reliably releases the port. This was the root cause of the recurring `docker-protocol` integration flake (`[Errno 98] Address already in use` in `test_local_port_forwarding_comprehensive`).
 *   **PR quality gate rejected Dependabot PRs** — `validate_pr_body.py` required the human PR template's Type of Change token, which Dependabot never provides, so every dependency-bump PR failed metadata validation before any real checks ran (and a merged Dependabot PR would have broken release planning on `main`). PRs from trusted bot authors with no explicit token are now classified as `dependencies` with no release.
+*   **SFTP downloads could silently corrupt files on short reads** — the pipelined read loops in `SFTPClient.get()`, `SFTPFile.read(-1)`, `AsyncSFTPClient.get()`, and `AsyncSFTPFile.read(-1)` assumed every `SSH_FXP_READ` response returned exactly the requested length. The SFTP spec allows servers to return fewer bytes before EOF; a short response left a silent gap and misplaced every subsequent chunk. Short reads now drain the stale pipeline and restart at the true end of the received data. The client also honours the server's `max-read-length` from `limits@openssh.com` (previously read and discarded).
+*   **`SFTPServer` could truncate large responses** — `_send_message()` used `Channel.send()`, which sends at most one chunk bounded by the peer's window and max packet size, silently dropping the remainder and desynchronising the SFTP stream. Now uses `sendall()`.
+*   **Port forwarding relays could drop data** — `LocalPortForwarder._relay_data()` and `RemotePortForwarder._relay_data()` called `Channel.send()` and ignored the partial-send return value. Both now use `sendall()` (the async relays were already correct).
+*   **`ChannelFile.write()` could silently truncate stdin data** — it returned `Channel.send()`'s partial byte count, which file-like callers never check. It now sends the full buffer via `sendall()`.
+*   **`HostKeyStorage.remove()` was case-sensitive** — `add()`/`get()`/`get_all()` normalise hostnames to lowercase (since 0.7.3) but `remove()` did not, so removing a host key with different capitalisation silently failed.
+*   **Timeouts used the wall clock** — channel send/recv/exit-status timeouts and the transport rekey timer used `time.time()`, so NTP clock steps could cause spurious timeouts or indefinitely deferred rekeys. Switched to `time.monotonic()`.
+*   **Remote-forward routing matched by port only** — two remote forwards on the same port with different bind addresses could mis-route incoming connections; an exact (address, port) match is now preferred with port-only as fallback.
+*   **Local forward bind used only the first resolved address** — `getaddrinfo()` may order an IPv6 entry first (e.g. for `localhost`) while clients connect over IPv4; each resolved address is now tried until one binds.
+*   **Channel remote window could exceed the RFC 4254 limit** — `WINDOW_ADJUST` handling now caps the window at 2^32 − 1.
+*   **Failed channel requests were silently swallowed** — `Channel._handle_channel_request()` caught all exceptions and returned `False` with no trace; failures are now logged.
+
+### Security
+*   **SFTP server caps client-supplied message length** — `_receive_message()` read a 32-bit length field and allocated it unconditionally, letting a hostile client demand up to 4 GiB; messages are now capped at 256 KiB (matching OpenSSH's sftp-server).
+*   **Signature verification no longer swallows unexpected errors** — `Ed25519Key.verify()`, `ECDSAKey.verify()`, and `RSAKey.verify()` caught all exceptions and returned `False`; they now only treat `InvalidSignature` and malformed signature blobs as verification failure, letting programming errors propagate (consistent with the `PKey.__eq__` fix in 0.7.3).
 
 ### Changed
 *   **Version bumped to 1.0.0** — `pyproject.toml` and `spindlex/_version.py` updated from `0.7.3`.
@@ -31,7 +45,7 @@ This is the first stable release of SpindleX. It marks the graduation from beta 
 *   `docs/comparison.md` added to MkDocs navigation.
 
 ### Verification
-*   Unit test suite: **1766 passed, 1 skipped, 0 failed**.
+*   Unit test suite: **1773 passed, 1 skipped, 0 failed**.
 *   Static analysis: ruff — 0 violations; mypy strict — 0 errors.
 *   Production readiness benchmark: **53/53 PASS** (carried from 0.7.3).
 *   `python -m build && twine check dist/*` — passes (run as part of RC final validation).
