@@ -16,9 +16,8 @@ This is the first stable release of SpindleX. It marks the graduation from beta 
 ### Fixed
 *   **Docs examples missing host key loading** — every `SSHClient` and `AsyncSSHClient` example in the user guide, cookbook, and quickstart now calls `client.get_host_keys().load()` before `connect()`. Previously, examples that used the default `RejectPolicy` would fail for any user whose server was not already trusted, and examples that omitted host key loading implicitly recommended connecting without verification. Affected files: `docs/quickstart.md`, `docs/user_guide/client.md`, `docs/user_guide/sftp.md`, `docs/cookbook/automation.md`, `docs/cookbook/sftp_recipes.md`.
 *   **Broken code block in `docs/user_guide/server.md`** — the `SSHServerManager` setup example had a premature closing fence that left `interface = MySSHServer()` and the remainder of the setup outside the code block, rendering as raw Python mixed into prose. Fixed into a single continuous code block. Removed unused `import socket`.
-
-### Fixed
 *   **Closing a local port forwarding tunnel could leak the listening port** — `LocalPortForwarder.close_tunnel()` closed the server socket without waking the accept thread. On Linux, `close()` does not interrupt a thread blocked in `accept()`, so the blocked call kept a reference to the socket and the local port stayed bound until the process exited. The socket is now `shutdown()` before `close()`, which reliably releases the port. This was the root cause of the recurring `docker-protocol` integration flake (`[Errno 98] Address already in use` in `test_local_port_forwarding_comprehensive`).
+*   **PR quality gate rejected Dependabot PRs** — `validate_pr_body.py` required the human PR template's Type of Change token, which Dependabot never provides, so every dependency-bump PR failed metadata validation before any real checks ran (and a merged Dependabot PR would have broken release planning on `main`). PRs from trusted bot authors with no explicit token are now classified as `dependencies` with no release.
 
 ### Changed
 *   **Version bumped to 1.0.0** — `pyproject.toml` and `spindlex/_version.py` updated from `0.7.3`.
@@ -32,7 +31,7 @@ This is the first stable release of SpindleX. It marks the graduation from beta 
 *   `docs/comparison.md` added to MkDocs navigation.
 
 ### Verification
-*   Unit test suite: **1761 passed, 1 skipped, 0 failed** (carried from 0.7.3; no runtime changes in this release).
+*   Unit test suite: **1766 passed, 1 skipped, 0 failed**.
 *   Static analysis: ruff — 0 violations; mypy strict — 0 errors.
 *   Production readiness benchmark: **53/53 PASS** (carried from 0.7.3).
 *   `python -m build && twine check dist/*` — passes (run as part of RC final validation).
