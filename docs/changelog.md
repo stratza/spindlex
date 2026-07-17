@@ -45,7 +45,7 @@ This is the first stable release of SpindleX. It marks the graduation from beta 
 *   `docs/comparison.md` added to MkDocs navigation.
 
 ### Verification
-*   Unit test suite: **1773 passed, 1 skipped, 0 failed**.
+*   Unit test suite: **1781 passed, 1 skipped, 0 failed**.
 *   Static analysis: ruff - 0 violations; mypy strict - 0 errors.
 *   Production readiness benchmark: **53/53 PASS** (carried from 0.7.3).
 *   `python -m build && twine check dist/*` - passes (run as part of RC final validation).
