@@ -64,6 +64,9 @@ from ..protocol.sftp_messages import (
 )
 from ..transport.channel import Channel
 
+# Maximum accepted SFTP message length; matches OpenSSH's sftp-server limit.
+_MAX_MESSAGE_LENGTH = 256 * 1024
+
 
 class SFTPHandle:
     """
@@ -291,7 +294,10 @@ class SFTPServer:
         """
         try:
             data = message.pack()
-            self._channel.send(data)
+            # Channel.send() may send only a partial chunk (bounded by the
+            # remote window and max packet size); a dropped tail would
+            # desynchronise the SFTP stream.
+            self._channel.sendall(data)
         except (OSError, struct.error, SSHException) as e:
             raise SFTPError(f"Failed to send SFTP message: {e}") from e
 
@@ -309,6 +315,14 @@ class SFTPServer:
             # Read message length first (4 bytes)
             length_data = self._channel.recv_exactly(4)
             msg_length = int.from_bytes(length_data, "big")
+
+            # The length field is client-controlled; cap it so a hostile
+            # client cannot make the server allocate up to 4 GiB.
+            if msg_length > _MAX_MESSAGE_LENGTH:
+                raise SFTPError(
+                    f"SFTP message length {msg_length} exceeds maximum "
+                    f"{_MAX_MESSAGE_LENGTH}"
+                )
 
             # Read message content (msg_length bytes)
             payload = self._channel.recv_exactly(msg_length)

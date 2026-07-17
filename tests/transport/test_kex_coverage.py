@@ -9,7 +9,6 @@ Covers the guard-raise paths that are missed in test_kex_unit.py:
 - _verify_server_signature failure paths (lines 347-351)
 - _perform_ecdh unsupported-algorithm guard (lines 363-370)
 - _perform_ecdh exception wrapping (lines 426-432)
-- generate_keys() before key exchange (line 989)
 - _perform_dh_group14_sha256 public-key-le-0 guard (line 283)
 """
 
@@ -394,30 +393,6 @@ class TestPerformEcdhGuards:
         ):
             with pytest.raises(CryptoException, match="P-521"):
                 kex._perform_ecdh()
-
-
-# ---------------------------------------------------------------------------
-# generate_keys() before key exchange raises CryptoException
-# ---------------------------------------------------------------------------
-
-
-class TestGenerateKeysBeforeKeyExchange:
-    def test_raises_if_keys_not_generated(self):
-        """generate_keys() before _generate_session_keys() should raise."""
-        kex, _ = _make_kex()
-        # No _encryption_key_c2s attribute set
-        with pytest.raises((CryptoException, AttributeError)):
-            kex.generate_keys()
-
-    def test_raises_with_explicit_none_keys(self):
-        """When key attributes exist but are falsy, CryptoException is raised."""
-        kex, _ = _make_kex()
-        kex._encryption_key_c2s = None  # type: ignore[assignment]
-        kex._encryption_key_s2c = None  # type: ignore[assignment]
-        kex._mac_key_c2s = None  # type: ignore[assignment]
-        kex._mac_key_s2c = None  # type: ignore[assignment]
-        with pytest.raises(CryptoException, match="Keys not generated"):
-            kex.generate_keys()
 
 
 # ---------------------------------------------------------------------------

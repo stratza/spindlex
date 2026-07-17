@@ -420,6 +420,11 @@ class TestChannelHandlers:
         ch._handle_window_adjust(50)
         assert ch._remote_window_size == 150
 
+    def test_handle_window_adjust_caps_at_rfc_limit(self):
+        ch = _make_channel(remote_window=0xFFFFFFFF - 10)
+        ch._handle_window_adjust(100)
+        assert ch._remote_window_size == 0xFFFFFFFF
+
     def test_handle_request_success(self):
         ch = _make_channel()
         ch._handle_request_success()

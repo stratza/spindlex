@@ -3,7 +3,7 @@ blank_issues_enabled: false
 contact_links:
   - name: 📖 Documentation
     url: https://spindlex.readthedocs.io/
-    about: Check the docs first — your answer might already be there.
+    about: Check the docs first - your answer might already be there.
   - name: 💬 General Questions & Discussions
     url: https://github.com/stratza/spindlex/discussions
     about: Use Discussions for usage questions, ideas, and community chat.

@@ -14,6 +14,7 @@ from ..exceptions import SFTPError
 from ..protocol.sftp_constants import (
     SFTP_VERSION,
     SSH_FILEXFER_ATTR_PERMISSIONS,
+    SSH_FILEXFER_ATTR_SIZE,
     SSH_FX_EOF,
     SSH_FX_OK,
     SSH_FXF_APPEND,
@@ -195,7 +196,7 @@ class AsyncSFTPClient:
                 loop = asyncio.get_running_loop()
                 with open(localpath, "wb") as local_file:
                     offset = 0
-                    inflight: list[asyncio.Future] = []
+                    inflight: list[tuple[asyncio.Future, int]] = []
                     done = False
 
                     while not done or inflight:
@@ -211,16 +212,29 @@ class AsyncSFTPClient:
                                 length=_CHUNK,
                             )
                             await self._send_message(msg)
-                            inflight.append(fut)
+                            inflight.append((fut, _CHUNK))
                             offset += _CHUNK
 
                         if not inflight:
                             break
 
                         # Drain oldest in-order
-                        response = await inflight.pop(0)
+                        fut, requested = inflight.pop(0)
+                        response = await fut
                         if isinstance(response, SFTPDataMessage):
                             local_file.write(response.data)
+                            if len(response.data) < requested:
+                                # Short read (allowed by the SFTP spec): the
+                                # remaining in-flight requests now target
+                                # offsets past a gap. Drain and discard their
+                                # responses, then restart the pipeline at the
+                                # true end of the data written so far.
+                                for stale_fut, _ in inflight:
+                                    await stale_fut
+                                inflight.clear()
+                                offset = local_file.tell()
+                                if not response.data:
+                                    done = True
                         elif isinstance(response, SFTPStatusMessage):
                             if response.status_code == SSH_FX_EOF:
                                 done = True
@@ -507,7 +521,7 @@ class AsyncSFTPClient:
 
             # Create attributes with mode
             attrs = SFTPAttributes()
-            attrs.st_mode = mode
+            attrs.permissions = mode
 
             # Send mkdir request
             mkdir_msg = SFTPMkdirMessage(request_id=request_id, path=path, attrs=attrs)
@@ -716,6 +730,39 @@ class AsyncSFTPClient:
                 raise
             raise SFTPError(f"Chmod failed: {e}") from e
 
+    async def truncate(self, path: str, size: int) -> None:
+        """
+        Truncate (or extend) a remote file to the given size in bytes.
+
+        Args:
+            path: Remote file path
+            size: Target size in bytes (0 empties the file)
+
+        Raises:
+            SFTPError: If the operation fails
+        """
+        try:
+            attrs = SFTPAttributes()
+            attrs.flags = SSH_FILEXFER_ATTR_SIZE
+            attrs.size = size
+            request_id = self._get_next_request_id()
+            setstat_msg = SFTPSetStatMessage(
+                request_id=request_id, path=path, attrs=attrs
+            )
+            await self._send_message(setstat_msg)
+            response = await self._wait_for_response(request_id)
+            if isinstance(response, SFTPStatusMessage):
+                if response.status_code != SSH_FX_OK:
+                    raise SFTPError(
+                        f"Truncate failed: {response.message}", response.status_code
+                    )
+            else:
+                raise SFTPError("Unexpected response to truncate request")
+        except Exception as e:
+            if isinstance(e, SFTPError):
+                raise
+            raise SFTPError(f"Truncate operation failed: {e}") from e
+
     async def normalize(self, path: str) -> str:
         """Resolve remote path to its absolute canonical form."""
         try:
@@ -737,6 +784,18 @@ class AsyncSFTPClient:
             if isinstance(e, SFTPError):
                 raise
             raise SFTPError(f"Normalize failed: {e}") from e
+
+    async def getcwd(self) -> str:
+        """
+        Get current working directory.
+
+        Returns:
+            Current working directory path
+
+        Raises:
+            SFTPError: If operation fails
+        """
+        return await self.normalize(".")
 
     async def close(self) -> None:
         """Close SFTP client and cleanup resources."""
@@ -953,7 +1012,7 @@ class AsyncSFTPFile:
                 # Pipelined read until EOF
                 _CHUNK = 32768
                 result = bytearray()
-                inflight: list[int] = []
+                inflight: list[tuple[int, int]] = []  # (request_id, requested)
                 done = False
                 offset = self._offset
 
@@ -968,17 +1027,29 @@ class AsyncSFTPFile:
                             length=_CHUNK,
                         )
                         await self._client._send_message(msg)
-                        inflight.append(req_id)
+                        inflight.append((req_id, _CHUNK))
                         offset += _CHUNK
 
                     if not inflight:
                         break
 
                     # Collect next in-order response
-                    rid = inflight.pop(0)
+                    rid, requested = inflight.pop(0)
                     response = await self._client._wait_for_response(rid)
                     if isinstance(response, SFTPDataMessage):
                         result.extend(response.data)
+                        if len(response.data) < requested:
+                            # Short read (allowed by the SFTP spec): the
+                            # remaining in-flight requests now target offsets
+                            # past a gap. Drain and discard their responses,
+                            # then restart the pipeline at the true end of
+                            # the data received.
+                            for stale_rid, _ in inflight:
+                                await self._client._wait_for_response(stale_rid)
+                            inflight.clear()
+                            offset = self._offset + len(result)
+                            if not response.data:
+                                done = True
                     elif isinstance(response, SFTPStatusMessage):
                         if response.status_code == SSH_FX_EOF:
                             done = True

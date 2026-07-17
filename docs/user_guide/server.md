@@ -78,7 +78,7 @@ class ExecServer(SSHServer):
     def check_channel_exec_request(self, channel, command):
         cmd_str = command.decode('utf-8')
         print(f"Client requested: {cmd_str}")
-        
+
         # In a real server, you might spawn a process
         # channel.send accepts both bytes and strings
         channel.send(f"Executed: {cmd_str}\n")

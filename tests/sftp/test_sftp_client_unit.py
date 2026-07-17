@@ -94,6 +94,7 @@ def _make_sftp_client() -> tuple[SFTPClient, MagicMock]:
     client._server_extensions = {}
     client._pending_responses = {}
     client._max_write_len = 64512  # _DEFAULT_MAX_WRITE fallback
+    client._max_read_len = 65536  # SFTP_MAX_READ_SIZE fallback
     return client, channel
 
 
@@ -186,6 +187,37 @@ class TestSFTPFile:
         )
         result = f.read(-1)
         assert result == b""
+
+    def test_read_all_short_reads_leave_no_gap(self):
+        """Servers may return less than requested; data must stay contiguous."""
+        f, client = self._make_file()
+        f._PIPELINE_DEPTH = 4
+        file_data = bytes(range(256)) * 300  # 76800 bytes, several chunks
+        requests: dict[int, tuple[int, int]] = {}
+
+        def record_send(msg):
+            requests[msg.request_id] = (msg.offset, msg.length)
+
+        def respond(rid):
+            offset, length = requests[rid]
+            # Serve at most 5000 bytes per request to force short reads.
+            chunk = file_data[offset : offset + min(length, 5000)]
+            if not chunk:
+                return SFTPStatusMessage(rid, SSH_FX_EOF, "EOF")
+            return _make_data_msg(data=chunk)
+
+        client._send_message.side_effect = record_send
+        client._receive_message_for_id.side_effect = respond
+
+        assert f.read(-1) == file_data
+        assert f._offset == len(file_data)
+
+    def test_read_all_empty_data_response_treated_as_eof(self):
+        """An empty data response must terminate the loop, not spin forever."""
+        f, client = self._make_file()
+        client._receive_message_for_id.return_value = _make_data_msg(data=b"")
+        assert f.read(-1) == b""
+        assert f._offset == 0
 
     # --- write ---
 
@@ -394,6 +426,51 @@ class TestSFTPClientGet:
         client.get("/remote/file.txt", local)
         with open(local, "rb") as fh:
             assert fh.read() == b"file content"
+
+    def test_get_short_reads_leave_no_gap(self, tmp_path):
+        """Servers may return less than requested; the file must not corrupt."""
+        client = self._client()
+        local = str(tmp_path / "short.bin")
+        client._send_request_and_wait_response.side_effect = [
+            _make_handle_msg(handle=b"dl_handle"),
+            _make_ok_status(),
+        ]
+        file_data = bytes(range(256)) * 300  # 76800 bytes, several chunks
+        requests: dict[int, tuple[int, int]] = {}
+
+        def record_send(msg):
+            requests[msg.request_id] = (msg.offset, msg.length)
+
+        def respond(rid):
+            offset, length = requests[rid]
+            # Serve at most 5000 bytes per request to force short reads.
+            chunk = file_data[offset : offset + min(length, 5000)]
+            if not chunk:
+                return SFTPStatusMessage(rid, SSH_FX_EOF, "EOF")
+            return _make_data_msg(data=chunk)
+
+        client._send_message = MagicMock(side_effect=record_send)
+        client._receive_message_for_id = MagicMock(side_effect=respond)
+
+        client.get("/remote/big.bin", local)
+        with open(local, "rb") as fh:
+            assert fh.read() == file_data
+
+    def test_get_empty_data_response_treated_as_eof(self, tmp_path):
+        """An empty data response must terminate the loop, not spin forever."""
+        client = self._client()
+        local = str(tmp_path / "empty.bin")
+        client._send_request_and_wait_response.side_effect = [
+            _make_handle_msg(handle=b"dl_handle"),
+            _make_ok_status(),
+        ]
+        client._send_message = MagicMock()
+        client._receive_message_for_id = MagicMock(
+            return_value=_make_data_msg(data=b"")
+        )
+        client.get("/remote/empty.bin", local)
+        with open(local, "rb") as fh:
+            assert fh.read() == b""
 
     def test_get_open_fails_raises(self, tmp_path):
         client = self._client()

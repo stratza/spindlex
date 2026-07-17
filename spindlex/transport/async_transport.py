@@ -372,7 +372,7 @@ class AsyncTransport(Transport):
                 if not hmac.compare_digest(received_mac, expected_mac):
                     raise TransportException("MAC verification failed")
 
-            return length_data + packet_data
+            return bytes(length_data + packet_data)
 
         except asyncio.IncompleteReadError as e:
             if not self._active:

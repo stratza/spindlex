@@ -12,7 +12,7 @@ import threading
 import time
 from typing import Any, Optional
 
-from ..exceptions import SFTPError
+from ..exceptions import SFTPError, SSHException
 from ..protocol.sftp_constants import (
     SFTP_MAX_PACKET_SIZE,
     SFTP_MAX_READ_SIZE,
@@ -87,9 +87,9 @@ class SFTPFile:
 
         if size < 0:
             # Read until EOF using a pipelined window of concurrent requests.
-            _CHUNK = SFTP_MAX_READ_SIZE
+            _CHUNK = min(SFTP_MAX_READ_SIZE, self._client._max_read_len)
             result = bytearray()
-            in_flight: list[int] = []
+            in_flight: list[tuple[int, int]] = []  # (request_id, requested_len)
             eof = False
             offset = self._offset
 
@@ -99,17 +99,28 @@ class SFTPFile:
                     self._client._send_message(
                         SFTPReadMessage(rid, self._handle, offset, _CHUNK)
                     )
-                    in_flight.append(rid)
+                    in_flight.append((rid, _CHUNK))
                     offset += _CHUNK
 
                 if not in_flight:
                     break
 
-                rid = in_flight.pop(0)
+                rid, requested = in_flight.pop(0)
                 response = self._client._receive_message_for_id(rid)
 
                 if isinstance(response, SFTPDataMessage):
                     result.extend(response.data)
+                    if len(response.data) < requested:
+                        # Short read (allowed by the SFTP spec): the remaining
+                        # in-flight requests now target offsets past a gap.
+                        # Drain and discard their responses, then restart the
+                        # pipeline at the true end of the data received.
+                        for stale_rid, _ in in_flight:
+                            self._client._receive_message_for_id(stale_rid)
+                        in_flight.clear()
+                        offset = self._offset + len(result)
+                        if not response.data:
+                            eof = True
                 elif isinstance(response, SFTPStatusMessage):
                     if response.status_code == SSH_FX_EOF:
                         eof = True
@@ -241,6 +252,7 @@ class SFTPClient:
         self._server_extensions: dict[str, str] = {}
         self._pending_responses: dict[int, SFTPMessage] = {}
         self._max_write_len: int = _DEFAULT_MAX_WRITE
+        self._max_read_len: int = SFTP_MAX_READ_SIZE
 
         # Initialize SFTP session
         self._initialize_sftp()
@@ -301,7 +313,7 @@ class SFTPClient:
             raise SFTPError(f"SFTP initialization failed: {e}") from e
 
     def _query_limits(self) -> None:
-        """Query server limits via limits@openssh.com and update _max_write_len."""
+        """Query limits via limits@openssh.com; update read/write chunk sizes."""
         try:
             request_id = self._get_next_request_id()
             self._send_message(SFTPExtendedMessage(request_id, "limits@openssh.com"))
@@ -309,13 +321,15 @@ class SFTPClient:
             if isinstance(response, SFTPExtendedReplyMessage):
                 data = response.extended_data
                 if len(data) >= 32:
-                    _max_pkt, _max_read, max_write, _max_handles = struct.unpack(
+                    _max_pkt, max_read, max_write, _max_handles = struct.unpack(
                         ">QQQQ", data[:32]
                     )
                     if max_write > 0:
                         self._max_write_len = int(max_write)
-        except Exception:  # nosec B110
-            pass  # non-fatal: fall back to _DEFAULT_MAX_WRITE
+                    if max_read > 0:
+                        self._max_read_len = int(max_read)
+        except (SFTPError, SSHException, struct.error, OSError):
+            pass  # non-fatal: server does not support limits@openssh.com
 
     def _get_next_request_id(self) -> int:
         """Get next request ID for SFTP messages."""
@@ -439,11 +453,11 @@ class SFTPClient:
 
             try:
                 # Open local file for writing
-                _CHUNK = 32768
+                _CHUNK = min(32768, self._max_read_len)
                 _DEPTH = 32
                 with open(localpath, "wb") as local_file:
                     offset = 0
-                    in_flight: list[int] = []
+                    in_flight: list[tuple[int, int]] = []  # (id, requested_len)
                     eof = False
 
                     while not eof or in_flight:
@@ -454,18 +468,30 @@ class SFTPClient:
                                 request_id, handle, offset, _CHUNK
                             )
                             self._send_message(read_msg)
-                            in_flight.append(request_id)
+                            in_flight.append((request_id, _CHUNK))
                             offset += _CHUNK
 
                         if not in_flight:
                             break
 
                         # Collect the next in-order response
-                        rid = in_flight.pop(0)
+                        rid, requested = in_flight.pop(0)
                         response = self._receive_message_for_id(rid)
 
                         if isinstance(response, SFTPDataMessage):
                             local_file.write(response.data)
+                            if len(response.data) < requested:
+                                # Short read (allowed by the SFTP spec): the
+                                # remaining in-flight requests now target
+                                # offsets past a gap. Drain and discard their
+                                # responses, then restart the pipeline at the
+                                # true end of the data written so far.
+                                for stale_rid, _ in in_flight:
+                                    self._receive_message_for_id(stale_rid)
+                                in_flight.clear()
+                                offset = local_file.tell()
+                                if not response.data:
+                                    eof = True
                         elif isinstance(response, SFTPStatusMessage):
                             if response.status_code == SSH_FX_EOF:
                                 eof = True
@@ -814,6 +840,39 @@ class SFTPClient:
             if isinstance(e, SFTPError):
                 raise
             raise SFTPError(f"Chmod operation failed: {e}", filename=path)
+
+    def truncate(self, path: str, size: int) -> None:
+        """
+        Truncate (or extend) a remote file to the given size in bytes.
+
+        Args:
+            path: Remote file path
+            size: Target size in bytes (0 empties the file)
+
+        Raises:
+            SFTPError: If the operation fails
+        """
+        try:
+            attrs = SFTPAttributes()
+            attrs.flags = SSH_FILEXFER_ATTR_SIZE
+            attrs.size = size
+
+            request_id = self._get_next_request_id()
+            from ..protocol.sftp_messages import SFTPSetStatMessage
+
+            setstat_msg = SFTPSetStatMessage(request_id, path, attrs)
+            response = self._send_request_and_wait_response(setstat_msg)
+
+            if isinstance(response, SFTPStatusMessage):
+                if response.status_code != SSH_FX_OK:
+                    raise SFTPError.from_status(response.status_code, response.message)
+            else:
+                raise SFTPError("Unexpected response to truncate request")
+
+        except Exception as e:
+            if isinstance(e, SFTPError):
+                raise
+            raise SFTPError(f"Truncate operation failed: {e}", filename=path) from e
 
     def mkdir(self, path: str, mode: int = 0o777) -> None:
         """

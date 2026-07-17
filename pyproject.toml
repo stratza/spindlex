@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "spindlex"
-version = "0.7.2"
+version = "1.0.0"
 
 description = "A modern, high-performance SSHv2 and SFTP client/server library"
 readme = "README.md"
@@ -22,7 +22,7 @@ maintainers = [
 ]
 keywords = ["ssh", "sftp", "client", "server", "cryptography", "security", "automation", "devops", "asyncio", "high-performance", "remote-execution", "file-transfer", "modern-ssh", "secure-shell"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Intended Audience :: System Administrators",
     "Operating System :: OS Independent",
@@ -189,41 +189,41 @@ envlist = py39,py310,py311,py312,py313,lint,type-check,security
 isolated_build = True
 
 [testenv]
-deps = 
+deps =
     pytest>=7.0.0
     pytest-cov>=4.0.0
     pytest-asyncio>=0.21.0
-commands = 
+commands =
     pytest tests/ -v --cov=spindlex --cov-report=term --cov-report=xml
 
 [testenv:lint]
-deps = 
+deps =
     ruff>=0.1.0
-commands = 
+commands =
     ruff check spindlex tests
     ruff format --check spindlex tests
 
 [testenv:type-check]
-deps = 
+deps =
     mypy>=1.0.0
     types-all
-commands = 
+commands =
     mypy spindlex
 
 [testenv:security]
-deps = 
+deps =
     bandit[toml]>=1.7.5
     safety>=2.3.0
-commands = 
+commands =
     bandit -r spindlex -c pyproject.toml
     safety check
 
 [testenv:docs]
-deps = 
+deps =
     mkdocs>=1.5.0
     mkdocs-material>=9.1.0
     mkdocstrings[python]>=0.22.0
-commands = 
+commands =
     mkdocs build
 """
 

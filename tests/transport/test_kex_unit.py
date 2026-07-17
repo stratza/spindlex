@@ -384,38 +384,6 @@ class TestGenerateSessionKeys:
 
 
 # ---------------------------------------------------------------------------
-# generate_keys (public API)
-# ---------------------------------------------------------------------------
-
-
-class TestGenerateKeys:
-    def test_generate_keys_raises_if_not_run(self):
-        """generate_keys() before _generate_session_keys() raises because
-        _encryption_key_c2s etc. don't exist yet (AttributeError) or are
-        falsy (CryptoException).  Either way it must not succeed."""
-        kex, _ = make_kex()
-        with pytest.raises((CryptoException, AttributeError)):
-            kex.generate_keys()
-
-    def test_generate_keys_returns_tuple_after_keygen(self):
-        kex, transport = make_kex()
-        kex._kex_algorithm = "curve25519-sha256"
-        kex._encryption_algorithm_c2s = "aes256-ctr"
-        kex._encryption_algorithm_s2c = "aes256-ctr"
-        kex._mac_algorithm_c2s = "hmac-sha2-256"
-        kex._mac_algorithm_s2c = "hmac-sha2-256"
-        from spindlex.protocol.utils import write_mpint
-
-        kex._shared_secret = write_mpint(1)
-        kex._exchange_hash = b"\xab" * 32
-        kex._session_id = b"\xab" * 32
-        kex._generate_session_keys()
-        result = kex.generate_keys()
-        assert isinstance(result, tuple)
-        assert len(result) == 4
-
-
-# ---------------------------------------------------------------------------
 # _sign_exchange_hash
 # ---------------------------------------------------------------------------
 

@@ -217,6 +217,7 @@ class Transport:
         self._session_id: Optional[bytes] = None
         self._server_version: Optional[str] = None
         self._client_version: Optional[str] = None
+        self._remote_version: Optional[str] = None
 
         # Crypto state
         self._crypto_backend = default_crypto_backend
@@ -264,7 +265,7 @@ class Transport:
         self._kex_in_progress = False
         self._kex = KeyExchange(self)
         self._bytes_since_rekey = 0
-        self._last_rekey_time = time.time()
+        self._last_rekey_time = time.monotonic()
 
         # Timeouts
         self._connect_timeout: float = float(DEFAULT_CONNECT_TIMEOUT)
@@ -897,6 +898,7 @@ class Transport:
             maximum_packet_size = msg.maximum_packet_size  # type: ignore[attr-defined]
             type_specific_data = msg.type_specific_data  # type: ignore[attr-defined]
 
+            assert sender_channel is not None
             if channel_type == CHANNEL_SESSION:
                 self._handle_session_open(
                     sender_channel, initial_window_size, maximum_packet_size
@@ -1678,7 +1680,7 @@ class Transport:
                 self._kex_in_progress = False
                 self._kex_thread = None
                 self._bytes_since_rekey = 0
-                self._last_rekey_time = time.time()
+                self._last_rekey_time = time.monotonic()
                 self._kex_condition.notify_all()
 
             try:
@@ -1766,7 +1768,7 @@ class Transport:
             # Check byte limit, time limit, or sequence number (rekey every 2^31 packets)
             if (
                 self._bytes_since_rekey >= self._rekey_bytes_limit
-                or (time.time() - self._last_rekey_time) >= self._rekey_time_limit
+                or (time.monotonic() - self._last_rekey_time) >= self._rekey_time_limit
                 or self._sequence_number_out >= REKEY_SEQUENCE_THRESHOLD
                 or self._sequence_number_in >= REKEY_SEQUENCE_THRESHOLD
             ):
@@ -2378,7 +2380,7 @@ class Transport:
                 raise TransportException("MAC verification failed")
 
         # Return complete packet
-        return length_data + packet_data
+        return bytes(length_data + packet_data)
 
     def _recv_bytes(self, length: int) -> bytes:
         """
@@ -2399,7 +2401,7 @@ class Transport:
         # * ``self._read_lock`` serializes the actual blocking ``socket.recv``
         #   call so two threads cannot race the kernel for the same socket.
         # Fast path: if the buffer already has enough bytes, consume under
-        # ``self._lock`` only — no need to acquire ``_read_lock`` at all.
+        # ``self._lock`` only - no need to acquire ``_read_lock`` at all.
         # Slow path: acquire ``_read_lock``, re-check the buffer (another
         # thread may have filled it while we waited), then block in recv().
         # Buffer consumption in the slow path therefore happens under both

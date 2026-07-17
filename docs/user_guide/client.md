@@ -100,11 +100,11 @@ The SSH client is the primary interface for connecting to SSH servers and execut
     ```python
     # Execute a simple command
     stdin, stdout, stderr = client.exec_command('ls -la')
-    
+
     # Read output
     output = stdout.read().decode('utf-8')
     error = stderr.read().decode('utf-8')
-    
+
     # Get exit status
     exit_status = stdout.get_exit_status()
     ```
@@ -114,11 +114,11 @@ The SSH client is the primary interface for connecting to SSH servers and execut
     ```python
     # Execute a simple command
     stdin, stdout, stderr = await client.exec_command('ls -la')
-    
+
     # Read output
     output = await stdout.read()
     error = await stderr.read()
-    
+
     # Get exit status
     exit_status = await stdout.recv_exit_status()
     ```
@@ -129,7 +129,7 @@ The SSH client is the primary interface for connecting to SSH servers and execut
 
     ```python
     stdin, stdout, stderr = client.exec_command('cat > /tmp/test.txt')
-    
+
     # Send input to the command
     stdin.write('Hello, World!\n')
     stdin.flush()
@@ -140,7 +140,7 @@ The SSH client is the primary interface for connecting to SSH servers and execut
 
     ```python
     stdin, stdout, stderr = await client.exec_command('cat > /tmp/test.txt')
-    
+
     # Send input
     await stdin.write('Hello, World!\n')
     await stdin.close()
@@ -180,17 +180,18 @@ Local port forwarding allows you to forward a port on your local machine to a po
 
     ```python
     with SSHClient() as client:
+        client.get_host_keys().load()
         client.connect('jump-host.example.com', username='user')
-        
+
         # Forward local port 8080 to remote-server.internal:80
         tunnel_id = client.create_local_port_forward(
             local_port=8080,
             remote_host='remote-server.internal',
             remote_port=80
         )
-        
+
         print(f"Tunnel {tunnel_id} established. Connect to localhost:8080")
-        
+
         # Keep the connection open while you use the tunnel
         import time
         while True:
@@ -206,16 +207,16 @@ Local port forwarding allows you to forward a port on your local machine to a po
         async with AsyncSSHClient() as client:
             client.get_host_keys().load()
             await client.connect('jump-host.example.com', username='user')
-            
+
             # Forward local port 8080 to remote-server.internal:80
             tunnel_id = await client.create_local_port_forward(
                 local_port=8080,
                 remote_host='remote-server.internal',
                 remote_port=80
             )
-            
+
             print(f"Tunnel {tunnel_id} established.")
-            
+
             # Keep the connection open while you use the tunnel
             while True:
                 await asyncio.sleep(1)
@@ -229,15 +230,16 @@ Remote port forwarding allows you to forward a port on the remote server to a po
 
     ```python
     with SSHClient() as client:
+        client.get_host_keys().load()
         client.connect('server.example.com', username='user')
-        
+
         # Forward remote port 9090 to localhost:3000
         tunnel_id = client.create_remote_port_forward(
             remote_port=9090,
             local_host='127.0.0.1',
             local_port=3000
         )
-        
+
         print(f"Remote tunnel {tunnel_id} established on server:9090")
     ```
 
@@ -246,15 +248,16 @@ Remote port forwarding allows you to forward a port on the remote server to a po
     ```python
     async def main():
         async with AsyncSSHClient() as client:
+            client.get_host_keys().load()
             await client.connect('server.example.com', username='user')
-            
+
             # Forward remote port 9090 to localhost:3000
             tunnel_id = await client.create_remote_port_forward(
                 remote_port=9090,
                 local_host='127.0.0.1',
                 local_port=3000
             )
-            
+
             print(f"Remote tunnel {tunnel_id} established.")
 
 ### Managing Tunnels

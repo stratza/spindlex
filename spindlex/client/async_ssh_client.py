@@ -7,10 +7,12 @@ Provides asynchronous SSH client functionality for high-concurrency applications
 from __future__ import annotations
 
 import asyncio
+import hmac
 import logging
 import socket
 from typing import Any, Callable
 
+from ..crypto.pkey import PKey as _PKey
 from ..exceptions import AuthenticationException, BadHostKeyException, SSHException
 from ..hostkeys.policy import MissingHostKeyPolicy, RejectPolicy
 from ..hostkeys.storage import HostKeyStorage
@@ -43,7 +45,7 @@ class AsyncSSHClient:
         port: int = 22,
         username: str | None = None,
         password: str | None = None,
-        pkey: Any | None = None,
+        pkey: _PKey | None = None,
         key_filename: str | list[str] | None = None,
         key_password: str | None = None,
         timeout: float | None = None,
@@ -55,6 +57,10 @@ class AsyncSSHClient:
         gss_host: str | None = None,
         rekey_bytes_limit: int | None = None,
         rekey_time_limit: int | None = None,
+        keyboard_interactive_handler: Callable[
+            [str, str, list[tuple[str, bool]]], list[str]
+        ]
+        | None = None,
     ) -> None:
         """
         Connect to SSH server asynchronously with retry logic for transient errors.
@@ -76,6 +82,11 @@ class AsyncSSHClient:
             gss_kex: Use GSSAPI key exchange
             gss_deleg_creds: Delegate GSSAPI credentials
             gss_host: GSSAPI hostname override
+            keyboard_interactive_handler: Callback for keyboard-interactive
+                auth challenges.  Receives (title, instructions, prompts) where
+                prompts is a list of (text, echo) tuples; must return a list of
+                answer strings.  When provided, keyboard-interactive is tried
+                after publickey/password if those methods fail or are absent.
 
         Raises:
             SSHException: If connection fails
@@ -83,6 +94,11 @@ class AsyncSSHClient:
         """
         if self._connected:
             raise SSHException("Already connected")
+
+        if compress:
+            from ..exceptions import ConfigurationException
+
+            raise ConfigurationException("Compression is not yet supported")
 
         # Validate port
         if not (0 < port <= 65535):
@@ -99,18 +115,23 @@ class AsyncSSHClient:
                             hostname, port, timeout
                         )
                     else:
-                        # If sock is provided, we need to wrap it if it's a raw socket
-                        # In asyncio, we usually need reader/writer.
-                        # If it's a SpindleX Channel, it might need special handling.
+                        # Channel objects (from direct-tcpip ProxyJump) do not
+                        # expose the asyncio stream interface.  Use SSHClient
+                        # (the sync client) for bastion-host connections.
+                        from ..transport.channel import Channel
+
+                        if isinstance(sock, Channel):
+                            raise SSHException(
+                                "AsyncSSHClient does not support Channel objects as "
+                                "the sock= argument. Use SSHClient (the synchronous "
+                                "client) for ProxyJump / bastion-host connections."
+                            )
                         current_sock = sock
-                        if hasattr(
-                            current_sock, "makefile"
-                        ):  # Likely a socket-like object
+                        if hasattr(current_sock, "makefile"):
                             reader, writer = await asyncio.open_connection(
                                 sock=current_sock
                             )
                         else:
-                            # Assume it's already a pair or handled by transport
                             reader, writer = None, None
 
                     # Create async transport
@@ -147,6 +168,7 @@ class AsyncSSHClient:
                             gss_auth=gss_auth,
                             gss_host=gss_host,
                             gss_deleg_creds=gss_deleg_creds,
+                            keyboard_interactive_handler=keyboard_interactive_handler,
                         )
 
                     return  # Success
@@ -243,24 +265,33 @@ class AsyncSSHClient:
                     # Policy rejected the key
                     raise
                 except Exception as e:
-                    # Policy had an error but didn't reject
-                    self._logger.warning(f"Host key policy error: {e}")
+                    raise SSHException(f"Host key policy error: {e}") from e
             else:
                 # We have known keys - check if any match the server key
                 self._logger.debug(f"Found known host key(s) for {hostname}")
 
                 server_key_bytes = server_key.get_public_key_bytes()
 
-                # Filter known keys by algorithm to avoid false positives for different key types
-                known_keys_of_type = [
-                    k
-                    for k in known_keys
-                    if k.algorithm_name == server_key.algorithm_name
-                ]
+                # RSA keys may be stored under any of three algorithm names
+                # (ssh-rsa, rsa-sha2-256, rsa-sha2-512) that all share the same
+                # underlying public key material. Broaden the filter so a key
+                # stored as ssh-rsa is still recognised when the server presents
+                # rsa-sha2-256, and vice versa.
+                _RSA_ALGORITHMS = {"ssh-rsa", "rsa-sha2-256", "rsa-sha2-512"}
+                if server_key.algorithm_name in _RSA_ALGORITHMS:
+                    known_keys_of_type = [
+                        k for k in known_keys if k.algorithm_name in _RSA_ALGORITHMS
+                    ]
+                else:
+                    known_keys_of_type = [
+                        k
+                        for k in known_keys
+                        if k.algorithm_name == server_key.algorithm_name
+                    ]
 
                 if known_keys_of_type:
                     if not any(
-                        k.get_public_key_bytes() == server_key_bytes
+                        hmac.compare_digest(k.get_public_key_bytes(), server_key_bytes)
                         for k in known_keys_of_type
                     ):
                         raise BadHostKeyException(
@@ -279,7 +310,7 @@ class AsyncSSHClient:
                     except BadHostKeyException:
                         raise
                     except Exception as e:
-                        self._logger.warning(f"Host key policy error: {e}")
+                        raise SSHException(f"Host key policy error: {e}") from e
 
         except BadHostKeyException:
             raise
@@ -525,12 +556,16 @@ class AsyncSSHClient:
         self,
         username: str,
         password: str | None = None,
-        pkey: Any | None = None,
+        pkey: _PKey | None = None,
         key_filename: str | list[str] | None = None,
         key_password: str | None = None,
         gss_auth: bool = False,
         gss_host: str | None = None,
         gss_deleg_creds: bool = False,
+        keyboard_interactive_handler: Callable[
+            [str, str, list[tuple[str, bool]]], list[str]
+        ]
+        | None = None,
     ) -> None:
         """Internal helper to guide authentication flow."""
         if not self._transport:
@@ -566,6 +601,19 @@ class AsyncSSHClient:
                 authenticated = True
             except Exception as e:
                 self._logger.debug(f"Password authentication failed: {e}")
+
+        # Try keyboard-interactive if a handler was provided and nothing else worked
+        if keyboard_interactive_handler and not authenticated:
+            try:
+                self._logger.debug(
+                    f"Attempting keyboard-interactive authentication for {username}"
+                )
+                await self.auth_keyboard_interactive(
+                    username, keyboard_interactive_handler
+                )
+                authenticated = True
+            except Exception as e:
+                self._logger.debug(f"Keyboard-interactive authentication failed: {e}")
 
         if not authenticated:
             raise AuthenticationException(f"Authentication failed for user {username}")

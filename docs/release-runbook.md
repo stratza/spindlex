@@ -1,8 +1,9 @@
 # Maintainer Release Runbook
 
-This runbook explains the beta release flow and the target v1 activation path.
+This runbook explains the PR-driven release flow and the v1 activation path
+that was completed for the `1.0.0` stable release.
 
-## Current Beta Flow
+## Release Flow
 
 1. A PR targets `main` and selects exactly one change type in the template.
 2. The PR gate validates metadata, code, docs, security-fast, workflows, and
@@ -46,7 +47,7 @@ release if the public package is broken.
 Release failures should use the release-blocked template and include workflow
 run URL, planned version, failed stage, and artifact state.
 
-## v1 Activation Checklist
+## v1 Activation Checklist (completed for 1.0.0)
 
 - Public API stability reviewed.
 - Compatibility docs match CI and integration evidence.

@@ -358,9 +358,9 @@ class TestVerifyHostKey:
         client._verify_host_key()
         storage.add.assert_called_once()
 
-    def test_policy_non_bad_host_key_exception_is_swallowed(self):
+    def test_policy_non_bad_host_key_exception_raises_ssh_exception(self):
         """A policy that raises a generic exception (not BadHostKeyException)
-        should be swallowed with a warning log - the source explicitly catches it."""
+        must be re-raised as SSHException - fail closed, not open."""
         client = _connected_client()
         server_key = MagicMock()
         server_key.get_public_key_bytes.return_value = b"key"
@@ -374,8 +374,8 @@ class TestVerifyHostKey:
         bad_policy.missing_host_key.side_effect = RuntimeError("policy exploded")
         client._host_key_policy = bad_policy
 
-        # Source code logs a warning and continues - does NOT raise
-        client._verify_host_key()  # must not raise
+        with pytest.raises(SSHException, match="Host key policy error"):
+            client._verify_host_key()
 
 
 # ===========================================================================
@@ -1134,7 +1134,6 @@ class TestSendMessageBridge:
             mock_super.assert_called_once_with(msg)
 
     def test_loop_running_uses_run_coroutine_threadsafe(self):
-
         t = self._make_transport()
         mock_loop = MagicMock()
         mock_loop.is_running.return_value = True
@@ -1154,7 +1153,6 @@ class TestSendMessageBridge:
             mock_future.result.assert_called_once()
 
     def test_loop_running_transport_exception_reraises(self):
-
         t = self._make_transport()
         mock_loop = MagicMock()
         mock_loop.is_running.return_value = True
@@ -1202,7 +1200,6 @@ class TestRecvMessageBridge:
             assert result is msg
 
     def test_loop_running_raises_transport_exception(self):
-
         t = self._make_transport()
         t._loop = MagicMock()
 
@@ -1218,7 +1215,6 @@ class TestRecvMessageBridge:
                 t._recv_message()
 
     def test_not_on_loop_thread_uses_threadsafe(self):
-
         t = self._make_transport()
         t._loop = MagicMock()
         t._recv_message_async = AsyncMock()

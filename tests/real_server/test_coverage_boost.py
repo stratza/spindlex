@@ -95,13 +95,15 @@ class TestCoverageBoost:
             client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
             client.connect(host, port=port, username=user, password=password)
             local_port = 20038
+            tunnel_id = None
             try:
-                client.create_local_port_forward(local_port, host, port)
+                tunnel_id = client.create_local_port_forward(local_port, host, port)
                 # Just check it connects
                 with socket.create_connection(("127.0.0.1", local_port), timeout=1):
                     pass
             finally:
-                client.close_port_forward(str(local_port))
+                if tunnel_id is not None:
+                    client.close_port_forward(tunnel_id)
 
     @pytest.mark.asyncio
     async def test_async_sftp_comprehensive(self, ssh_server):

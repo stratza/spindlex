@@ -37,7 +37,7 @@ designed for high-performance automation and secure file transfers, providing a
 clean alternative to legacy SSH libraries.
 
 > [!NOTE]
-> **0.7.x - ChaCha20-Poly1305 & SFTP throughput era.** This release line adds full `chacha20-poly1305@openssh.com` support as the preferred cipher, adaptive SFTP write chunks via `limits@openssh.com` (up to 255 KB), and a hardened async transport. Review [SECURITY.md](SECURITY.md), [production usage expectations](docs/production-usage.md), and [compatibility policy](docs/compatibility.md) before deploying in production-facing workflows.
+> **1.0.0 - First stable release.** SpindleX has graduated from beta: the public API surface is frozen under semantic versioning, with `chacha20-poly1305@openssh.com` as the preferred cipher, adaptive SFTP chunks via `limits@openssh.com`, and a hardened sync + async transport. Upgrading from 0.x? Read the [migration guide](docs/migration/0.x-to-1.0.md). See also [SECURITY.md](SECURITY.md), [production usage expectations](docs/production-usage.md), and the [compatibility policy](docs/compatibility.md).
 
 ### 🔥 Key Features
 
@@ -45,7 +45,7 @@ clean alternative to legacy SSH libraries.
 - 🔒 **ChaCha20-Poly1305**: Preferred AEAD cipher - no separate MAC pass, full Terrapin-defense strict-KEX, on par with leading SSH libraries.
 - 🔄 **Native Async**: First-class `asyncio` support via `AsyncSSHClient` and `AsyncSFTPClient`.
 - 🛡️ **Secure by Default**: Modern primitives only - Ed25519, ECDSA, ChaCha20-Poly1305, AES-CTR. Legacy/weak ciphers are not negotiated.
-- 🔗 **Advanced Tunneling**: Support for **ProxyJump** (bastion hosts) and TCP port forwarding.
+- 🔗 **Advanced Tunneling**: ProxyJump (bastion hosts) via `direct-tcpip` channels and TCP port forwarding.
 - 📂 **Recursive SFTP**: Native support for recursive directory uploads and downloads.
 - 🏷️ **Fully Typed**: Comprehensive type hints for IDE integration and static analysis.
 
@@ -64,7 +64,7 @@ clean alternative to legacy SSH libraries.
 - You need universal compatibility with legacy SSH servers or weak algorithms.
 - You need production use of unknown-host auto-acceptance policies.
 - You need every OpenSSH server feature or appliance-specific SSH behavior.
-- You need a stable `1.0.0` API today; SpindleX is still in beta.
+- You need SCP, SSH agent forwarding, X11 forwarding, or compression - these are deliberate scope exclusions (see the [comparison page](docs/comparison.md)).
 
 ## 💎 Why SpindleX?
 
@@ -160,7 +160,7 @@ asyncio.run(main())
 
 ## 📊 Performance Benchmarks
 
-SpindleX is optimized for high-throughput environments. The 0.7.x line brings SFTP upload throughput in line with leading SSH libraries and adds ChaCha20-Poly1305 as the preferred cipher.
+SpindleX is optimized for high-throughput environments, with SFTP upload throughput in line with leading SSH libraries and ChaCha20-Poly1305 as the preferred cipher. See the [comparison page](docs/comparison.md) for the full benchmark methodology.
 
 | Operation | SpindleX | Other libs | Notes |
 |:---|:---:|:---:|:---|

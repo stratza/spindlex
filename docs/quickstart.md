@@ -49,11 +49,11 @@ pip install spindlex[gssapi]
 
         # Execute a command (returns stdin, stdout, stderr)
         stdin, stdout, stderr = client.exec_command('uname -a')
-        
+
         # Read the output
         output = stdout.read().decode('utf-8')
         print(f"Server info: {output}")
-        
+
         # Get exit status
         exit_status = stdout.get_exit_status()
         print(f"Exit status: {exit_status}")
@@ -78,7 +78,7 @@ pip install spindlex[gssapi]
                 username='myuser',
                 password='mypassword'
             )
-            
+
             stdin, stdout, stderr = await client.exec_command('uname -a')
             print(f"Server info: {await stdout.read()}")
 
@@ -126,10 +126,10 @@ pip install spindlex[gssapi]
         with client.open_sftp() as sftp:
             # Upload a file
             sftp.put('/local/file.txt', '/remote/file.txt')
-            
+
             # Download a file
             sftp.get('/remote/data.csv', '/local/data.csv')
-            
+
             # List directory contents
             files = sftp.listdir('/remote/directory')
             for filename in files:
@@ -146,11 +146,11 @@ pip install spindlex[gssapi]
         async with AsyncSSHClient() as client:
             client.get_host_keys().load()  # load ~/.ssh/known_hosts
             await client.connect('example.com', username='user', password='pass')
-            
+
             async with client.open_sftp() as sftp:
                 await sftp.put('/local/file.txt', '/remote/file.txt')
                 await sftp.get('/remote/data.csv', '/local/data.csv')
-    
+
     asyncio.run(transfer_files())
     ```
 
@@ -158,8 +158,8 @@ pip install spindlex[gssapi]
 
 ```python
 from spindlex import (
-    SSHClient, 
-    AuthenticationException, 
+    SSHClient,
+    AuthenticationException,
     BadHostKeyException,
     SSHException
 )
