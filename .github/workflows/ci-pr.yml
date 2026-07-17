@@ -75,7 +75,7 @@ jobs:
             detect --source /repo --config /repo/.gitleaks.toml --no-git --redact --exit-code 1
 
       - name: Workflow lint
-        uses: raven-actions/actionlint@205b530c5d9fa8f44ae9ed59f341a0db994aa6f8 # v2
+        uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2
 
       - name: Script compile
         run: python -m py_compile scripts/*.py
