@@ -2401,7 +2401,7 @@ class Transport:
         # * ``self._read_lock`` serializes the actual blocking ``socket.recv``
         #   call so two threads cannot race the kernel for the same socket.
         # Fast path: if the buffer already has enough bytes, consume under
-        # ``self._lock`` only — no need to acquire ``_read_lock`` at all.
+        # ``self._lock`` only - no need to acquire ``_read_lock`` at all.
         # Slow path: acquire ``_read_lock``, re-check the buffer (another
         # thread may have filled it while we waited), then block in recv().
         # Buffer consumption in the slow path therefore happens under both

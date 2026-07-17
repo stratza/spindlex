@@ -43,7 +43,7 @@ Run the following scenarios manually or via the canary workflow:
 - [ ] Host key verification with a pre-populated known_hosts entry
 
 ### SSH Command Execution
-- [ ] `exec_command('echo hello')` — basic smoke test
+- [ ] `exec_command('echo hello')` - basic smoke test
 - [ ] Multi-line stdout
 - [ ] Non-zero exit status captured correctly
 - [ ] Timeout behavior (connection timeout, command timeout)
@@ -99,10 +99,10 @@ the release:
 
 | Failure category | Action |
 |---|---|
-| **Code regression** — reproduces in Docker tests or unit tests | Block release; fix forward |
-| **Environment issue** — canary host unreachable, misconfigured, or credentials rotated | Fix the environment; re-run canary |
-| **Server version incompatibility** — not reproduced on Docker OpenSSH | Record in `docs/compatibility.md`; decide whether to fix or document |
-| **Intermittent / flaky** — not reproducible on re-run | Re-run up to 3 times; if still present treat as code regression |
+| **Code regression** - reproduces in Docker tests or unit tests | Block release; fix forward |
+| **Environment issue** - canary host unreachable, misconfigured, or credentials rotated | Fix the environment; re-run canary |
+| **Server version incompatibility** - not reproduced on Docker OpenSSH | Record in `docs/compatibility.md`; decide whether to fix or document |
+| **Intermittent / flaky** - not reproducible on re-run | Re-run up to 3 times; if still present treat as code regression |
 
 ---
 

@@ -5,7 +5,7 @@ version boundaries.
 
 ## Available Guides
 
-- [0.x to 1.0](0.x-to-1.0.md) — upgrading from any 0.x beta release to the
+- [0.x to 1.0](0.x-to-1.0.md) - upgrading from any 0.x beta release to the
   stable v1.0.0 release.
 
 ## General Upgrade Advice

@@ -47,7 +47,7 @@ class Channel:
         self._local_window_size = 0
         self._local_max_packet_size = 0
 
-        # Data buffers — declared as Any because AsyncChannel overrides these with
+        # Data buffers - declared as Any because AsyncChannel overrides these with
         # plain bytes (flat buffer, sliceable) vs the deque[bytes] used here.
         self._recv_buffer: Any = deque()
         self._stderr_buffer: Any = deque()

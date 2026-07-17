@@ -7,7 +7,7 @@ not a claim that every SSH feature or deployment environment is risk-free.
 ## Security Status
 
 SpindleX `1.0.0` is the first stable release: the public API surface is frozen
-under semantic versioning. Stable does not mean risk-free — apply the same
+under semantic versioning. Stable does not mean risk-free - apply the same
 operational discipline you would to any security-sensitive dependency:
 
 * Pin exact versions in production-facing automation.

@@ -360,7 +360,7 @@ class TestVerifyHostKey:
 
     def test_policy_non_bad_host_key_exception_raises_ssh_exception(self):
         """A policy that raises a generic exception (not BadHostKeyException)
-        must be re-raised as SSHException — fail closed, not open."""
+        must be re-raised as SSHException - fail closed, not open."""
         client = _connected_client()
         server_key = MagicMock()
         server_key.get_public_key_bytes.return_value = b"key"

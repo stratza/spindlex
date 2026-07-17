@@ -101,7 +101,7 @@ class CryptographyBackend:
     for modern, secure cryptographic operations.
     """
 
-    # Hash algorithm mapping — SHA-1 intentionally excluded (weak, not negotiated)
+    # Hash algorithm mapping - SHA-1 intentionally excluded (weak, not negotiated)
     HASH_ALGORITHMS = {
         "sha256": hashes.SHA256,
         "sha384": hashes.SHA384,

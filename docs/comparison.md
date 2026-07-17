@@ -7,7 +7,7 @@ superiority. Every library has trade-offs.
 !!! info "Benchmark environment"
     Numbers below are from the SpindleX v0.7.3 production readiness benchmark
     (`scripts/benchmark_production.py`) run against a Docker-backed OpenSSH
-    server on the same host. They reflect loopback conditions — real-network
+    server on the same host. They reflect loopback conditions - real-network
     results will differ. See [Performance](performance.md) for methodology.
 
 ---
@@ -75,7 +75,7 @@ relevant to your servers and network conditions.
 - You want strict type hints across the entire public API.
 - You want minimal dependencies (only `cryptography`).
 - You prefer MIT licensing for commercial or proprietary projects.
-- SFTP throughput matters — SpindleX adaptive write chunks (up to 255 KB via
+- SFTP throughput matters - SpindleX adaptive write chunks (up to 255 KB via
   `limits@openssh.com`) reduce round trips significantly.
 
 **Choose Paramiko if:**
@@ -87,7 +87,7 @@ relevant to your servers and network conditions.
 - You are deploying on a large existing codebase already built on Paramiko.
 - You need support for legacy algorithms that SpindleX deliberately excludes
   (SHA-1 MACs, CBC ciphers, Group 1 DH).
-- Long-term library stability matters more than modern API design — Paramiko
+- Long-term library stability matters more than modern API design - Paramiko
   has a longer track record in production.
 
 **Feature gaps to know about:**
@@ -128,15 +128,15 @@ better choice today.
 
 These features are intentionally out of scope for SpindleX 1.0:
 
-- **SCP** — SFTP is the modern replacement and is fully supported.
-- **Compression** — Not implemented; `none` is the only advertised method.
-- **SSH agent forwarding** — Not implemented.
-- **X11 forwarding** — Not implemented.
-- **GSSAPI key exchange** — GSSAPI authentication (not KEX) is available as an
+- **SCP** - SFTP is the modern replacement and is fully supported.
+- **Compression** - Not implemented; `none` is the only advertised method.
+- **SSH agent forwarding** - Not implemented.
+- **X11 forwarding** - Not implemented.
+- **GSSAPI key exchange** - GSSAPI authentication (not KEX) is available as an
   optional extra on Unix.
-- **Legacy algorithms** — SHA-1 KEX/MACs, CBC ciphers, DH Group 1, MD5 MACs are
+- **Legacy algorithms** - SHA-1 KEX/MACs, CBC ciphers, DH Group 1, MD5 MACs are
   explicitly excluded. SpindleX will never negotiate these.
-- **Universal SSH server compatibility** — Tested against OpenSSH and Dropbear.
+- **Universal SSH server compatibility** - Tested against OpenSSH and Dropbear.
   Appliance-specific or legacy SSH server behavior may not be compatible.
 
 ---
