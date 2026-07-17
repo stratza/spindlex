@@ -98,6 +98,7 @@ def _make_sftp_client() -> tuple[SFTPClient, MagicMock]:
     client._server_extensions = {}
     client._pending_responses = {}
     client._max_write_len = 64512  # _DEFAULT_MAX_WRITE fallback
+    client._max_read_len = 65536  # SFTP_MAX_READ_SIZE fallback
     return client, channel
 
 

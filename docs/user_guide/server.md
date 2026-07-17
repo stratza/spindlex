@@ -43,13 +43,11 @@ class MySSHServer(SSHServer):
 Use `SSHServerManager` to bind the server to a port and start accepting connections.
 
 ```python
-import socket
 from spindlex import SSHServerManager
 from spindlex.crypto import PKey
 
 # Load or generate server host key
 server_key = PKey.generate(key_type='ed25519')
-```
 
 # Initialize interface and manager
 interface = MySSHServer()
@@ -80,7 +78,7 @@ class ExecServer(SSHServer):
     def check_channel_exec_request(self, channel, command):
         cmd_str = command.decode('utf-8')
         print(f"Client requested: {cmd_str}")
-        
+
         # In a real server, you might spawn a process
         # channel.send accepts both bytes and strings
         channel.send(f"Executed: {cmd_str}\n")

@@ -104,7 +104,7 @@ class KeyExchange:
             # Transport layer must complete KEXINIT exchange before calling start_kex().
             if not self._transport._peer_kexinit:
                 raise CryptoException(
-                    "Peer KEXINIT not received — transport must exchange KEXINIT "
+                    "Peer KEXINIT not received - transport must exchange KEXINIT "
                     "before invoking KeyExchange.start_kex()"
                 )
 

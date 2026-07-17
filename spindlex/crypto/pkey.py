@@ -11,6 +11,7 @@ import struct
 import warnings
 from typing import Any, Optional
 
+from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, ed25519, padding, rsa
 from cryptography.hazmat.primitives.asymmetric.utils import (
@@ -167,7 +168,7 @@ class PKey:
         try:
             return self.get_public_key_bytes() == other.get_public_key_bytes()
         except CryptoException:
-            # One or both keys are uninitialised — treat as not equal.
+            # One or both keys are uninitialised - treat as not equal.
             return False
 
     @classmethod
@@ -506,7 +507,9 @@ class Ed25519Key(PKey):
             # Verify signature
             public_key.verify(sig_bytes, data)
             return True
-        except Exception:
+        except (InvalidSignature, struct.error, ValueError):
+            # Invalid signature or malformed signature blob; anything else
+            # (e.g. programming errors) must propagate.
             return False
 
 
@@ -809,7 +812,9 @@ class ECDSAKey(PKey):
             hash_algo = self._get_hash_algo()
             public_key.verify(der_signature, data, ec.ECDSA(hash_algo))
             return True
-        except Exception:
+        except (InvalidSignature, struct.error, ValueError):
+            # Invalid signature or malformed signature blob; anything else
+            # (e.g. programming errors) must propagate.
             return False
 
 
@@ -1064,7 +1069,9 @@ class RSAKey(PKey):
             # Verify signature
             public_key.verify(sig_bytes, data, padding.PKCS1v15(), hash_algo)
             return True
-        except Exception:
+        except (InvalidSignature, struct.error, ValueError):
+            # Invalid signature or malformed signature blob; anything else
+            # (e.g. programming errors) must propagate.
             return False
 
 

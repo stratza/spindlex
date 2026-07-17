@@ -10,10 +10,11 @@ The SSH File Transfer Protocol (SFTP) provides secure file transfer capabilities
 
     ```python
     from spindlex import SSHClient
-    
+
     with SSHClient() as client:
+        client.get_host_keys().load()
         client.connect('server.example.com', username='user', password='password')
-        
+
         with client.open_sftp() as sftp:
             files = sftp.listdir('.')
             print(f"Found {len(files)} files")
@@ -23,10 +24,11 @@ The SSH File Transfer Protocol (SFTP) provides secure file transfer capabilities
 
     ```python
     from spindlex import AsyncSSHClient
-    
+
     async with AsyncSSHClient() as client:
+        client.get_host_keys().load()
         await client.connect('server.example.com', username='user', password='password')
-        
+
         async with client.open_sftp() as sftp:
             files = await sftp.listdir('.')
             print(f"Found {len(files)} files")

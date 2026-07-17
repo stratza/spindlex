@@ -326,7 +326,7 @@ class TestLocalRelayData:
         dest_channel = MagicMock()
 
         forwarder._relay_data(source, dest_channel, "socket_to_channel")
-        dest_channel.send.assert_called_once_with(b"hello")
+        dest_channel.sendall.assert_called_once_with(b"hello")
 
     def test_relay_data_channel_to_socket(self):
         """Relay from channel to socket (line 351)."""

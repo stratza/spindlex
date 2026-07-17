@@ -11,8 +11,8 @@ authors:
   given-names: "Adi"
   alias: "adirothbuilds"
 title: "SpindleX"
-version: 0.7.0
-date-released: 2026-05-16
+version: 1.0.0
+date-released: 2026-07-17
 url: "https://github.com/stratza/spindlex"
 abstract: "A modern, high-performance SSHv2 and SFTP library focused on speed, security, and developer experience."
 keywords:

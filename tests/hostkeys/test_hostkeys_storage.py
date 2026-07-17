@@ -27,6 +27,24 @@ class TestHostKeyStorage:
         assert storage.get_all("example.com") == [key]
         assert storage.get("unknown.com") is None
 
+    def test_remove_is_case_insensitive(self, temp_known_hosts):
+        storage = HostKeyStorage(temp_known_hosts)
+        key = MagicMock(spec=Ed25519Key)
+        key.algorithm_name = "ssh-ed25519"
+
+        storage.add("Server.Example.com", key)
+        assert storage.remove("SERVER.example.COM") is True
+        assert storage.get_all("server.example.com") == []
+
+    def test_remove_specific_key_is_case_insensitive(self, temp_known_hosts):
+        storage = HostKeyStorage(temp_known_hosts)
+        key = MagicMock(spec=Ed25519Key)
+        key.algorithm_name = "ssh-ed25519"
+
+        storage.add("server.example.com", key)
+        assert storage.remove("Server.Example.com", key) is True
+        assert storage.get_all("server.example.com") == []
+
     def test_save_and_load(self, temp_known_hosts):
         storage = HostKeyStorage(temp_known_hosts)
 

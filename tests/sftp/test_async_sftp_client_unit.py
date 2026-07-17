@@ -959,3 +959,37 @@ class TestAsyncSFTPClientInitialize:
 
         await patch_initialize()
         assert client._initialized is True
+
+
+# ---------------------------------------------------------------------------
+# Pipelined read: empty-data guard (short-read resync)
+# ---------------------------------------------------------------------------
+
+
+class TestPipelinedReadEmptyData:
+    async def test_file_read_all_empty_data_response_treated_as_eof(self):
+        """An empty data response must terminate the loop, not spin forever."""
+        client = _make_async_client()
+        f = AsyncSFTPFile(client, b"fh", "r")
+        client._wait_for_response.return_value = _make_data_msg(data=b"")
+        assert await f.read(-1) == b""
+        assert f._offset == 0
+
+    async def test_get_empty_data_response_treated_as_eof(self, tmp_path):
+        """An empty data response must terminate the loop, not spin forever."""
+        client = _make_async_client()
+        client._wait_for_response.side_effect = [
+            _make_handle_msg(handle=b"fh"),  # open
+            _make_ok_status(),  # close
+        ]
+
+        async def resolve_read(msg):
+            fut = client._pending_requests.pop(msg.request_id, None)
+            if fut is not None and not fut.done():
+                fut.set_result(_make_data_msg(request_id=msg.request_id, data=b""))
+
+        client._send_message = AsyncMock(side_effect=resolve_read)
+        local = str(tmp_path / "empty.bin")
+        await client.get("/remote/empty.bin", local)
+        with open(local, "rb") as fh:
+            assert fh.read() == b""

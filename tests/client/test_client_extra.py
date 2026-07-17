@@ -27,11 +27,10 @@ def test_channel_file_read_size():
 
 def test_channel_file_write():
     channel = MagicMock()
-    channel.send.return_value = 5
 
     cf = ChannelFile(channel, mode="w")
     assert cf.write("hello") == 5
-    channel.send.assert_called_with(b"hello")
+    channel.sendall.assert_called_with(b"hello")
 
 
 def test_channel_file_context_manager():

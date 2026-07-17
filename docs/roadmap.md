@@ -3,9 +3,9 @@
 This roadmap summarizes public lifecycle expectations without exposing internal
 planning noise or committing to exact timelines.
 
-## Beta Stabilization
+## Beta Stabilization (completed)
 
-Current beta work focuses on:
+The 0.x beta line focused on:
 
 - protocol correctness and malformed-input handling
 - SFTP reliability and performance
@@ -13,10 +13,9 @@ Current beta work focuses on:
 - CI reliability on free GitHub-hosted runners
 - conservative compatibility claims
 
-## v1.0 Release Candidate
+## v1.0 Stable (released)
 
-The `1.0.0` release candidate starts only after the readiness checklist is
-complete or explicitly accepted by maintainers:
+`1.0.0` shipped after the readiness checklist was completed:
 
 - public production usage, compatibility, and API stability docs
 - release, artifact verification, and support policy docs
@@ -24,9 +23,9 @@ complete or explicitly accepted by maintainers:
 - property tests and repeatable local benchmark baseline
 - security and vulnerability response documentation
 
-## After v1
+## Current Focus (post-1.0)
 
-After stable release, work shifts toward:
+With the stable release out, work shifts toward:
 
 - SemVer discipline
 - compatibility matrix maintenance

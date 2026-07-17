@@ -196,7 +196,7 @@ class AsyncSFTPClient:
                 loop = asyncio.get_running_loop()
                 with open(localpath, "wb") as local_file:
                     offset = 0
-                    inflight: list[asyncio.Future] = []
+                    inflight: list[tuple[asyncio.Future, int]] = []
                     done = False
 
                     while not done or inflight:
@@ -212,16 +212,29 @@ class AsyncSFTPClient:
                                 length=_CHUNK,
                             )
                             await self._send_message(msg)
-                            inflight.append(fut)
+                            inflight.append((fut, _CHUNK))
                             offset += _CHUNK
 
                         if not inflight:
                             break
 
                         # Drain oldest in-order
-                        response = await inflight.pop(0)
+                        fut, requested = inflight.pop(0)
+                        response = await fut
                         if isinstance(response, SFTPDataMessage):
                             local_file.write(response.data)
+                            if len(response.data) < requested:
+                                # Short read (allowed by the SFTP spec): the
+                                # remaining in-flight requests now target
+                                # offsets past a gap. Drain and discard their
+                                # responses, then restart the pipeline at the
+                                # true end of the data written so far.
+                                for stale_fut, _ in inflight:
+                                    await stale_fut
+                                inflight.clear()
+                                offset = local_file.tell()
+                                if not response.data:
+                                    done = True
                         elif isinstance(response, SFTPStatusMessage):
                             if response.status_code == SSH_FX_EOF:
                                 done = True
@@ -999,7 +1012,7 @@ class AsyncSFTPFile:
                 # Pipelined read until EOF
                 _CHUNK = 32768
                 result = bytearray()
-                inflight: list[int] = []
+                inflight: list[tuple[int, int]] = []  # (request_id, requested)
                 done = False
                 offset = self._offset
 
@@ -1014,17 +1027,29 @@ class AsyncSFTPFile:
                             length=_CHUNK,
                         )
                         await self._client._send_message(msg)
-                        inflight.append(req_id)
+                        inflight.append((req_id, _CHUNK))
                         offset += _CHUNK
 
                     if not inflight:
                         break
 
                     # Collect next in-order response
-                    rid = inflight.pop(0)
+                    rid, requested = inflight.pop(0)
                     response = await self._client._wait_for_response(rid)
                     if isinstance(response, SFTPDataMessage):
                         result.extend(response.data)
+                        if len(response.data) < requested:
+                            # Short read (allowed by the SFTP spec): the
+                            # remaining in-flight requests now target offsets
+                            # past a gap. Drain and discard their responses,
+                            # then restart the pipeline at the true end of
+                            # the data received.
+                            for stale_rid, _ in inflight:
+                                await self._client._wait_for_response(stale_rid)
+                            inflight.clear()
+                            offset = self._offset + len(result)
+                            if not response.data:
+                                done = True
                     elif isinstance(response, SFTPStatusMessage):
                         if response.status_code == SSH_FX_EOF:
                             done = True

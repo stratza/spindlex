@@ -28,8 +28,9 @@ Users can verify a release by:
 
 ## Maintainer Policy
 
-During beta, SBOM, hash, and attestation generation may start as non-blocking.
-Before v1 RC, maintainers decide which integrity failures block release.
+SBOM, hash, and attestation generation may run as non-blocking steps.
+Maintainers decide which integrity failures block a release and update this
+page when that policy changes.
 
 PyPI trusted publishing should remain the preferred publishing path. Long-lived
 PyPI tokens should not be required for the normal release process.

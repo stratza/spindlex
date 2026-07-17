@@ -230,6 +230,12 @@ def _plan_from_protected_release_commit(
     )
 
 
+def _pr_author(pr: dict[str, Any]) -> str:
+    user = pr.get("user")
+    login = user.get("login") if isinstance(user, dict) else None
+    return login if isinstance(login, str) else ""
+
+
 def _plan_from_pr_body(
     *,
     body: str,
@@ -238,8 +244,9 @@ def _plan_from_pr_body(
     source_sha: str,
     source_pr: str = "",
     source_pr_url: str = "",
+    author: str = "",
 ) -> ReleasePlan:
-    result = validate_body(body)
+    result = validate_body(body, author=author)
     if not result.valid:
         errors = "\n".join(f"- {error}" for error in result.errors)
         raise ValueError(f"Source PR metadata is invalid:\n{errors}")
@@ -305,6 +312,7 @@ def create_plan(event_path: Path) -> ReleasePlan:
             source_sha=source_sha,
             source_pr=str(pr.get("number") or ""),
             source_pr_url=str(pr.get("html_url") or ""),
+            author=_pr_author(pr),
         )
 
     if event_name == "push":
@@ -361,6 +369,7 @@ def create_plan(event_path: Path) -> ReleasePlan:
             source_sha=source_sha,
             source_pr=str(pr.get("number") or ""),
             source_pr_url=str(pr.get("html_url") or ""),
+            author=_pr_author(pr),
         )
 
     return _plan_from_release_type(

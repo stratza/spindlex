@@ -26,7 +26,7 @@ runs and skipped release-only jobs from cluttering PR status.
 ## Advisory Checks
 
 Scheduled security, CodeQL, compatibility, integration, property tests, and
-benchmarks may be advisory during beta unless they are called by the PR or
+benchmarks may run as advisory checks unless they are called by the PR or
 release orchestrator. CodeQL and the full security scan are called by the
 `main` push release orchestrator so post-merge code is scanned without launching
 parallel workflows.
@@ -73,6 +73,6 @@ release tooling version.
 
 ## Promotion Rules
 
-During beta, new heavy checks can start as manual or scheduled. Before v1 RC,
-maintainers decide whether each check is required, advisory, or release-blocking
-and update this page plus repository settings when needed.
+New heavy checks can start as manual or scheduled. Maintainers decide whether
+each check is promoted to required, advisory, or release-blocking and update
+this page plus repository settings when needed.

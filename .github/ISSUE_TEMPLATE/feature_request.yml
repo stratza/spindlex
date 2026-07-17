@@ -62,10 +62,10 @@ body:
     attributes:
       label: How important is this to you?
       options:
-        - Critical — blocking my use-case entirely
-        - High — I work around it but it's painful
-        - Medium — nice to have
-        - Low — minor quality-of-life improvement
+        - Critical - blocking my use-case entirely
+        - High - I work around it but it's painful
+        - Medium - nice to have
+        - Low - minor quality-of-life improvement
     validations:
       required: true
 
