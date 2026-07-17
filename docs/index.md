@@ -53,12 +53,13 @@ pip install spindlex
 
     async def run():
         async with AsyncSSHClient() as client:
+            client.get_host_keys().load()
             await client.connect('example.com', username='user')
             stdin, stdout, stderr = await client.exec_command('ls -la')
             print(await stdout.read())
 
     asyncio.run(run())
-```
+    ```
 
 ## Navigation
 

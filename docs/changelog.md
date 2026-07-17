@@ -4,9 +4,9 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0] - 2026-06-27
+## [1.0.0] - 2026-07-17
 
-This is the first stable release of SpindleX. It marks the graduation from beta to a production-ready library with a frozen public API surface, full security documentation, a migration guide from the 0.x line, and validated performance benchmarks.
+This is the first stable release of SpindleX. It marks the graduation from beta to a production-ready library with a frozen public API surface, full security documentation, a migration guide from the 0.x line, and validated performance benchmarks. It also closes all findings from a full-project pre-release review, including data-integrity fixes in the SFTP transfer paths and port forwarding.
 
 ### Added
 *   **Migration guide** (`docs/migration/0.x-to-1.0.md`) — covers all breaking changes, removed APIs, changed defaults, host key behavior changes, and sync/async differences between the 0.x beta line and 1.0.0. A beta user can upgrade without diffing source code.

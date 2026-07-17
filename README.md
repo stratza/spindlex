@@ -26,7 +26,7 @@
 **SpindleX** is a modern SSH protocol implementation for Python 3.9+. It is designed for high-performance automation and secure file transfers, providing a clean alternative to legacy SSH libraries.
 
 > [!NOTE]
-> **0.7.x - ChaCha20-Poly1305 & SFTP throughput era.** This release line adds full `chacha20-poly1305@openssh.com` support as the preferred cipher, adaptive SFTP write chunks via `limits@openssh.com` (up to 255 KB), and a hardened async transport. Review [SECURITY.md](SECURITY.md), [production usage expectations](docs/production-usage.md), and [compatibility policy](docs/compatibility.md) before deploying in production-facing workflows.
+> **1.0.0 - First stable release.** SpindleX has graduated from beta: the public API surface is frozen under semantic versioning, with `chacha20-poly1305@openssh.com` as the preferred cipher, adaptive SFTP chunks via `limits@openssh.com`, and a hardened sync + async transport. Upgrading from 0.x? Read the [migration guide](docs/migration/0.x-to-1.0.md). See also [SECURITY.md](SECURITY.md), [production usage expectations](docs/production-usage.md), and the [compatibility policy](docs/compatibility.md).
 
 ### 🔥 Key Features
 
@@ -103,6 +103,7 @@ from spindlex import AsyncSSHClient
 
 async def main():
     async with AsyncSSHClient() as client:
+        client.get_host_keys().load()
         await client.connect('example.com', username='admin')
         stdin, stdout, stderr = await client.exec_command('df -h')
         print(await stdout.read())
@@ -115,7 +116,7 @@ asyncio.run(main())
 
 ## 📊 Performance Benchmarks
 
-SpindleX is optimized for high-throughput environments. The 0.7.x line brings SFTP upload throughput in line with leading SSH libraries and adds ChaCha20-Poly1305 as the preferred cipher.
+SpindleX is optimized for high-throughput environments, with SFTP upload throughput in line with leading SSH libraries and ChaCha20-Poly1305 as the preferred cipher. See the [comparison page](docs/comparison.md) for the full benchmark methodology.
 
 | Operation | SpindleX | Other libs | Notes |
 |:---|:---:|:---:|:---|
