@@ -373,8 +373,17 @@ class LocalPortForwarder:
 
             # Close server socket
             if tunnel_id in self._servers:
+                server_socket = self._servers[tunnel_id]
+                # shutdown() wakes the accept thread if it is blocked in
+                # accept(); close() alone does not interrupt a blocked
+                # accept() on Linux, which keeps the listening port bound
+                # until the process exits.
                 try:
-                    self._servers[tunnel_id].close()
+                    server_socket.shutdown(socket.SHUT_RDWR)
+                except OSError as e:
+                    self._logger.debug(f"Forwarding shutdown error: {e}")
+                try:
+                    server_socket.close()
                 except Exception as e:
                     self._logger.debug(f"Forwarding close error: {e}")
                 del self._servers[tunnel_id]

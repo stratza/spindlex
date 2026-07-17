@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import socket
+import time
 from unittest.mock import MagicMock
 
 import pytest
@@ -99,7 +100,32 @@ class TestLocalPortForwarder:
         lpf._servers["t1"] = mock_server
         lpf.close_tunnel("t1")
         assert "t1" not in lpf._tunnels
+        mock_server.shutdown.assert_called_once_with(socket.SHUT_RDWR)
         mock_server.close.assert_called_once()
+
+    def test_close_tunnel_releases_listening_port(self):
+        t = _make_transport()
+        lpf = LocalPortForwarder(t)
+        tunnel_id = lpf.create_tunnel(0, "remote", 80, "127.0.0.1")
+        port = lpf._servers[tunnel_id].getsockname()[1]
+        # Let the accept thread block in accept() before closing.
+        time.sleep(0.05)
+        lpf.close_tunnel(tunnel_id)
+
+        # The port must be rebindable without SO_REUSEADDR once the tunnel
+        # is closed; a leaked accept thread would keep it bound.
+        deadline = time.monotonic() + 5
+        while True:
+            probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            try:
+                probe.bind(("127.0.0.1", port))
+                break
+            except OSError:
+                if time.monotonic() > deadline:
+                    raise
+                time.sleep(0.05)
+            finally:
+                probe.close()
 
     def test_get_tunnels(self):
         t = _make_transport()
