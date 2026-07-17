@@ -136,3 +136,33 @@ def test_rejects_placeholder_only_description():
 
     assert not result.valid
     assert "description" in result.errors[0].lower()
+
+
+DEPENDABOT_BODY = (
+    "Bumps [actions/checkout](https://github.com/actions/checkout) "
+    "from 6.0.3 to 7.0.0.\n"
+    "<details>\n<summary>Release notes</summary>\n</details>\n"
+)
+
+
+def test_dependabot_body_without_template_is_valid_and_needs_no_release():
+    result = validate_pr_body.validate_body(DEPENDABOT_BODY, author="dependabot[bot]")
+
+    assert result.valid
+    assert result.change_type == "dependencies"
+    assert result.release_needed == "false"
+    assert result.release_type == "none"
+
+
+def test_dependabot_body_with_explicit_token_uses_normal_validation():
+    result = validate_pr_body.validate_body(pr_body(), author="dependabot[bot]")
+
+    assert result.valid
+    assert result.change_type == "docs"
+
+
+def test_untrusted_author_without_template_still_fails():
+    result = validate_pr_body.validate_body(DEPENDABOT_BODY, author="someone")
+
+    assert not result.valid
+    assert "exactly one" in result.errors[0]

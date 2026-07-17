@@ -29,6 +29,11 @@ RELEASE_TYPES = {
     "refactor": ("false", "none"),
     "test": ("false", "none"),
 }
+# Automation authors whose PRs do not use the human PR template. Their PRs are
+# classified as dependency updates and never produce a release. A bot PR that
+# does select a Type of Change token is validated like a human PR.
+TRUSTED_BOT_AUTHORS = frozenset({"dependabot[bot]"})
+BOT_CHANGE_TYPE = "dependencies"
 
 
 @dataclass(frozen=True)
@@ -108,10 +113,17 @@ def _has_test_evidence(body: str) -> bool:
     return False
 
 
-def validate_body(body: str) -> ValidationResult:
+def validate_body(body: str, *, author: str = "") -> ValidationResult:
     errors: list[str] = []
 
     selected = _selected_change_types(body)
+    if author in TRUSTED_BOT_AUTHORS and not selected:
+        return ValidationResult(
+            change_type=BOT_CHANGE_TYPE,
+            release_needed="false",
+            release_type="none",
+            errors=(),
+        )
     if len(selected) != 1:
         errors.append(
             "Select exactly one Type of Change token "
@@ -155,6 +167,17 @@ def _body_from_event(event_path: Path) -> str:
     return body if isinstance(body, str) else ""
 
 
+def _author_from_event(event_path: Path) -> str:
+    payload = json.loads(event_path.read_text(encoding="utf-8"))
+    pull_request = payload.get("pull_request")
+    if not isinstance(pull_request, dict):
+        return ""
+
+    user = pull_request.get("user")
+    login = user.get("login") if isinstance(user, dict) else None
+    return login if isinstance(login, str) else ""
+
+
 def _write_github_output(result: ValidationResult) -> None:
     output_path = os.environ.get("GITHUB_OUTPUT")
     if not output_path:
@@ -171,10 +194,20 @@ def main(argv: list[str] | None = None) -> int:
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--event-path", type=Path, help="Path to GitHub event JSON.")
     source.add_argument("--body", help="Pull request body to validate.")
+    parser.add_argument(
+        "--author",
+        default="",
+        help="Pull request author login; read from the event payload by default.",
+    )
     args = parser.parse_args(argv)
 
-    body = args.body if args.body is not None else _body_from_event(args.event_path)
-    result = validate_body(body)
+    if args.body is not None:
+        body = args.body
+        author = args.author
+    else:
+        body = _body_from_event(args.event_path)
+        author = args.author or _author_from_event(args.event_path)
+    result = validate_body(body, author=author)
     _write_github_output(result)
 
     print(f"change_type={result.change_type}")

@@ -90,6 +90,29 @@ def test_pull_request_feature_plans_patch_release_during_beta(monkeypatch, tmp_p
     assert plan.source_pr == "130"
 
 
+def test_pull_request_dependabot_plans_no_release(monkeypatch, tmp_path):
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "pull_request")
+    monkeypatch.setenv("GITHUB_SHA", "abc123")
+    event_path = write_event(
+        tmp_path,
+        {
+            "pull_request": {
+                "number": 203,
+                "html_url": "https://github.com/stratza/spindlex/pull/203",
+                "body": "Bumps actions/checkout from 6.0.3 to 7.0.0.",
+                "user": {"login": "dependabot[bot]"},
+            }
+        },
+    )
+
+    plan = plan_release.create_plan(event_path)
+
+    assert plan.release_needed == "false"
+    assert plan.release_type == "none"
+    assert plan.change_type == "dependencies"
+    assert plan.next_version == plan.current_version
+
+
 def test_pull_request_feature_minor_plans_minor_release_during_beta(
     monkeypatch, tmp_path
 ):
