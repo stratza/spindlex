@@ -212,6 +212,13 @@ class TestSFTPFile:
         assert f.read(-1) == file_data
         assert f._offset == len(file_data)
 
+    def test_read_all_empty_data_response_treated_as_eof(self):
+        """An empty data response must terminate the loop, not spin forever."""
+        f, client = self._make_file()
+        client._receive_message_for_id.return_value = _make_data_msg(data=b"")
+        assert f.read(-1) == b""
+        assert f._offset == 0
+
     # --- write ---
 
     def test_write_raises_when_closed(self):
@@ -448,6 +455,22 @@ class TestSFTPClientGet:
         client.get("/remote/big.bin", local)
         with open(local, "rb") as fh:
             assert fh.read() == file_data
+
+    def test_get_empty_data_response_treated_as_eof(self, tmp_path):
+        """An empty data response must terminate the loop, not spin forever."""
+        client = self._client()
+        local = str(tmp_path / "empty.bin")
+        client._send_request_and_wait_response.side_effect = [
+            _make_handle_msg(handle=b"dl_handle"),
+            _make_ok_status(),
+        ]
+        client._send_message = MagicMock()
+        client._receive_message_for_id = MagicMock(
+            return_value=_make_data_msg(data=b"")
+        )
+        client.get("/remote/empty.bin", local)
+        with open(local, "rb") as fh:
+            assert fh.read() == b""
 
     def test_get_open_fails_raises(self, tmp_path):
         client = self._client()

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import socket
 import time
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -85,6 +85,22 @@ class TestLocalPortForwarder:
         with pytest.raises(SSHException, match="already exists"):
             lpf.create_tunnel(8080, "remote", 80)
 
+    def test_create_tunnel_all_binds_fail_raises(self):
+        t = _make_transport()
+        lpf = LocalPortForwarder(t)
+        mock_sock = MagicMock(spec=socket.socket)
+        mock_sock.bind.side_effect = OSError("address in use")
+        with patch(
+            "spindlex.transport.forwarding.socket.socket", return_value=mock_sock
+        ):
+            with pytest.raises(
+                SSHException, match="Failed to create local port forwarding"
+            ):
+                lpf.create_tunnel(0, "remote", 80, "127.0.0.1")
+        mock_sock.close.assert_called()
+        assert lpf._tunnels == {}
+        assert lpf._servers == {}
+
     def test_close_tunnel_nonexistent(self):
         t = _make_transport()
         lpf = LocalPortForwarder(t)
@@ -101,6 +117,19 @@ class TestLocalPortForwarder:
         lpf.close_tunnel("t1")
         assert "t1" not in lpf._tunnels
         mock_server.shutdown.assert_called_once_with(socket.SHUT_RDWR)
+        mock_server.close.assert_called_once()
+
+    def test_close_tunnel_shutdown_error_still_closes(self):
+        t = _make_transport()
+        lpf = LocalPortForwarder(t)
+        tunnel = ForwardingTunnel("t1", ("127.0.0.1", 8080), ("remote", 80), "local")
+        tunnel.active = True
+        lpf._tunnels["t1"] = tunnel
+        mock_server = MagicMock(spec=socket.socket)
+        mock_server.shutdown.side_effect = OSError("not connected")
+        lpf._servers["t1"] = mock_server
+        lpf.close_tunnel("t1")  # should not raise
+        assert "t1" not in lpf._tunnels
         mock_server.close.assert_called_once()
 
     def test_close_tunnel_releases_listening_port(self):
@@ -233,6 +262,35 @@ class TestRemotePortForwarder:
         rpf = RemotePortForwarder(t)
         tid = rpf.create_tunnel(8080, "localhost", 80)
         assert tid in rpf._tunnels
+
+    def test_forwarded_connection_prefers_exact_address_match(self):
+        t = _make_transport()
+        rpf = RemotePortForwarder(t)
+        for name in ("a", "b"):
+            tunnel = ForwardingTunnel(
+                f"remote_{name}",
+                (f"local-{name}", 80),
+                (f"addr-{name}", 8080),
+                "remote",
+            )
+            tunnel.active = True
+            rpf._tunnels[tunnel.tunnel_id] = tunnel
+
+        resolved: list[tuple[str, int]] = []
+
+        def fake_getaddrinfo(host, port, *args, **kwargs):
+            resolved.append((host, port))
+            raise OSError("stop before connecting")
+
+        channel = MagicMock()
+        with patch(
+            "spindlex.transport.forwarding.socket.getaddrinfo",
+            side_effect=fake_getaddrinfo,
+        ):
+            rpf.handle_forwarded_connection(channel, ("1.2.3.4", 5), ("addr-b", 8080))
+
+        # Both tunnels listen on port 8080; the addr-b tunnel must win.
+        assert resolved == [("local-b", 80)]
 
     def test_close_tunnel_nonexistent(self):
         t = _make_transport()
