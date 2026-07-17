@@ -101,6 +101,33 @@ class TestLocalPortForwarder:
         assert lpf._tunnels == {}
         assert lpf._servers == {}
 
+    def test_create_tunnel_ipv6_dual_stack_unsupported_still_binds(self):
+        t = _make_transport()
+        lpf = LocalPortForwarder(t)
+        mock_sock = MagicMock(spec=socket.socket)
+
+        def setsockopt(level, option, value):
+            if level == socket.IPPROTO_IPV6:
+                raise OSError("dual-stack not supported")
+
+        mock_sock.setsockopt.side_effect = setsockopt
+        mock_sock.accept.side_effect = OSError("closed")
+        addrinfo = [(socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("::1", 9999, 0, 0))]
+        with (
+            patch(
+                "spindlex.transport.forwarding.socket.getaddrinfo",
+                return_value=addrinfo,
+            ),
+            patch(
+                "spindlex.transport.forwarding.socket.socket",
+                return_value=mock_sock,
+            ),
+        ):
+            tunnel_id = lpf.create_tunnel(9999, "remote", 80, "::1")
+        assert tunnel_id in lpf._tunnels
+        mock_sock.bind.assert_called_once()
+        lpf.close_tunnel(tunnel_id)
+
     def test_close_tunnel_nonexistent(self):
         t = _make_transport()
         lpf = LocalPortForwarder(t)
