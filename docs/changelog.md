@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-07-18
+
 ### Security
 *   **`cryptography` minimum raised to 48.0.1** - versions below 48.0.1 ship wheels bundling a vulnerable OpenSSL ([GHSA-537c-gmf6-5ccf](https://github.com/advisories/GHSA-537c-gmf6-5ccf), high severity). SpindleX previously allowed `>=46.0.7`, so environments pinned inside the vulnerable range could resolve an affected build. This closes the open OpenSSF Scorecard vulnerability alert.
 
