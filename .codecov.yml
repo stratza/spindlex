@@ -9,6 +9,14 @@ coverage:
         target: auto
         threshold: 0%
 
+# No-release pushes to main only receive the nightly integration upload
+# (the unit flag is uploaded by the compatibility matrix, which only runs
+# for PRs and release pushes). Without carryforward, those commits report
+# integration-only coverage (~54%) and the project badge flaps.
+flag_management:
+  default_rules:
+    carryforward: true
+
 comment:
   layout: "reach,diff,flags,files"
   behavior: default
