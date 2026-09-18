@@ -30,6 +30,6 @@ because it controls release planning.
 
 ## Related
 
-- [Release policy](../release-policy.md)
+- [Release policy](../../../docs/release-policy.md)
 - [Release runbook](../release-runbook.md)
 - [Artifact verification](../release-verification.md)

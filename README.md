@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://capsule-render.vercel.app/api?type=waving&amp;color=gradient&amp;customColorList=18,18,18,48,25,52,18,18,18&amp;height=200&amp;section=header&amp;text=SpindleX&amp;fontSize=80&amp;fontColor=bb86fc&amp;fontAlignY=45&amp;desc=High-Performance%20SSH%20and%20SFTP%20for%20Python&amp;descSize=22&amp;descColor=b39ddb&amp;descAlignY=70&amp;animation=fadeIn" width="100%" />
+<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=18,18,18,48,25,52,18,18,18&height=200&section=header&text=SpindleX&fontSize=80&fontColor=bb86fc&fontAlignY=45&desc=High-Performance%20SSH%20and%20SFTP%20for%20Python&descSize=22&descColor=b39ddb&descAlignY=70&animation=fadeIn" width="100%" />
 
 <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&size=24&duration=3000&pause=1000&color=bb86fc&center=true&vCenter=true&width=600&lines=High-Performance+SSHv2+%E2%9A%A1;Native+AsyncIO+Support+%F0%9F%8C%91;Recursive+SFTP+Automation+%F0%9F%94%84;Secure+by+Default+%E2%9A%99%EF%B8%8F" alt="Typing SVG" />
 
@@ -26,7 +26,7 @@
 **SpindleX** is a modern SSH protocol implementation for Python 3.9+. It is designed for high-performance automation and secure file transfers, providing a clean alternative to legacy SSH libraries.
 
 > [!NOTE]
-> **1.0.0 - First stable release.** SpindleX has graduated from beta: the public API surface is frozen under semantic versioning, with `chacha20-poly1305@openssh.com` as the preferred cipher, adaptive SFTP chunks via `limits@openssh.com`, and a hardened sync + async transport. Upgrading from 0.x? Read the [migration guide](docs/migration/0.x-to-1.0.md). See also [SECURITY.md](SECURITY.md), [production usage expectations](docs/production-usage.md), and the [compatibility policy](docs/compatibility.md).
+> **1.0.0 - First stable release.** SpindleX has graduated from beta: the public API surface is frozen under semantic versioning, with `chacha20-poly1305@openssh.com` as the preferred cipher, adaptive SFTP chunks via `limits@openssh.com`, and a hardened sync + async transport. Upgrading from 0.x? Read the [migration guide](docs/migration/0.x-to-1.0.md). See also [SECURITY.md](SECURITY.md) and the [compatibility & API stability policy](docs/compatibility.md).
 
 ### 🔥 Key Features
 

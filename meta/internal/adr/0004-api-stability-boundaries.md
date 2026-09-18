@@ -11,7 +11,7 @@ stabilizes.
 
 ## Decision
 
-The documented APIs under [API stability](../api-stability.md) are the v1
+The documented APIs under [Compatibility & API stability](../../../docs/compatibility.md) are the v1
 compatibility surface. Underscore-prefixed modules, undocumented internals, test
 helpers, and protocol implementation details are not stable unless a public doc
 explicitly says otherwise.
@@ -24,4 +24,4 @@ as part of the compatibility contract.
 
 ## Related
 
-- [API stability](../api-stability.md)
+- [Compatibility & API stability](../../../docs/compatibility.md)

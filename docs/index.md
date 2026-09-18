@@ -69,5 +69,4 @@ pip install spindlex
 *   [**API Reference**](api_reference/index.md) - Detailed technical documentation.
 *   [**Performance**](performance.md) - Benchmarks and optimization tips.
 *   [**Security**](security.md) - Our security model and best practices.
-*   [**Production Usage**](production-usage.md) - Supported production-facing usage expectations.
-*   [**Compatibility**](compatibility.md) - Supported Python, OS, and SSH server compatibility boundaries.
+*   [**Compatibility & API Stability**](compatibility.md) - Supported Python, OS, and SSH server boundaries, production usage expectations, and the stable API surface.

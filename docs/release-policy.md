@@ -49,6 +49,4 @@ stable release.
 
 ## Related
 
-- [Release runbook](release-runbook.md)
-- [API stability](api-stability.md)
-- [ADR 0001](adr/0001-release-policy.md)
+- [Compatibility & API stability](compatibility.md)

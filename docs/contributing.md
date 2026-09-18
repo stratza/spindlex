@@ -52,8 +52,6 @@ python -m pytest tests/protocol/test_protocol_utils.py
 
 ### Code Quality
 
-I maintain high code quality standards:
-
 ```bash
 # Lint code
 ruff check spindlex tests
@@ -74,6 +72,11 @@ bandit -r spindlex -c pyproject.toml
 # Build docs
 mkdocs build --strict
 ```
+
+Coding style (line length, import sorting, docstring format) is enforced by
+`ruff` and `mypy` per `pyproject.toml` - run the commands above rather than
+following a separate style guide. Type hints are required on all public APIs,
+and public APIs need docstrings that render cleanly under mkdocstrings.
 
 ## Contributing Guidelines
 
@@ -107,50 +110,18 @@ protection to require pull requests, conversation resolution, and the
 `quality-gate` status check before merge. Direct pushes to `main` should be
 reserved for emergency recovery by repository administrators.
 
-1. **Create Feature Branch**
-   ```bash
-   git switch main
-   git pull --ff-only
-   git switch -c feature/your-feature-name
-   ```
+In the PR body, select one `Type of Change`:
 
-2. **Make Changes**
-   - Follow coding standards (see below)
-   - Add tests for new functionality
-   - Update documentation as needed
+- `bug`: patch release after merge
+- `feature`: feature or stabilization work for the current beta minor line; patch release before `1.0.0`
+- `feature-minor`: intentional beta minor-line feature; minor release before `1.0.0`
+- `breaking`: breaking beta change; minor release before `1.0.0`
+- `docs`: no release
+- `refactor`: no release
+- `test`: no release
 
-3. **Test Changes**
-   ```bash
-   ruff check spindlex tests
-   ruff format --check spindlex tests
-   mypy spindlex
-   python -m pytest tests -m "not integration and not real_server and not slow and not performance"
-   mkdocs build --strict
-   ```
-
-4. **Commit Changes**
-   ```bash
-   git add .
-   git commit -m "feat: add new feature description"
-   ```
-
-5. **Push and Create PR**
-   ```bash
-   git push origin feature/your-feature-name
-   ```
-
-   In the PR body, select one `Type of Change`:
-
-   - `bug`: patch release after merge
-   - `feature`: feature or stabilization work for the current beta minor line; patch release before `1.0.0`
-   - `feature-minor`: intentional beta minor-line feature; minor release before `1.0.0`
-   - `breaking`: breaking beta change; minor release before `1.0.0`
-   - `docs`: no release
-   - `refactor`: no release
-   - `test`: no release
-
-   Release-impact types (`bug`, `feature`, `breaking`) must include test
-   evidence in the PR body.
+Release-impact types (`bug`, `feature`, `breaking`) must include test
+evidence in the PR body.
 
 ### Commit Message Format
 
@@ -181,279 +152,28 @@ docs(readme): update installation instructions
 test(crypto): add tests for key generation
 ```
 
-## Coding Standards
-
-### Python Style
-
-I follow PEP 8 with some modifications:
-
-- **Line Length**: 88 characters
-- **Imports**: Use Ruff import sorting
-- **Type Hints**: Required for all public APIs
-- **Docstrings**: Google style docstrings
-
-### Code Structure
-
-```python
-"""Module docstring describing the module's purpose."""
-
-import standard_library
-import third_party_library
-
-from spindlex import local_imports
-
-
-class ExampleClass:
-    """Class docstring.
-    
-    Args:
-        param1: Description of parameter.
-        param2: Description of parameter.
-    
-    Attributes:
-        attr1: Description of attribute.
-    """
-    
-    def __init__(self, param1: str, param2: int) -> None:
-        """Initialize the class.
-        
-        Args:
-            param1: Description.
-            param2: Description.
-        """
-        self.attr1 = param1
-        self._private_attr = param2
-    
-    def public_method(self, arg: str) -> bool:
-        """Public method with proper docstring.
-        
-        Args:
-            arg: Description of argument.
-            
-        Returns:
-            Description of return value.
-            
-        Raises:
-            ValueError: When arg is invalid.
-        """
-        if not arg:
-            raise ValueError("arg cannot be empty")
-        return True
-    
-    def _private_method(self) -> None:
-        """Private method (single underscore)."""
-        pass
-```
-
-### Testing Standards
-
-- **Test Coverage**: Aim for >90% coverage
-- **Test Types**: Unit, integration, and performance tests
-- **Test Structure**: Use pytest fixtures and parametrization
-- **Mocking**: Use unittest.mock for external dependencies
-
-```python
-import pytest
-from unittest.mock import Mock, patch
-
-from spindlex.client.ssh_client import SSHClient
-
-
-class TestSSHClient:
-    """Test cases for SSHClient."""
-    
-    @pytest.fixture
-    def client(self):
-        """Provide a test client instance."""
-        return SSHClient()
-    
-    def test_connect_success(self, client):
-        """Test successful connection."""
-        # Test implementation
-        pass
-    
-    @pytest.mark.parametrize("username,password,expected", [
-        ("user1", "pass1", True),
-        ("user2", "pass2", False),
-    ])
-    def test_authentication(self, client, username, password, expected):
-        """Test authentication with various credentials."""
-        # Test implementation
-        pass
-    
-    @patch('spindlex.transport.transport.socket')
-    def test_connection_failure(self, mock_socket, client):
-        """Test connection failure handling."""
-        mock_socket.side_effect = ConnectionError("Connection failed")
-        # Test implementation
-        pass
-```
-
-### Documentation Standards
-
-- **API Documentation**: All public APIs must have docstrings
-- **Type Hints**: Required for all function signatures
-- **Examples**: Include usage examples in docstrings
-- **MkDocs / mkdocstrings**: Public APIs should have docstrings that render clearly in the generated documentation
-
-```python
-def connect(
-    self,
-    hostname: str,
-    port: int = 22,
-    username: Optional[str] = None,
-    password: Optional[str] = None,
-    pkey: Optional[PKey] = None,
-    timeout: Optional[float] = None
-) -> None:
-    """Connect to SSH server.
-    
-    Establishes an SSH connection to the specified server with the given
-    authentication credentials.
-    
-    Args:
-        hostname: Server hostname or IP address.
-        port: SSH port number (default: 22).
-        username: Username for authentication.
-        password: Password for authentication (if using password auth).
-        pkey: Private key for authentication (if using key auth).
-        timeout: Connection timeout in seconds.
-    
-    Raises:
-        AuthenticationException: If authentication fails.
-        TransportException: If connection cannot be established.
-        
-    Example:
-        >>> client = SSHClient()
-        >>> client.connect('example.com', username='user', password='pass')
-        >>> # Use the connection
-        >>> client.close()
-    """
-```
-
-## Security Guidelines
-
-### Security-First Development
-
-- **Input Validation**: Validate all inputs
-- **Constant-Time Operations**: Use constant-time comparisons for secrets
-- **Memory Safety**: Clear sensitive data from memory
-- **Logging**: Never log sensitive information
-
-### Cryptographic Standards
-
-- **Modern Algorithms**: Use only modern, secure algorithms
-- **Key Sizes**: Enforce minimum key sizes
-- **Random Generation**: Use cryptographically secure random generators
-- **Timing Attacks**: Protect against timing-based attacks
-
-### Security Review Process
-
-1. **Self Review**: Check your code for security issues
-2. **Automated Scanning**: Run bandit and other security tools
-3. **Peer Review**: Have security-conscious developers review
-4. **Security Team Review**: For cryptographic or security-critical changes
-
-## Performance Guidelines
-
-### Performance Considerations
-
-- **Efficiency**: Optimize hot paths and frequently called functions
-- **Memory Usage**: Minimize memory allocations and leaks
-- **Async Support**: Consider async alternatives for I/O operations
-- **Benchmarking**: Add benchmarks for performance-critical code
-
-### Benchmarking
-
-```python
-import time
-from spindlex.crypto.pkey import Ed25519Key
-
-def benchmark_key_generation():
-    """Benchmark key generation performance."""
-    iterations = 100
-    start_time = time.perf_counter()
-    
-    for _ in range(iterations):
-        Ed25519Key.generate()
-    
-    end_time = time.perf_counter()
-    avg_time = (end_time - start_time) / iterations
-    
-    print(f"Average key generation time: {avg_time:.4f}s")
-    assert avg_time < 0.1  # Should be fast
-```
-
-## Documentation
-
-### Types of Documentation
-
-1. **API Documentation**: Auto-generated from docstrings
-2. **User Guide**: How-to guides and tutorials
-3. **Examples**: Practical code examples
-4. **Security Guide**: Security best practices
-
-### Building Documentation
-
-```bash
-# Install documentation dependencies
-pip install -e .[docs]
-
-# Build documentation
-mkdocs build --strict
-
-# View documentation
-open site/index.html
-```
-
-### Writing Documentation
-
-- **Clear Language**: Use simple, clear language
-- **Code Examples**: Include working code examples
-- **Cross-References**: Link to related documentation
-- **Updates**: Keep documentation in sync with code changes
-
 ## Community
 
-### Communication Channels
-
 - **GitHub Issues**: Bug reports and feature requests
-- **GitHub Discussions**: General questions and discussions
-- **Security Issue**: Use the GitHub Security Advisory system for security-related concerns.
-
-### Getting Help
-
-- **Documentation**: Check the documentation first
-- **Search Issues**: Look for existing issues
-- **Ask Questions**: Use GitHub Discussions for questions
-- **Stack Overflow**: Tag questions with `spindlex`
+- **GitHub Discussions**: General questions and help
+- **Security Issue**: Use the GitHub Security Advisory system for security-related concerns, not public issues
 
 ## Recognition
 
 Contributors are recognized in:
 - **CONTRIBUTORS.md**: List of all contributors
 - **Release Notes**: Major contributions mentioned
-- **Documentation**: Author attribution where appropriate
 
 ## Legal
 
-### Contributor License Agreement
-
 By contributing to SpindleX, you agree that:
 
-1. Your contributions are your original work
-2. You have the right to submit the contributions
-3. Your contributions are licensed under the MIT license
-4. You grant the project creator the right to use your contributions
-
-### Copyright
-
-- **New Files**: Include MIT license header
-- **Existing Files**: Maintain existing copyright notices
-- **Third-Party Code**: Clearly mark and attribute third-party code
+1. Your contributions are your original work, or you have the right to submit them.
+2. Your contributions are licensed under the project's MIT license.
+3. New files include an MIT license header; existing copyright notices and third-party attributions are preserved.
 
 ## Thank You
 
 Thank you for contributing to SpindleX! Your contributions help make secure SSH communication accessible to Python developers worldwide.
 
-For questions about contributing, please open a GitHub Discussion or contact me.
+For questions about contributing, please open a GitHub Discussion.

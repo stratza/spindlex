@@ -23,4 +23,4 @@ claims.
 
 ## Related
 
-- [Compatibility](../compatibility.md)
+- [Compatibility](../../../docs/compatibility.md)

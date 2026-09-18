@@ -41,3 +41,25 @@ Most changes can be decided in PR review. Use an ADR when a decision affects:
 - Release failures use release-blocked issue templates and the release runbook.
 - Repeated CI failures become tracked issues.
 - Community moderation follows `CODE_OF_CONDUCT.md`.
+
+## Security-Sensitive Interfaces
+
+Maintainer review is required for changes to:
+
+- host key policies and storage
+- authentication
+- key exchange and algorithm negotiation
+- packet framing, MAC, AEAD, and rekey behavior
+- SFTP read/write integrity
+- logging sanitizer rules
+- release and artifact integrity workflows
+
+## Production-Impacting Bugs
+
+Maintainers treat the following as production-impacting when reproducible:
+
+- Host key verification bypasses or unsafe defaults.
+- Authentication regressions for supported key/password flows.
+- SFTP data corruption, truncation, or unreported write failure.
+- Protocol deadlocks, resource leaks, or unbounded malformed-input handling.
+- Compatibility regressions against documented tested environments.
