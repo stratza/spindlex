@@ -82,22 +82,20 @@ plugins:
 
 nav:
   - Home: index.md
-  - Quick Start: quickstart.md
-  - User Guide:
+  - Getting Started:
+      - Quick Start: quickstart.md
+      - Migration Overview: migration/index.md
+      - 0.x to 1.0: migration/0.x-to-1.0.md
+  - Guide:
       - Introduction: user_guide/index.md
       - Authentication: user_guide/authentication.md
       - Client Usage: user_guide/client.md
       - SFTP Operations: user_guide/sftp.md
       - Server Usage: user_guide/server.md
-  - Cookbook:
-      - Overview: cookbook/index.md
+      - Cookbook Overview: cookbook/index.md
       - SFTP Recipes: cookbook/sftp_recipes.md
-      - Automation: cookbook/automation.md
-  - Deployment: deployment.md
-  - Project:
-      - Compatibility & API Stability: compatibility.md
-      - Release Policy: release-policy.md
-      - Public Roadmap: roadmap.md
+      - Automation Recipes: cookbook/automation.md
+      - Deployment: deployment.md
   - API Reference:
       - Overview: api_reference/index.md
       - Client: api_reference/client.md
@@ -109,12 +107,14 @@ nav:
       - Tools: api_reference/tools.md
       - Logging: api_reference/logging.md
       - Exceptions: api_reference/exceptions.md
-  - Migration:
-      - Overview: migration/index.md
-      - 0.x to 1.0: migration/0.x-to-1.0.md
-  - Comparison: comparison.md
-  - Algorithms: algorithms.md
-  - Security: security.md
-  - Performance: performance.md
+  - Security & Performance:
+      - Security: security.md
+      - Performance: performance.md
+      - Algorithms: algorithms.md
+  - Project:
+      - Compatibility & API Stability: compatibility.md
+      - Release Policy: release-policy.md
+      - Public Roadmap: roadmap.md
+      - Comparison: comparison.md
+      - Changelog: changelog.md
   - Contributing: contributing.md
-  - Changelog: changelog.md
