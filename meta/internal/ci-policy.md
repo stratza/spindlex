@@ -76,3 +76,10 @@ release tooling version.
 New heavy checks can start as manual or scheduled. Maintainers decide whether
 each check is promoted to required, advisory, or release-blocking and update
 this page plus repository settings when needed.
+
+## Suppressing Scanner Findings
+
+Suppressions must be narrow and documented near the relevant configuration or
+code. A suppression is acceptable only when the finding is understood, not
+exploitable in the project context, and cheaper to document than to restructure.
+Broad scanner disables are not acceptable for runtime code.

@@ -42,6 +42,28 @@ correctly configured. If an application accepts unknown host keys without
 verification, the SSH transport can be encrypted but the server identity is not
 trusted.
 
+## Architecture and Trust Boundaries
+
+**Data flow:**
+
+1. Client code configures host keys, credentials, algorithms, and connection
+   options.
+2. Transport opens a TCP socket and performs SSH version exchange.
+3. Key exchange negotiates KEX, host key, cipher, and MAC or AEAD behavior.
+4. Host key policy verifies server identity.
+5. Authentication establishes the user session.
+6. Channels carry command execution, forwarding, and SFTP subsystem traffic.
+7. SFTP clients and servers encode and decode file-operation messages.
+
+**Trust boundaries:**
+
+* Remote SSH peers are untrusted until host key verification succeeds.
+* Credentials and private keys are caller-owned secrets.
+* Protocol bytes from the network are untrusted input.
+* `cryptography` owns low-level primitive correctness.
+* SpindleX owns SSH framing, negotiation, host key policy, authentication flow,
+  channel behavior, and SFTP message handling.
+
 ## Cryptography Dependency Model
 
 SpindleX does not implement low-level cryptographic primitives directly. It uses
@@ -99,14 +121,53 @@ For a full reference of all supported KEX, host key, cipher, and MAC algorithms 
 
 ---
 
-## Security Policy
+## Logging and Observability
 
-For information on how to report vulnerabilities or our disclosure policy, see
-the repository [Security Policy](https://github.com/stratza/spindlex/blob/main/SECURITY.md).
-Maintainer response workflow details are in
-[Vulnerability Response](vulnerability-response.md).
+SpindleX loggers use the `spindlex` namespace. Module loggers should remain
+under that namespace so sanitizing filters and application log configuration can
+target the whole library.
 
-## Security Scanning and Blocker Policy
+Important categories:
+
+- `spindlex.*` for runtime library events
+- `spindlex.security` for security-relevant events
+- `spindlex.performance` for timing and throughput metrics
+
+**Levels:**
+
+- `ERROR`: operation failed and the caller likely needs to handle it.
+- `WARNING`: degraded behavior, unsafe user configuration, retryable issue, or
+  compatibility warning.
+- `INFO`: lifecycle events useful during normal operations.
+- `DEBUG`: protocol diagnostics and detailed troubleshooting data.
+
+**Redaction guarantees:** sanitizers are expected to redact common passwords,
+tokens, private-key blocks, and sensitive key/value fields. They are defense in
+depth, not permission to log raw secrets. Avoid logging passwords, private keys,
+raw authorization tokens, full known-host files, or unredacted environment
+dumps.
+
+**Safe debug fields** include algorithm names, packet/message type names, byte
+counts, channel identifiers, elapsed time, and server version family when
+already visible on the wire. Avoid logging full payloads, command arguments
+that may contain secrets, or private filesystem paths unless the caller
+explicitly controls the log.
+
+**Debugging a production incident:**
+
+1. Enable `DEBUG` only for the narrow process or logger needed.
+2. Reproduce with sanitized logs.
+3. Capture Python, SpindleX, OS, and SSH server versions.
+4. Include correlation context from the application when available.
+5. Remove logs after triage according to local retention policy.
+
+Useful operational metrics include connect time, authentication time, command
+latency, SFTP throughput, retry counts, error counts, and packet-level profiler
+summaries when `SPINDLEX_PROFILE=1` is enabled.
+
+---
+
+## Security Scanning
 
 The repository uses layered automated checks:
 
@@ -119,13 +180,7 @@ The repository uses layered automated checks:
 * OpenSSF Scorecard for repository supply-chain posture.
 
 PR gates block high-confidence fast findings such as Bandit failures, Semgrep
-`ERROR` findings, vulnerable runtime dependencies, and committed secrets. The
-full CodeQL and security workflows run on schedule, on demand, and through the
-sequential `main` push release orchestrator so post-merge code is scanned
-without competing with PR or release runner capacity. Supported tools upload
-SARIF to GitHub code scanning.
-
-### Release-Blocking Findings
+`ERROR` findings, vulnerable runtime dependencies, and committed secrets.
 
 These findings block releases until fixed or explicitly accepted by a maintainer:
 
@@ -135,23 +190,9 @@ These findings block releases until fixed or explicitly accepted by a maintainer
 * Host key verification bypass or unsafe default behavior.
 * Supply-chain finding that weakens release integrity.
 
-### False Positives
+---
 
-Suppressions must be narrow and documented near the relevant configuration or
-code. A suppression is acceptable only when the finding is understood, not
-exploitable in the project context, and cheaper to document than to restructure.
-Broad scanner disables are not acceptable for runtime code.
+## Reporting a Vulnerability
 
-### Supported Versions
-
-Only the latest version of SpindleX is currently supported for security updates.
-
-| Version | Supported          |
-| ------- | ------------------ |
-| 1.0.x   | :white_check_mark: |
-| 0.7.x   | :x:                |
-| < 0.7   | :x:                |
-
-### Reporting a Vulnerability
-
-If you believe you have found a security vulnerability, please report it privately through [GitHub Security Advisories](https://github.com/stratza/spindlex/security/advisories/new).
+For how to report vulnerabilities and our disclosure timeline, see the
+repository [Security Policy](https://github.com/stratza/spindlex/blob/main/SECURITY.md).

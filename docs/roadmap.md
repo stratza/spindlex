@@ -1,27 +1,8 @@
 # Public Roadmap
 
 This roadmap summarizes public lifecycle expectations without exposing internal
-planning noise or committing to exact timelines.
-
-## Beta Stabilization (completed)
-
-The 0.x beta line focused on:
-
-- protocol correctness and malformed-input handling
-- SFTP reliability and performance
-- security documentation and release trust
-- CI reliability on free GitHub-hosted runners
-- conservative compatibility claims
-
-## v1.0 Stable (released)
-
-`1.0.0` shipped after the readiness checklist was completed:
-
-- public production usage, compatibility, and API stability docs
-- release, artifact verification, and support policy docs
-- CI/release checks that match the documented policy
-- property tests and repeatable local benchmark baseline
-- security and vulnerability response documentation
+planning noise or committing to exact timelines. For what shipped in each
+release, see the [Changelog](changelog.md).
 
 ## Current Focus (post-1.0)
 

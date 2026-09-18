@@ -24,7 +24,7 @@ issue requesting a private security contact and do not include exploit details
 in that issue.
 
 Maintainer triage, severity, embargo, advisory, CVE, and patch-release handling
-are documented in [docs/vulnerability-response.md](docs/vulnerability-response.md).
+follow an internal runbook.
 
 ## What to Include
 
@@ -72,8 +72,7 @@ SpindleX follows these security principles:
   logic errors.
 
 The broader security model and trust boundaries are documented in
-[docs/security.md](docs/security.md) and
-[docs/architecture-security.md](docs/architecture-security.md).
+[docs/security.md](docs/security.md).
 
 ## Minimal Threat Model
 
