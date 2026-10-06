@@ -348,11 +348,11 @@ class HostKeyStorage:
         # token) - nothing extra needed. For completeness also try the bare host
         # if a bracketed form was requested and vice versa is NOT done (ports
         # must match). Now add any hashed entries that match this token.
+        token_bytes = token.encode("utf-8")
         for salt, host_hash, key in self._hashed_entries:
-            try:
-                digest = hmac.new(salt, token.encode("utf-8"), hashlib.sha1).digest()
-            except Exception:
-                continue
+            # salt/host_hash are validated bytes (decoded at parse time), so the
+            # HMAC never raises here. known_hosts hashing uses HMAC-SHA1 by spec.
+            digest = hmac.new(salt, token_bytes, hashlib.sha1).digest()
             if hmac.compare_digest(digest, host_hash):
                 results.append(key)
         return results

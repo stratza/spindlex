@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-10-06
+
 ### Security
 *   **Server authentication bypass fixed** (CWE-287, [GHSA-xcrc-h5v2-7cj8](https://github.com/stratza/spindlex/security/advisories/GHSA-xcrc-h5v2-7cj8)) - the server processed connection-protocol messages (channel open, global requests, exec) before authentication completed, so a client that never authenticated could open a session and run commands. The server now rejects every connection-protocol message until authentication has succeeded.
 *   **SFTP recursive-download path traversal fixed** (CWE-22) - during `get_recursive()` the sync and async SFTP clients joined server-supplied directory-entry names straight into the local path, so a malicious server could write outside the download directory. Entry names containing path separators, drive letters, absolute paths or parent references are now rejected.
