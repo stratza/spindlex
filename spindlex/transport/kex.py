@@ -108,7 +108,12 @@ class KeyExchange:
                     "before invoking KeyExchange.start_kex()"
                 )
 
-            peer_kexinit_blob = self._transport._peer_kexinit.pack()
+            # Use the peer's KEXINIT exactly as it arrived on the wire; a
+            # re-serialised parse can differ and break the exchange hash.
+            peer_kexinit_blob = (
+                self._transport._peer_kexinit_raw
+                or self._transport._peer_kexinit.pack()
+            )
             our_kexinit_blob = self._transport._client_kexinit_blob
 
             if self._transport._server_mode:
@@ -219,24 +224,50 @@ class KeyExchange:
         # Store server KEXINIT blob for hash calculation
         self._server_kexinit = msg.pack()
 
+    def _our_host_key_algorithms(self) -> list:
+        """Host-key algorithms we are willing to use.
+
+        As a client we accept any supported server key type. As a server we
+        must only advertise (and agree to) algorithms our configured host key
+        can actually sign with, otherwise a client that prefers a different
+        type gets a signature it cannot verify ("key type does not match").
+        """
+        full = list(self._cipher_suite.HOST_KEY_ALGORITHMS)
+        if not self._transport._server_mode:
+            return full
+
+        key = self._transport._server_key
+        name = getattr(key, "algorithm_name", None)
+        if name in ("rsa-sha2-256", "rsa-sha2-512", "ssh-rsa"):
+            # One RSA key can sign with either SHA-2 variant; keep our
+            # preference order (sha2-512 before sha2-256) from HOST_KEY_ALGORITHMS.
+            allowed = {"rsa-sha2-512", "rsa-sha2-256"}
+        elif name:
+            allowed = {name}
+        else:
+            return full
+        return [a for a in full if a in allowed]
+
     def _negotiate_algorithms(self) -> None:
         """Negotiate algorithms based on client and server preferences."""
         if not self._transport._peer_kexinit:
             raise CryptoException("No peer KEXINIT for negotiation")
 
-        # Build client algorithms dict
-        client_algs = {
+        # Our own advertised algorithms. In server mode the host-key list is
+        # restricted to algorithms our configured key can actually produce, so
+        # we never agree to sign with a key type we do not hold.
+        our_algs = {
             "kex_algorithms": self._cipher_suite.KEX_ALGORITHMS,
-            "server_host_key_algorithms": self._cipher_suite.HOST_KEY_ALGORITHMS,
+            "server_host_key_algorithms": self._our_host_key_algorithms(),
             "encryption_algorithms_client_to_server": self._cipher_suite.ENCRYPTION_ALGORITHMS,
             "encryption_algorithms_server_to_client": self._cipher_suite.ENCRYPTION_ALGORITHMS,
             "mac_algorithms_client_to_server": self._cipher_suite.MAC_ALGORITHMS,
             "mac_algorithms_server_to_client": self._cipher_suite.MAC_ALGORITHMS,
         }
 
-        # Build server algorithms dict
+        # The peer's advertised algorithms.
         peer = self._transport._peer_kexinit
-        server_algs = {
+        peer_algs = {
             "kex_algorithms": peer.kex_algorithms,
             "server_host_key_algorithms": peer.server_host_key_algorithms,
             "encryption_algorithms_client_to_server": peer.encryption_algorithms_client_to_server,
@@ -244,6 +275,15 @@ class KeyExchange:
             "mac_algorithms_client_to_server": peer.mac_algorithms_client_to_server,
             "mac_algorithms_server_to_client": peer.mac_algorithms_server_to_client,
         }
+
+        # RFC 4253 s7.1: the CLIENT's preference order decides, and both ends
+        # must compute the same result. negotiate_algorithms() iterates the
+        # first dict (the client) in order, so the client's list must be the
+        # first argument regardless of which side we are.
+        if self._transport._server_mode:
+            client_algs, server_algs = peer_algs, our_algs
+        else:
+            client_algs, server_algs = our_algs, peer_algs
 
         # Use CipherSuite to negotiate
         negotiated = self._cipher_suite.negotiate_algorithms(client_algs, server_algs)
@@ -706,6 +746,17 @@ class KeyExchange:
         server_key = self._transport._server_key
         if server_key is None:
             raise CryptoException("Server key not set - cannot sign exchange hash")
+        # For RSA keys, sign with the host-key algorithm that was negotiated
+        # (rsa-sha2-256 vs rsa-sha2-512) rather than the key's default, so the
+        # signature algorithm matches what the client agreed to verify.
+        negotiated = getattr(self, "_server_host_key_algorithm", None)
+        current = getattr(server_key, "algorithm_name", None)
+        if negotiated in ("rsa-sha2-256", "rsa-sha2-512") and current in (
+            "rsa-sha2-256",
+            "rsa-sha2-512",
+            "ssh-rsa",
+        ):
+            server_key._algorithm_name = negotiated
         signature = server_key.sign(exchange_hash)
         if signature is None:
             raise CryptoException("Failed to sign exchange hash")

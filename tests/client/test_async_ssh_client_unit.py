@@ -307,7 +307,7 @@ class TestVerifyHostKey:
         known_key.get_public_key_bytes.return_value = b"same"
         known_key.algorithm_name = "ssh-rsa"  # Added to match filtering
         storage = MagicMock(spec=HostKeyStorage)
-        storage.get_all.return_value = [known_key]
+        storage.lookup.return_value = [known_key]
         client._host_key_storage = storage
         # Should not raise
         client._verify_host_key()
@@ -321,7 +321,7 @@ class TestVerifyHostKey:
         known_key = MagicMock()
         known_key.get_public_key_bytes.return_value = b"old"
         storage = MagicMock(spec=HostKeyStorage)
-        storage.get_all.return_value = [known_key]
+        storage.lookup.return_value = [known_key]
         client._host_key_storage = storage
 
         with pytest.raises(BadHostKeyException):
@@ -334,7 +334,7 @@ class TestVerifyHostKey:
         client._transport.get_server_host_key.return_value = server_key
 
         storage = MagicMock(spec=HostKeyStorage)
-        storage.get_all.return_value = []
+        storage.lookup.return_value = []
         client._host_key_storage = storage
         client._host_key_policy = RejectPolicy()
 
@@ -351,7 +351,7 @@ class TestVerifyHostKey:
 
         storage = MagicMock(spec=HostKeyStorage)
         storage.get.return_value = None
-        storage.get_all.return_value = []
+        storage.lookup.return_value = []
         client._host_key_storage = storage
         client._host_key_policy = AutoAddPolicy(accept_risk=True)
 
@@ -367,7 +367,7 @@ class TestVerifyHostKey:
         client._transport.get_server_host_key.return_value = server_key
 
         storage = MagicMock(spec=HostKeyStorage)
-        storage.get_all.return_value = []
+        storage.lookup.return_value = []
         client._host_key_storage = storage
 
         bad_policy = MagicMock(spec=RejectPolicy)

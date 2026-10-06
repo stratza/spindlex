@@ -709,12 +709,16 @@ class SSHServerManager:
                 # Accept new connection
                 client_socket, client_address = self._server_socket.accept()
 
-                # Check connection limits
+                # Check connection limits. Count every accepted socket - not
+                # just those that finished the handshake - so a flood of
+                # half-open connections cannot bypass the cap and exhaust
+                # threads.
                 with self._lock:
-                    if len(self._connections) >= self._max_connections:
+                    if self._active_connections >= self._max_connections:
                         client_socket.close()
                         continue
 
+                    self._active_connections += 1
                     self._total_connections += 1
                     # Handle IPv6 address tuples (host, port, flowinfo, scopeid)
                     client_host = client_address[0]
@@ -757,9 +761,7 @@ class SSHServerManager:
         """
         transport = None
         try:
-            with self._lock:
-                self._active_connections += 1
-
+            # _active_connections was already incremented at accept time.
             # Set socket timeout
             client_socket.settimeout(self._connection_timeout)
 
@@ -771,6 +773,12 @@ class SSHServerManager:
             with self._lock:
                 self._connections[connection_id] = transport
 
+            # Login grace period: an unauthenticated peer must finish auth
+            # within auth_timeout, otherwise the connection is dropped (like
+            # OpenSSH's LoginGraceTime). Without this, idle half-authenticated
+            # connections could be held open indefinitely.
+            login_deadline = time.monotonic() + self._auth_timeout
+
             # Keep connection alive and process messages
             while transport.active:
                 try:
@@ -781,11 +789,28 @@ class SSHServerManager:
                     # Check if still active
                     if not transport.active:
                         break  # type: ignore[unreachable]
+                    if (
+                        not transport.authenticated
+                        and time.monotonic() > login_deadline
+                    ):
+                        self._logger.warning(
+                            "Login grace time exceeded for %s; closing",
+                            connection_id,
+                        )
+                        transport.close()
+                        break
                     continue
                 except Exception as e:
                     self._logger.debug(
                         f"Connection loop error for {connection_id}: {e}"
                     )
+                    break
+                # Enforce the deadline on the normal path too.
+                if not transport.authenticated and time.monotonic() > login_deadline:
+                    self._logger.warning(
+                        "Login grace time exceeded for %s; closing", connection_id
+                    )
+                    transport.close()
                     break
 
         except Exception as e:

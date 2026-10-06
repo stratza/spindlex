@@ -113,6 +113,15 @@ Host key verification is critical to prevent man-in-the-middle (MITM) attacks.
 *   **Input Sanitization**: If you are building a server that executes commands based on user input, rigorously sanitize all inputs to prevent command injection.
 *   **Logging**: Be careful not to log sensitive information like passwords or private key data. SpindleX's built-in logging sanitizes most sensitive data by default.
 
+### 5. Running a Server
+
+When you build a server with `SSHServer`/`SSHServerManager` or expose files with `SFTPServer`, SpindleX enforces several protections you should rely on and complement:
+
+*   **Authentication gates the connection protocol**: the server refuses channel opens, global requests, and channel operations until authentication has succeeded. Your `check_channel_*` callbacks only run for authenticated sessions.
+*   **Brute-force and resource limits**: the server caps failed authentication attempts per connection, drops connections that do not authenticate within the login grace period, and counts connections at accept time. Keep `set_auth_timeout()` / `set_connection_timeout()` and the maximum-connections limit at sensible values for your environment.
+*   **Restrict the SFTP root**: always pass an explicit, restricted `root_path` to `SFTPServer` - never the filesystem root (`/`), which exposes everything the process can read. SpindleX resolves client paths within the root and does not follow a symlink in the final path component for `lstat`/`remove`/`rename`.
+*   **Override the SFTP access checks**: `check_file_access()` and `check_directory_access()` default to allowing everything. Override them to enforce your own authorization policy.
+
 ---
 
 ## Supported Cryptographic Algorithms

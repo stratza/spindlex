@@ -72,6 +72,7 @@ class TestAsyncTransportUnit:
     @pytest.mark.asyncio
     async def test_send_message_async_no_writer_raises(self, transport):
         msg = MagicMock(spec=Message)
+        msg.msg_type = 90  # non-KEX type; send path reads this before the writer check
         with pytest.raises(TransportException, match="Transport not initialized"):
             await transport._send_message_async(msg)
 

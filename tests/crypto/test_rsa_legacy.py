@@ -23,7 +23,7 @@ def test_rsa_sha1_disabled_by_default(rsa_key):
 
     # Signing should fail
     with pytest.raises(
-        CryptoException, match="RSA with SHA-1 \(ssh-rsa\) is disabled by default"
+        CryptoException, match=r"RSA with SHA-1 \(ssh-rsa\) is disabled by default"
     ):
         rsa_key.sign(data)
 

@@ -22,7 +22,7 @@ from ..exceptions import (
     SSHException,
 )
 from ..hostkeys.policy import MissingHostKeyPolicy, RejectPolicy
-from ..hostkeys.storage import HostKeyStorage
+from ..hostkeys.storage import HostKeyStorage, host_token
 from ..protocol.constants import SSH_STRING_ENCODING
 from ..transport.channel import Channel
 from ..transport.transport import Transport
@@ -427,6 +427,10 @@ class SSHClient:
             raise SSHException("No transport available")
 
         hostname = self._hostname or "unknown"
+        # OpenSSH stores non-22 ports as [host]:port and may hash host names;
+        # look up and persist under the same canonical token so those entries
+        # are actually matched instead of being treated as unknown.
+        lookup_host = host_token(hostname, self._port)
 
         try:
             # Get actual server host key from transport
@@ -435,15 +439,18 @@ class SSHClient:
             if server_key is None:
                 raise SSHException("No host key received from server")
 
-            # Check if we have any known host keys for this hostname
-            known_keys = self._host_key_storage.get_all(hostname)
+            # Check if we have any known host keys for this host (port-aware,
+            # hashed-aware).
+            known_keys = self._host_key_storage.lookup(hostname, self._port)
 
             if not known_keys:
                 # No known key - apply missing host key policy
-                self._logger.debug(f"No known host key for {hostname}")
+                self._logger.debug(f"No known host key for {lookup_host}")
 
                 try:
-                    self._host_key_policy.missing_host_key(self, hostname, server_key)
+                    self._host_key_policy.missing_host_key(
+                        self, lookup_host, server_key
+                    )
                 except (BadHostKeyException, SSHException):
                     raise
                 except Exception as e:
@@ -483,11 +490,12 @@ class SSHClient:
                     # We have keys for this host, but not of this type.
                     # Standard behavior is to treat it as a new (missing) host key.
                     self._logger.debug(
-                        f"No known {server_key.algorithm_name} host key for {hostname}"
+                        f"No known {server_key.algorithm_name} host key for "
+                        f"{lookup_host}"
                     )
                     try:
                         self._host_key_policy.missing_host_key(
-                            self, hostname, server_key
+                            self, lookup_host, server_key
                         )
                     except (BadHostKeyException, SSHException):
                         raise

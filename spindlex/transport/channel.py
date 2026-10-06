@@ -46,6 +46,12 @@ class Channel:
         # Local channel info
         self._local_window_size = 0
         self._local_max_packet_size = 0
+        # Bytes the peer may still send before it must wait for a
+        # WINDOW_ADJUST. Seeded lazily from the local window on first data,
+        # decremented as data arrives, replenished when we send an adjust. A
+        # peer that overruns it is violating RFC 4254 flow control and is cut
+        # off rather than allowed to grow our buffer without bound.
+        self._inbound_window_remaining: Optional[int] = None
 
         # Data buffers - declared as Any because AsyncChannel overrides these with
         # plain bytes (flat buffer, sliceable) vs the deque[bytes] used here.
@@ -733,6 +739,9 @@ class Channel:
                 self._transport._send_channel_window_adjust(
                     self._channel_id, bytes_to_add
                 )
+                # Credit the same amount back to the inbound-overrun accounting.
+                if self._inbound_window_remaining is not None:
+                    self._inbound_window_remaining += bytes_to_add
 
     def _handle_data(self, data: bytes) -> None:
         """
@@ -743,8 +752,38 @@ class Channel:
         """
         with self._lock:
             if not self._closed:
+                if self._check_inbound_window(len(data)):
+                    return
                 self._recv_buffer.append(data)
                 self._data_event.set()
+
+    def _check_inbound_window(self, nbytes: int) -> bool:
+        """Account for inbound bytes against the advertised window.
+
+        Returns True if the peer overran the window (the channel is closed as a
+        side effect) and the data must be dropped.
+        """
+        # Only enforce when a real local window has been advertised. If the
+        # window is unset (0), flow control is not in effect for this channel
+        # and we must not drop data.
+        if not self._local_window_size:
+            return False
+        if self._inbound_window_remaining is None:
+            self._inbound_window_remaining = self._local_window_size
+        self._inbound_window_remaining -= nbytes
+        # Allow one max-packet of slack for adjust timing, then treat an overrun
+        # as a protocol violation.
+        slack = self._local_max_packet_size or 0
+        if self._inbound_window_remaining < -slack:
+            self._logger.warning(
+                "Channel %d peer exceeded advertised window; closing",
+                self._channel_id,
+            )
+            self._closed = True
+            self._data_event.set()
+            self._window_event.set()
+            return True
+        return False
 
     def _handle_extended_data(self, data_type: int, data: bytes) -> None:
         """
@@ -756,6 +795,8 @@ class Channel:
         """
         with self._lock:
             if not self._closed and data_type == 1:  # SSH_EXTENDED_DATA_STDERR
+                if self._check_inbound_window(len(data)):
+                    return
                 self._stderr_buffer.append(data)
                 self._data_event.set()
 

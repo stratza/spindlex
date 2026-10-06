@@ -22,6 +22,7 @@ from ..protocol.constants import (
     DEFAULT_MAX_PACKET_SIZE,
     DEFAULT_WINDOW_SIZE,
     MAX_PACKET_SIZE,
+    MAX_QUEUE_SIZE,
     MIN_PACKET_SIZE,
     MSG_CHANNEL_OPEN_CONFIRMATION,
     MSG_CHANNEL_OPEN_FAILURE,
@@ -413,6 +414,8 @@ class AsyncTransport(Transport):
         # Queue protocol messages for _expect_message_async; skip msg_type==0 sentinels.
         if msg is not None and msg.msg_type != 0:
             async with self._state_lock:
+                if len(self._message_queue) >= MAX_QUEUE_SIZE:
+                    raise TransportException("Message queue size limit exceeded")
                 self._message_queue.append(msg)
 
     async def _expect_message_async(
@@ -452,6 +455,8 @@ class AsyncTransport(Transport):
 
             # 3. Queue it
             async with self._state_lock:
+                if len(self._message_queue) >= MAX_QUEUE_SIZE:
+                    raise TransportException("Message queue size limit exceeded")
                 self._message_queue.append(msg)
 
     # --- Handshake Helpers ---

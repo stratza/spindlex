@@ -275,6 +275,38 @@ class TestHandleOpen:
         sent = send.call_args[0][0]
         assert isinstance(sent, SFTPHandleMessage)
 
+    def test_open_write_honours_offset_not_append(self, server, temp_root):
+        """Regression (finding 7): WRITE|CREAT without TRUNC must honour the
+        per-write offset instead of always appending."""
+        sent = []
+        with patch.object(server, "_send_message", side_effect=sent.append):
+            server._handle_open(
+                SFTPOpenMessage(
+                    1, "off.bin", SSH_FXF_WRITE | SSH_FXF_CREAT, SFTPAttributes()
+                )
+            )
+            handle = sent[-1].handle
+            server._handle_write(SFTPWriteMessage(2, handle, 0, b"AAAA"))
+            server._handle_write(SFTPWriteMessage(3, handle, 2, b"XX"))
+            server._handle_close(SFTPCloseMessage(4, handle))
+        with open(os.path.join(temp_root, "off.bin"), "rb") as fh:
+            assert fh.read() == b"AAXX"
+
+    def test_open_read_write_create_new_file(self, server, temp_root):
+        """Regression (finding 7): READ|WRITE|CREAT must create a missing file
+        instead of failing with ENOENT."""
+        sent = []
+        with patch.object(server, "_send_message", side_effect=sent.append):
+            server._handle_open(
+                SFTPOpenMessage(
+                    1,
+                    "rw_new.bin",
+                    SSH_FXF_READ | SSH_FXF_WRITE | SSH_FXF_CREAT,
+                    SFTPAttributes(),
+                )
+            )
+        assert isinstance(sent[-1], SFTPHandleMessage)
+
     def test_open_write_create_no_trunc_no_excl(self, server, temp_root):
         """CREAT without TRUNC/EXCL → mode 'ab' (append)."""
         msg = SFTPOpenMessage(
@@ -366,7 +398,7 @@ class TestHandleOpen:
 
     def test_open_permission_error_on_os_open(self, server, temp_root):
         msg = SFTPOpenMessage(14, "perm.txt", SSH_FXF_READ, SFTPAttributes())
-        with patch("builtins.open", side_effect=PermissionError("denied")):
+        with patch("os.open", side_effect=PermissionError("denied")):
             with patch.object(server, "_send_message") as send:
                 server._handle_open(msg)
         sent = send.call_args[0][0]

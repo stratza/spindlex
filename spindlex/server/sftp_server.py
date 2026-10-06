@@ -215,6 +215,16 @@ class SFTPServer:
         self._handle_counter = 0
         self._handle_lock = threading.Lock()
         self._logger = logging.getLogger(__name__)
+        # Warn loudly about the insecure default of serving the whole
+        # filesystem; deployments should pass an explicit, restricted root.
+        if self._root_path == os.path.realpath(os.sep):
+            self._logger.warning(
+                "SFTPServer root is the filesystem root (%s): the entire "
+                "filesystem is exposed with this process's permissions. Pass a "
+                "restricted root_path and override check_file_access/"
+                "check_directory_access.",
+                self._root_path,
+            )
         self._client_version: Optional[int] = None
         self._client_extensions: dict[str, str] = {}
 
@@ -465,6 +475,31 @@ class SFTPServer:
 
         return resolved
 
+    def _resolve_path_nofollow(self, path: str) -> str:
+        """Resolve a path without following a symlink in its FINAL component.
+
+        Operations that act on the link object itself - lstat, remove, rename,
+        readlink - must not be redirected to the link's target. We resolve the
+        parent directory (which must stay within root) and then re-attach the
+        final name verbatim, so a symlink there is operated on as a link rather
+        than its target.
+        """
+        if "\x00" in path:
+            raise SFTPError("Invalid path", SSH_FX_PERMISSION_DENIED)
+        norm = path.replace("\\", "/")
+        if norm.startswith("/"):
+            norm = norm.lstrip("/")
+        full_path = os.path.normpath(os.path.join(self._root_path, norm))
+        parent, name = os.path.split(full_path)
+        # The parent (with symlinks resolved) must be inside the root.
+        resolved_parent = os.path.realpath(parent)
+        root_norm = os.path.normcase(self._root_path)
+        rp_norm = os.path.normcase(resolved_parent)
+        root_with_sep = root_norm.rstrip(os.sep) + os.sep
+        if rp_norm != root_norm and not rp_norm.startswith(root_with_sep):
+            raise SFTPError("Path outside root directory", SSH_FX_PERMISSION_DENIED)
+        return os.path.join(resolved_parent, name)
+
     def _path_to_attrs(self, path: str) -> SFTPAttributes:
         """
         Convert file system path to SFTP attributes.
@@ -531,29 +566,61 @@ class SFTPServer:
                     self._send_message(error_msg)
                     return
 
-            # Determine file mode
-            mode = ""
-            if message.pflags & SSH_FXF_READ and message.pflags & SSH_FXF_WRITE:
-                mode = "r+b"
-            elif message.pflags & SSH_FXF_WRITE:
-                if message.pflags & SSH_FXF_CREAT:
-                    if message.pflags & SSH_FXF_EXCL:
-                        mode = "xb"  # Exclusive create
-                    elif message.pflags & SSH_FXF_TRUNC:
-                        mode = "wb"  # Create or truncate
-                    else:
-                        mode = "ab"  # Create or append
-                else:
-                    mode = "r+b"  # Write to existing file
-            elif message.pflags & SSH_FXF_APPEND:
-                mode = "ab"
+            # Translate SFTP pflags into os.open() flags. Building the fd from
+            # explicit flags (rather than a mode string) is the only way to get
+            # create/truncate/exclusive semantics right; the old "ab" mapping
+            # silently ignored the per-write offset and never created or
+            # truncated for several flag combinations.
+            want_read = bool(message.pflags & SSH_FXF_READ)
+            want_write = bool(
+                message.pflags & (SSH_FXF_WRITE | SSH_FXF_APPEND | SSH_FXF_CREAT)
+            )
+            if want_read and want_write:
+                open_flags = os.O_RDWR
+            elif want_write:
+                open_flags = os.O_WRONLY
             else:
-                mode = "rb"  # Read only
+                open_flags = os.O_RDONLY
+
+            if message.pflags & SSH_FXF_CREAT:
+                open_flags |= os.O_CREAT
+            if message.pflags & SSH_FXF_TRUNC:
+                open_flags |= os.O_TRUNC
+            if message.pflags & SSH_FXF_EXCL:
+                open_flags |= os.O_EXCL
+            if message.pflags & SSH_FXF_APPEND:
+                open_flags |= os.O_APPEND
+            if hasattr(os, "O_BINARY"):  # Windows: avoid newline translation
+                open_flags |= os.O_BINARY
+
+            # Permissions for newly created files: honour the client's requested
+            # mode when present, else a sane default, both subject to umask.
+            create_mode = 0o666
+            attrs = getattr(message, "attrs", None)
+            if attrs is not None and getattr(attrs, "permissions", None):
+                create_mode = attrs.permissions & 0o777
+
+            # Pick an fdopen() mode matching the fd's access mode. Truncation is
+            # already handled by O_TRUNC, so "wb" here does NOT re-truncate; it
+            # stays seekable so per-write offsets are honoured.
+            if want_read and want_write:
+                fdopen_mode = "r+b"
+            elif want_write and (message.pflags & SSH_FXF_APPEND):
+                fdopen_mode = "ab"
+            elif want_write:
+                fdopen_mode = "wb"
+            else:
+                fdopen_mode = "rb"
 
             # Open file
             file_obj = None
             try:
-                file_obj = open(resolved_path, mode)
+                fd = os.open(resolved_path, open_flags, create_mode)
+                try:
+                    file_obj = os.fdopen(fd, fdopen_mode)
+                except OSError:
+                    os.close(fd)
+                    raise
 
                 # Create handle
                 handle_id = self._generate_handle()
@@ -761,8 +828,9 @@ class SFTPServer:
         """Handle lstat request (don't follow symlinks)."""
         assert message.request_id is not None
         try:
-            # Resolve and validate path
-            resolved_path = self._resolve_path(message.path)
+            # lstat must describe the link itself, so do not resolve a symlink
+            # in the final path component.
+            resolved_path = self._resolve_path_nofollow(message.path)
 
             # Check authorization
             if not self.check_file_access(resolved_path, "r"):
@@ -1158,8 +1226,9 @@ class SFTPServer:
         """Handle file removal request."""
         assert message.request_id is not None
         try:
-            # Resolve and validate path
-            resolved_path = self._resolve_path(message.filename)
+            # Remove the named entry itself; if it is a symlink, unlink the
+            # link rather than its target.
+            resolved_path = self._resolve_path_nofollow(message.filename)
 
             # Check authorization
             if not self.check_file_access(resolved_path, "w"):
@@ -1206,9 +1275,10 @@ class SFTPServer:
         """Handle file rename request."""
         assert message.request_id is not None
         try:
-            # Resolve and validate paths
-            old_path = self._resolve_path(message.oldpath)
-            new_path = self._resolve_path(message.newpath)
+            # Rename the entries themselves without following a symlink in the
+            # final component (renaming a link must move the link, not its target).
+            old_path = self._resolve_path_nofollow(message.oldpath)
+            new_path = self._resolve_path_nofollow(message.newpath)
 
             # Check authorization for both paths
             if not self.check_file_access(old_path, "w"):

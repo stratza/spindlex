@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Security
+*   **Server authentication bypass fixed** (CWE-287, [GHSA-xcrc-h5v2-7cj8](https://github.com/stratza/spindlex/security/advisories/GHSA-xcrc-h5v2-7cj8)) - the server processed connection-protocol messages (channel open, global requests, exec) before authentication completed, so a client that never authenticated could open a session and run commands. The server now rejects every connection-protocol message until authentication has succeeded.
+*   **SFTP recursive-download path traversal fixed** (CWE-22) - during `get_recursive()` the sync and async SFTP clients joined server-supplied directory-entry names straight into the local path, so a malicious server could write outside the download directory. Entry names containing path separators, drive letters, absolute paths or parent references are now rejected.
+*   **Brute-force and resource limits added** (CWE-307) - the server now enforces a failed-authentication attempt cap, drops unauthenticated connections past a login grace period, and counts connections at accept time so half-open connections cannot bypass the maximum-connections limit.
+*   **`known_hosts` no longer corrupted on save** - saving previously rewrote the whole file, dropping `@cert-authority`/`@revoked` markers, breaking hashed (`|1|`) entries and deleting unknown key types. Saves are now append-only and preserve existing content verbatim.
+
+### Fixed
+*   **Server-side algorithm negotiation** now honours the client's preference order (RFC 4253 §7.1), advertises only host-key algorithms the configured key can produce, and signs the exchange hash with the negotiated RSA SHA-2 variant. This restores interoperability with clients whose cipher/MAC/KEX ordering differs from SpindleX's (e.g. OpenSSH, Paramiko), which previously failed the handshake.
+*   **Host key lookup is now port-aware and hashed-aware** - `[host]:port` entries for non-standard ports and hashed (`|1|salt|hash`) `known_hosts` entries are matched instead of being treated as unknown hosts.
+*   **SFTP server file handling** - open flags now map to correct `os.open()` semantics, so offset writes are honoured and create/truncate/exclusive behave correctly; `lstat`, `remove` and `rename` act on the named entry rather than a symlink's target.
+*   **Key exchange** - strict-KEX (Terrapin defense) is enforced by role and rejects spurious `IGNORE`/`DEBUG`/`UNIMPLEMENTED` messages during the initial exchange, and the exchange hash uses the peer's `KEXINIT` exactly as received on the wire.
+*   **Channels** - incoming data is bounded by the advertised window and an overrun closes the channel; a malformed `SSH_MSG_GLOBAL_REQUEST` no longer raises an unhandled error.
+*   **Async transport robustness** - a failed rekey shuts the socket down instead of leaking an un-awaited coroutine, the message queue is bounded, and threads wait instead of busy-spinning while another thread drives a key exchange.
+
+### Changed
+*   **SFTP server warns when its root is the filesystem root** (`/`), since that exposes the whole filesystem with the process's permissions; deployments should pass a restricted `root_path`.
+
 ## [1.0.1] - 2026-07-18
 
 ### Security

@@ -1110,7 +1110,7 @@ class TestVerifyHostKeyPolicyError:
         client._hostname = "localhost"
 
         storage = MagicMock()
-        storage.get_all.return_value = []
+        storage.lookup.return_value = []
         client._host_key_storage = storage
 
         # Policy that raises a non-SSH exception

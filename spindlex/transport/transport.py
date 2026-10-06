@@ -42,6 +42,7 @@ from ..protocol.constants import (
     DEFAULT_MAX_PACKET_SIZE,
     DEFAULT_WINDOW_SIZE,
     KEX_COOKIE_SIZE,
+    MAX_AUTH_ATTEMPTS,
     MAX_CHANNELS,
     MAX_PACKET_SIZE,
     MAX_QUEUE_SIZE,
@@ -72,6 +73,7 @@ from ..protocol.constants import (
     MSG_REQUEST_SUCCESS,
     MSG_SERVICE_ACCEPT,
     MSG_SERVICE_REQUEST,
+    MSG_UNIMPLEMENTED,
     MSG_USERAUTH_FAILURE,
     MSG_USERAUTH_PK_OK,
     MSG_USERAUTH_REQUEST,
@@ -81,6 +83,8 @@ from ..protocol.constants import (
     REKEY_SEQUENCE_THRESHOLD,
     SERVICE_CONNECTION,
     SERVICE_USERAUTH,
+    SSH_DISCONNECT_NO_MORE_AUTH_METHODS_AVAILABLE,
+    SSH_DISCONNECT_PROTOCOL_ERROR,
     SSH_OPEN_CONNECT_FAILED,
     SSH_OPEN_RESOURCE_SHORTAGE,
     SSH_OPEN_UNKNOWN_CHANNEL_TYPE,
@@ -261,6 +265,11 @@ class Transport:
         self._read_lock = threading.RLock()
         self._kex_condition = threading.Condition(self._lock)
         self._server_host_key_blob: Optional[bytes] = None
+        # Exact bytes of the peer's last KEXINIT payload, captured on the wire.
+        # The exchange hash must use these verbatim; a re-serialised copy of the
+        # parsed message can differ (dropped empty tokens, zeroed reserved
+        # field) and break signature verification.
+        self._peer_kexinit_raw: Optional[bytes] = None
 
         self._kex_in_progress = False
         self._kex = KeyExchange(self)
@@ -273,6 +282,11 @@ class Transport:
 
         # Authentication state
         self._userauth_service_requested = False
+        # Server-side brute-force guard: count failed auth attempts and cut the
+        # connection off once MAX_AUTH_ATTEMPTS is reached (like OpenSSH's
+        # MaxAuthTries).
+        self._auth_failures = 0
+        self._max_auth_attempts = MAX_AUTH_ATTEMPTS
 
         # Server interface for authentication callbacks
         self._server_interface: Optional[Any] = None
@@ -1388,6 +1402,7 @@ class Transport:
         Args:
             msg: Global request message
         """
+        want_reply = False
         try:
             # Parse global request message
             data = msg._data
@@ -1496,6 +1511,14 @@ class Transport:
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         self.close()
 
+    def _disconnect(self, reason_code: int, description: str = "") -> None:
+        """Send SSH_MSG_DISCONNECT (best effort) then close the transport."""
+        try:
+            self._send_message(DisconnectMessage(reason_code, description))
+        except (OSError, SSHException, struct.error):
+            pass
+        self.close()
+
     def close(self) -> None:
         """Close transport and cleanup resources."""
         kex_thread: Optional[threading.Thread] = None
@@ -1508,6 +1531,8 @@ class Transport:
         with self._lock:
             self._active = False
             self._stop_event.set()
+            # Wake any sender blocked waiting for a key exchange to finish.
+            self._kex_condition.notify_all()
             kex_thread = self._kex_thread
             channels_snapshot = list(self._channels.values())
             sock = self._socket
@@ -1666,8 +1691,17 @@ class Transport:
             # _kex_in_progress / _active are reset under the lock in finally
             with self._lock:
                 self._active = False
+                self._kex_condition.notify_all()
+            # _start_kex runs in a worker thread. On AsyncTransport close() is a
+            # coroutine that cannot be awaited here, so shut the socket down
+            # directly instead of calling the (async) close() and leaking it.
             try:
-                self.close()
+                if self._socket is not None:
+                    try:
+                        self._socket.shutdown(socket.SHUT_RDWR)
+                    except OSError:
+                        pass
+                    self._socket.close()
             except (OSError, SSHException):
                 pass
             if isinstance(e, SSHException):
@@ -1716,10 +1750,15 @@ class Transport:
                 a for a in kex_algorithms if a != "kex-strict-s-v00@openssh.com"
             ]
 
+        # Advertise only host-key algorithms we can actually use. As a server
+        # this is restricted to the configured key's type so we never offer a
+        # type we cannot sign with (RFC 4253 and interop with OpenSSH clients).
+        host_key_algorithms = self._kex._our_host_key_algorithms()
+
         kexinit_msg = KexInitMessage(
             cookie=cookie,
             kex_algorithms=kex_algorithms,
-            server_host_key_algorithms=cipher_suite.HOST_KEY_ALGORITHMS,
+            server_host_key_algorithms=host_key_algorithms,
             encryption_algorithms_client_to_server=cipher_suite.ENCRYPTION_ALGORITHMS,
             encryption_algorithms_server_to_client=cipher_suite.ENCRYPTION_ALGORITHMS,
             mac_algorithms_client_to_server=cipher_suite.MAC_ALGORITHMS,
@@ -1742,17 +1781,18 @@ class Transport:
         self._peer_kexinit = msg
         self._logger.debug(f"Peer KEX algorithms: {msg.kex_algorithms}")
 
-        # Check for strict KEX marker from peer
+        # Check for the strict-KEX marker from the peer. Only the marker that
+        # belongs to the peer's role counts: a client must see the server's
+        # token and vice versa, so a reflected own-role token cannot be used to
+        # spoof strict mode.
+        expected_marker = (
+            "kex-strict-c-v00@openssh.com"
+            if self._server_mode
+            else "kex-strict-s-v00@openssh.com"
+        )
         self._peer_strict_kex_version = None
-        for algo in msg.kex_algorithms:
-            if algo in (
-                "kex-strict-s-v00@openssh.com",
-                "kex-strict-c-v00@openssh.com",
-            ):
-                self._peer_strict_kex_version = "v00"
-                break
-
-        if self._peer_strict_kex_version:
+        if expected_marker in msg.kex_algorithms:
+            self._peer_strict_kex_version = "v00"
             self._strict_kex = True
             self._logger.debug("Strict KEX mode enabled (Terrapin defense)")
 
@@ -1860,6 +1900,10 @@ class Transport:
         with self._lock:
             msg = Message.unpack(payload)
 
+            # Capture the peer KEXINIT exactly as received for the exchange hash.
+            if msg.msg_type == MSG_KEXINIT:
+                self._peer_kexinit_raw = bytes(payload)
+
             # Track bytes received for rekeying (unless it's KEX)
             if msg.msg_type not in [
                 MSG_KEXINIT,
@@ -1870,6 +1914,24 @@ class Transport:
 
             # ALWAYS increment sequence number for EVERY packet received
             self._sequence_number_in = (self._sequence_number_in + 1) & 0xFFFFFFFF
+
+            # Strict-KEX (Terrapin defense): during the INITIAL key exchange
+            # (before the first NEWKEYS activates encryption) no spurious
+            # IGNORE/DEBUG/UNIMPLEMENTED packets are permitted - their presence
+            # is exactly the packet-injection the countermeasure forbids.
+            if (
+                self._strict_kex
+                and getattr(self, "_cipher_in_active", None) is None
+                and msg.msg_type in (MSG_IGNORE, MSG_DEBUG, MSG_UNIMPLEMENTED)
+            ):
+                self._logger.warning(
+                    "Strict KEX violation: unexpected message %d during initial "
+                    "key exchange",
+                    msg.msg_type,
+                )
+                raise ProtocolException(
+                    "Strict KEX violation: unexpected message during key exchange"
+                )
 
             if msg.msg_type in [MSG_IGNORE, MSG_DEBUG, MSG_EXT_INFO]:
                 return HandledMessage() if single_pump else None  # type: ignore[return-value]
@@ -1899,6 +1961,21 @@ class Transport:
                 or msg.msg_type == MSG_CHANNEL_OPEN  # 90
                 or (msg.msg_type >= 93 and msg.msg_type <= 100)
             ):
+                # RFC 4252 s6: the connection protocol (global requests and
+                # channels) must not be reachable until authentication has
+                # succeeded. A server that skipped this check would run a
+                # client's channel/exec requests with no login at all.
+                if self._server_mode and not self._authenticated:
+                    self._logger.warning(
+                        "Connection-protocol message %d received before "
+                        "authentication; disconnecting",
+                        msg.msg_type,
+                    )
+                    self._disconnect(
+                        SSH_DISCONNECT_PROTOCOL_ERROR,
+                        "Authentication required before connection protocol",
+                    )
+                    return HandledMessage() if single_pump else None  # type: ignore[return-value]
                 self._handle_channel_message(msg)
                 return HandledMessage() if single_pump else None  # type: ignore[return-value]
 
@@ -1963,6 +2040,13 @@ class Transport:
         with self._lock:
             if self._message_queue:
                 return self._message_queue.popleft()
+            # While another thread drives a key exchange, this thread must not
+            # read the socket (_read_message returns None immediately). Wait on
+            # the kex condition instead of returning instantly, so callers like
+            # the server accept loop don't busy-spin at 100% CPU.
+            if self._kex_in_progress and threading.current_thread() != self._kex_thread:
+                self._kex_condition.wait(timeout=0.1)
+                return None
 
         msg = self._read_message(single_pump=True)
         if msg:
@@ -2510,12 +2594,29 @@ class Transport:
             self._send_message(UserAuthFailureMessage(["password", "publickey"], False))
             return
 
+        # RFC 4252 s5.1: once authentication has succeeded, further requests
+        # must be silently ignored (do not re-run the application callbacks).
+        if self._authenticated:
+            self._logger.debug("Ignoring userauth request after success")
+            return
+
         username = ""
         try:
             # Unpack request
             auth_req = UserAuthRequestMessage._unpack_data(bytes(msg._data))
             username = auth_req.username
             method = auth_req.method
+
+            # The only service a userauth request may target is ssh-connection.
+            service = getattr(auth_req, "service", "ssh-connection")
+            if service != "ssh-connection":
+                self._logger.warning("Rejecting userauth for service %r", service)
+                self._send_message(
+                    UserAuthFailureMessage(
+                        self._server_interface.get_allowed_auths(username), False
+                    )
+                )
+                return
 
             result = AUTH_FAILED
             if method == AUTH_PASSWORD:
@@ -2539,6 +2640,29 @@ class Transport:
                 except (ValueError, struct.error, SSHException):
                     # Invalid key blob
                     self._send_message(UserAuthFailureMessage(["publickey"], False))
+                    return
+
+                # Bind the advertised algorithm name to the actual key type so a
+                # client cannot claim one algorithm while presenting a key (or,
+                # below, a signature) of another. RSA keys legitimately appear
+                # under three algorithm names that share key material.
+                _RSA = {"ssh-rsa", "rsa-sha2-256", "rsa-sha2-512"}
+                key_algo = key.algorithm_name
+                algo_ok = algo_name == key_algo or (
+                    algo_name in _RSA and key_algo in _RSA
+                )
+                if not algo_ok:
+                    self._logger.warning(
+                        "Public key algorithm %r does not match key type %r",
+                        algo_name,
+                        key_algo,
+                    )
+                    self._auth_failures += 1
+                    self._send_message(
+                        UserAuthFailureMessage(
+                            self._server_interface.get_allowed_auths(username), False
+                        )
+                    )
                     return
 
                 if not has_signature:
@@ -2585,9 +2709,19 @@ class Transport:
                 self._server_interface.on_authentication_successful(username, method)
                 self._send_message(UserAuthSuccessMessage())
             else:
+                self._auth_failures += 1
                 self._server_interface.on_authentication_failed(username, method)
                 allowed_methods = self._server_interface.get_allowed_auths(username)
                 self._send_message(UserAuthFailureMessage(allowed_methods, False))
+                if self._auth_failures >= self._max_auth_attempts:
+                    self._logger.warning(
+                        "Too many authentication failures (%d); disconnecting",
+                        self._auth_failures,
+                    )
+                    self._disconnect(
+                        SSH_DISCONNECT_NO_MORE_AUTH_METHODS_AVAILABLE,
+                        "Too many authentication failures",
+                    )
 
         except (
             OSError,

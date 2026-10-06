@@ -50,6 +50,7 @@ from ..protocol.sftp_messages import (
     SFTPVersionMessage,
     SFTPWriteMessage,
 )
+from .sftp_client import _is_unsafe_remote_name
 
 # Sentinel key for the init VERSION response - intentionally outside uint32 range
 _SFTP_INIT_SENTINEL: int = -2
@@ -342,6 +343,14 @@ class AsyncSFTPClient:
         items = await self.listdir(remotepath)
         tasks = []
         for item in items:
+            # Never let a server-supplied name escape the download directory.
+            if _is_unsafe_remote_name(item):
+                self._logger.warning(
+                    "Skipping unsafe remote directory entry during recursive "
+                    "download: %r",
+                    item,
+                )
+                continue
             remote_item = (
                 f"{remotepath}/{item}"
                 if not remotepath.endswith("/")

@@ -6,12 +6,23 @@ maintaining known host keys and verification.
 """
 
 import base64
+import hashlib
+import hmac
 import logging
 import os
 from typing import Optional
 
 from ..crypto.pkey import PKey
 from ..exceptions import SSHException
+
+
+def host_token(hostname: str, port: int = 22) -> str:
+    """OpenSSH known_hosts host token: ``host`` for port 22, ``[host]:port``
+    otherwise. DNS names are case-insensitive so the host part is lowercased."""
+    host = hostname.lower()
+    if port and port != 22:
+        return f"[{host}]:{port}"
+    return host
 
 
 class HostKeyStorage:
@@ -31,6 +42,9 @@ class HostKeyStorage:
         """
         self._filename = filename or os.path.expanduser("~/.ssh/known_hosts")
         self._keys: dict[str, list[PKey]] = {}
+        # Hashed (|1|salt|hash) entries, which cannot be keyed by hostname.
+        # Each item is (salt_bytes, host_hash_bytes, PKey).
+        self._hashed_entries: list[tuple[bytes, bytes, PKey]] = []
         self._logger = logging.getLogger(__name__)
 
         # Try to load existing keys
@@ -88,13 +102,14 @@ class HostKeyStorage:
         if len(parts) < 3:
             return  # Invalid line format
 
+        # Skip markers we do not evaluate here (@cert-authority, @revoked);
+        # they are preserved on disk by the append-only save().
+        if parts[0].startswith("@"):
+            return
+
         hostnames_part = parts[0]
         key_type = parts[1]
         key_data = parts[2]
-
-        # Parse hostnames (can be comma-separated); normalise to lowercase
-        # because DNS hostnames are case-insensitive.
-        hostnames = [h.strip().lower() for h in hostnames_part.split(",")]
 
         try:
             # Decode base64 key data
@@ -102,13 +117,31 @@ class HostKeyStorage:
 
             # Create appropriate key object based on type
             key = self._create_key_from_type_and_data(key_type, key_bytes)
+            if not key:
+                return
 
-            if key:
-                # Add key for each hostname
-                for hostname in hostnames:
-                    if hostname not in self._keys:
-                        self._keys[hostname] = []
-                    self._keys[hostname].append(key)
+            for token in hostnames_part.split(","):
+                token = token.strip()
+                if token.startswith("|1|"):
+                    # Hashed host: |1|<b64 salt>|<b64 HMAC-SHA1(salt, host)>.
+                    # Case-sensitive, so never lowercase it.
+                    try:
+                        _, _, salt_b64, hash_b64 = token.split("|")
+                        self._hashed_entries.append(
+                            (
+                                base64.b64decode(salt_b64),
+                                base64.b64decode(hash_b64),
+                                key,
+                            )
+                        )
+                    except (ValueError, Exception) as e:
+                        self._logger.debug(f"Bad hashed host entry: {e}")
+                    continue
+                # Plain or [host]:port token - DNS names are case-insensitive.
+                hostname = token.lower()
+                if hostname not in self._keys:
+                    self._keys[hostname] = []
+                self._keys[hostname].append(key)
 
         except Exception as e:
             self._logger.debug(f"Failed to parse key data: {e}")
@@ -151,37 +184,87 @@ class HostKeyStorage:
             self._logger.debug(f"Failed to create key from type {key_type}: {e}")
             return None
 
+    def _existing_file_index(self) -> tuple[list[str], set]:
+        """Read the current file verbatim and index the (host, key) pairs it holds.
+
+        Returns (raw_lines, present) where raw_lines are the file's exact lines
+        (each with its trailing newline) and present is a set of
+        ``(hostname_token, base64_key)`` tuples already recorded, so save() can
+        skip re-adding them. Lines that cannot be parsed (comments, markers like
+        ``@revoked``, hashed ``|1|`` entries, unsupported key types) are kept in
+        raw_lines but simply not indexed.
+        """
+        raw_lines: list[str] = []
+        present: set = set()
+        if not os.path.exists(self._filename):
+            return raw_lines, present
+        with open(self._filename, encoding="utf-8") as f:
+            for line in f:
+                raw_lines.append(line if line.endswith("\n") else line + "\n")
+                stripped = line.strip()
+                if not stripped or stripped.startswith("#") or stripped.startswith("@"):
+                    continue
+                parts = stripped.split()
+                if len(parts) < 3:
+                    continue
+                for host_token in parts[0].split(","):
+                    present.add((host_token.strip().lower(), parts[2]))
+        return raw_lines, present
+
     def save(self) -> None:
         """
-        Save host keys to storage file.
+        Persist host keys by APPENDING new entries to the file.
+
+        The user's ``known_hosts`` is never rewritten: existing lines - including
+        comments, ``@cert-authority``/``@revoked`` markers, hashed ``|1|`` host
+        entries and key types SpindleX does not parse - are preserved byte for
+        byte. Only keys held in memory that are not already present in the file
+        are appended. This avoids silently corrupting or dropping entries that
+        other SSH tooling relies on.
 
         Raises:
             SSHException: If saving fails
         """
         temp_filename = self._filename + ".tmp"
         try:
-            # Create directory if it doesn't exist
             dirname = os.path.dirname(self._filename)
             if dirname:
                 os.makedirs(dirname, exist_ok=True)
 
+            raw_lines, present = self._existing_file_index()
+
+            new_lines: list[str] = []
+            for hostname, keys in self._keys.items():
+                for key in keys:
+                    try:
+                        key_data = base64.b64encode(key.get_public_key_bytes()).decode(
+                            "ascii"
+                        )
+                    except Exception as e:
+                        self._logger.warning(f"Failed to save key for {hostname}: {e}")
+                        continue
+                    if (hostname, key_data) in present:
+                        continue
+                    present.add((hostname, key_data))
+                    new_lines.append(f"{hostname} {key.algorithm_name} {key_data}\n")
+
+            if not raw_lines and not new_lines:
+                return  # nothing to write and no existing file to preserve
+
+            # If we are creating the file fresh, add a short header; when
+            # appending to an existing file leave its content untouched.
+            header: list[str] = []
+            if not raw_lines:
+                header = ["# SSH known hosts file\n", "# Managed by spindlex\n", "\n"]
+            # Ensure the preserved content ends with a newline before appending.
+            if raw_lines and not raw_lines[-1].endswith("\n"):
+                raw_lines[-1] += "\n"
+
             with open(temp_filename, "w", encoding="utf-8") as f:
-                f.write("# SSH known hosts file\n")
-                f.write("# Generated by spindlex\n\n")
+                f.writelines(header)
+                f.writelines(raw_lines)
+                f.writelines(new_lines)
 
-                for hostname, keys in self._keys.items():
-                    for key in keys:
-                        try:
-                            key_data = base64.b64encode(
-                                key.get_public_key_bytes()
-                            ).decode("ascii")
-                            f.write(f"{hostname} {key.algorithm_name} {key_data}\n")
-                        except Exception as e:
-                            self._logger.warning(
-                                f"Failed to save key for {hostname}: {e}"
-                            )
-
-            # Atomic replace
             os.replace(temp_filename, self._filename)
 
         except Exception as e:
@@ -249,6 +332,30 @@ class HostKeyStorage:
             List of host keys
         """
         return self._keys.get(hostname.lower(), [])
+
+    def lookup(self, hostname: str, port: int = 22) -> list[PKey]:
+        """Return all known keys for (hostname, port).
+
+        Matches plain-hostname entries, OpenSSH ``[host]:port`` entries for
+        non-standard ports, and hashed ``|1|salt|hash`` entries - so a
+        ``known_hosts`` written by OpenSSH (which hashes by default on many
+        distros, and brackets non-22 ports) is actually honoured rather than
+        silently treated as "unknown host".
+        """
+        token = host_token(hostname, port)
+        results: list[PKey] = list(self._keys.get(token, []))
+        # When connecting on port 22, also accept a bare-host entry (already the
+        # token) - nothing extra needed. For completeness also try the bare host
+        # if a bracketed form was requested and vice versa is NOT done (ports
+        # must match). Now add any hashed entries that match this token.
+        for salt, host_hash, key in self._hashed_entries:
+            try:
+                digest = hmac.new(salt, token.encode("utf-8"), hashlib.sha1).digest()
+            except Exception:
+                continue
+            if hmac.compare_digest(digest, host_hash):
+                results.append(key)
+        return results
 
     def copy_from(self, other: "HostKeyStorage") -> None:
         """

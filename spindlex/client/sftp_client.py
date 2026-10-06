@@ -50,6 +50,26 @@ from ..transport.transport import Transport
 _DEFAULT_MAX_WRITE = SFTP_MAX_PACKET_SIZE - 1024  # 64 KB minus SFTP header overhead
 
 
+def _is_unsafe_remote_name(name: str) -> bool:
+    """Return True if a server-supplied directory entry must not be joined
+    into a local path.
+
+    A malicious or compromised server controls the names returned by READDIR.
+    A name containing a path separator, a drive letter, a leading slash, or a
+    parent reference can escape the intended download directory (CVE-2019-6111
+    class). On Windows ``\\`` is a separator too, so reject both. Callers use
+    this to skip entries during recursive download.
+    """
+    if name in ("", ".", ".."):
+        return True
+    if "/" in name or "\\" in name or "\x00" in name:
+        return True
+    # Drive-relative ("C:...") or any absolute form.
+    if os.path.isabs(name) or (len(name) >= 2 and name[1] == ":"):
+        return True
+    return False
+
+
 class SFTPFile:
     """SFTP file object for remote file operations."""
 
@@ -614,6 +634,14 @@ class SFTPClient:
             os.makedirs(localpath)
 
         for item in self.listdir(remotepath):
+            # Never let a server-supplied name escape the download directory.
+            if _is_unsafe_remote_name(item):
+                self._logger.warning(
+                    "Skipping unsafe remote directory entry during recursive "
+                    "download: %r",
+                    item,
+                )
+                continue
             # SFTP paths always use forward slash
             remote_item = (
                 f"{remotepath}/{item}"

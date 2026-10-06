@@ -253,7 +253,7 @@ class TestHandleOpenMorePaths:
         """Generic OSError (not FileNotFound/Permission/Exists) â†’ SSH_FX_FAILURE (line 594)."""
         msg = SFTPOpenMessage(16, "genericerr.txt", SSH_FXF_READ, SFTPAttributes())
         err = OSError("disk full")
-        with patch("builtins.open", side_effect=err):
+        with patch("os.open", side_effect=err):
             with patch.object(server, "_send_message") as send:
                 server._handle_open(msg)
         sent = send.call_args[0][0]
@@ -321,7 +321,9 @@ class TestHandleLstatOuter:
     def test_lstat_outer_oserror_handler(self, server):
         """OSError in outer block â†’ SSH_FX_FAILURE (lines 796-799)."""
         msg = SFTPStatMessage(11, "test.txt")
-        with patch.object(server, "_resolve_path", side_effect=OSError("unexpected")):
+        with patch.object(
+            server, "_resolve_path_nofollow", side_effect=OSError("unexpected")
+        ):
             with patch.object(server, "_send_message") as send:
                 server._handle_lstat(msg)
         sent = send.call_args[0][0]
@@ -476,7 +478,9 @@ class TestHandleRemoveOuter:
     def test_remove_outer_oserror_handler(self, server):
         """Unexpected OSError â†’ outer handler (lines 1187-1190)."""
         msg = SFTPRemoveMessage(10, "somefile.txt")
-        with patch.object(server, "_resolve_path", side_effect=OSError("unexpected")):
+        with patch.object(
+            server, "_resolve_path_nofollow", side_effect=OSError("unexpected")
+        ):
             with patch.object(server, "_send_message") as send:
                 server._handle_remove(msg)
         sent = send.call_args[0][0]
@@ -500,7 +504,9 @@ class TestHandleRenameErrors:
     def test_rename_outer_oserror_handler(self, server):
         """Unexpected OSError â†’ outer handler (lines 1246-1249)."""
         msg = SFTPRenameMessage(11, "src.txt", "dst.txt")
-        with patch.object(server, "_resolve_path", side_effect=OSError("unexpected")):
+        with patch.object(
+            server, "_resolve_path_nofollow", side_effect=OSError("unexpected")
+        ):
             with patch.object(server, "_send_message") as send:
                 server._handle_rename(msg)
         sent = send.call_args[0][0]
