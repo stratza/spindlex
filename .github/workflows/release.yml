@@ -388,7 +388,7 @@ jobs:
           fi
 
           python scripts/finalize_changelog_release.py --version "$NEXT_VERSION"
-          git add docs/changelog.md pyproject.toml spindlex/_version.py
+          git add docs/changelog.md pyproject.toml spindlex/_version.py CITATION.cff
           if git diff --cached --quiet; then
             echo "::notice::Release branch $branch already has current release metadata."
           else
