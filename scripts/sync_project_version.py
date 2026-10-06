@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import re
 import sys
 from pathlib import Path
@@ -16,7 +17,10 @@ else:  # pragma: no cover - exercised on Python 3.9/3.10 in CI
 ROOT = Path(__file__).resolve().parents[1]
 PYPROJECT = ROOT / "pyproject.toml"
 VERSION_FILE = ROOT / "spindlex" / "_version.py"
+CITATION_FILE = ROOT / "CITATION.cff"
 VERSION_PATTERN = re.compile(r'(?m)^(version\s*=\s*)"([^"]+)"')
+CITATION_VERSION_PATTERN = re.compile(r"(?m)^(version:[ \t]*)(\S+)[ \t]*$")
+CITATION_DATE_PATTERN = re.compile(r"(?m)^(date-released:[ \t]*)(\S+)[ \t]*$")
 SEMVER_PATTERN = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 
 
@@ -68,19 +72,48 @@ def write_version_file(version: str, version_file: Path = VERSION_FILE) -> None:
     version_file.write_text(render_version_file(version), encoding="utf-8")
 
 
+def read_citation_version(citation: Path = CITATION_FILE) -> str | None:
+    match = CITATION_VERSION_PATTERN.search(citation.read_text(encoding="utf-8"))
+    return match.group(2) if match else None
+
+
+def write_citation_version(
+    version: str,
+    citation: Path = CITATION_FILE,
+    release_date: str | None = None,
+) -> None:
+    """Set CITATION.cff ``version``; refresh ``date-released`` when it changes."""
+    validate_version(version)
+    content = citation.read_text(encoding="utf-8")
+    current = read_citation_version(citation)
+    updated, count = CITATION_VERSION_PATTERN.subn(rf"\g<1>{version}", content, count=1)
+    if count != 1:
+        raise ValueError("Could not update version in CITATION.cff")
+    if current != version:
+        date = release_date or dt.datetime.now(dt.timezone.utc).date().isoformat()
+        updated = CITATION_DATE_PATTERN.sub(rf"\g<1>{date}", updated, count=1)
+    citation.write_text(updated, encoding="utf-8")
+
+
 def sync_version(version: str | None = None) -> str:
     target_version = version or read_pyproject_version()
     validate_version(target_version)
     if version is not None:
         write_pyproject_version(target_version)
     write_version_file(target_version)
+    if CITATION_FILE.exists():
+        write_citation_version(target_version, CITATION_FILE)
     return target_version
 
 
 def check_synced() -> bool:
     version = read_pyproject_version()
     expected = render_version_file(version)
-    return VERSION_FILE.read_text(encoding="utf-8") == expected
+    if VERSION_FILE.read_text(encoding="utf-8") != expected:
+        return False
+    if CITATION_FILE.exists() and read_citation_version(CITATION_FILE) != version:
+        return False
+    return True
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -91,7 +124,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--check",
         action="store_true",
-        help="Validate that spindlex/_version.py is derived from pyproject.toml.",
+        help=(
+            "Validate that spindlex/_version.py and CITATION.cff are derived "
+            "from pyproject.toml."
+        ),
     )
     args = parser.parse_args(argv)
 
@@ -100,7 +136,7 @@ def main(argv: list[str] | None = None) -> int:
             print("Version metadata is synced.")
             return 0
         print(
-            "spindlex/_version.py is not derived from pyproject.toml.",
+            "spindlex/_version.py or CITATION.cff is not derived from pyproject.toml.",
             file=sys.stderr,
         )
         return 1

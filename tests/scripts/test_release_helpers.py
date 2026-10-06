@@ -411,3 +411,61 @@ def test_render_version_file_matches_expected_shape():
     assert '__version__ = "1.2.3"' in rendered
     assert "__version_info__ = (1, 2, 3)" in rendered
     assert "def get_version() -> str:" in rendered
+
+
+CITATION_SAMPLE = """cff-version: 1.2.0
+title: "SpindleX"
+version: 1.0.1
+date-released: 2026-07-18
+license: MIT
+"""
+
+
+def test_write_citation_version_bumps_version_and_date(tmp_path):
+    citation = tmp_path / "CITATION.cff"
+    citation.write_text(CITATION_SAMPLE, encoding="utf-8")
+
+    sync_project_version.write_citation_version(
+        "1.0.2", citation, release_date="2026-10-06"
+    )
+
+    content = citation.read_text(encoding="utf-8")
+    assert "version: 1.0.2\n" in content
+    assert "date-released: 2026-10-06\n" in content
+    assert "cff-version: 1.2.0\n" in content  # cff-version untouched
+    assert sync_project_version.read_citation_version(citation) == "1.0.2"
+
+
+def test_write_citation_version_keeps_date_when_version_unchanged(tmp_path):
+    citation = tmp_path / "CITATION.cff"
+    citation.write_text(CITATION_SAMPLE, encoding="utf-8")
+
+    sync_project_version.write_citation_version(
+        "1.0.1", citation, release_date="2099-01-01"
+    )
+
+    assert "date-released: 2026-07-18\n" in citation.read_text(encoding="utf-8")
+
+
+def test_check_synced_detects_stale_citation(monkeypatch, tmp_path):
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text('[project]\nversion = "1.0.2"\n', encoding="utf-8")
+    version_file = tmp_path / "_version.py"
+    version_file.write_text(
+        sync_project_version.render_version_file("1.0.2"), encoding="utf-8"
+    )
+    citation = tmp_path / "CITATION.cff"
+    citation.write_text(CITATION_SAMPLE, encoding="utf-8")  # still 1.0.1
+
+    monkeypatch.setattr(sync_project_version, "PYPROJECT", pyproject)
+    monkeypatch.setattr(sync_project_version, "VERSION_FILE", version_file)
+    monkeypatch.setattr(sync_project_version, "CITATION_FILE", citation)
+    monkeypatch.setattr(
+        sync_project_version,
+        "read_pyproject_version",
+        lambda pyproject=pyproject: "1.0.2",
+    )
+
+    assert sync_project_version.check_synced() is False
+    sync_project_version.write_citation_version("1.0.2", citation)
+    assert sync_project_version.check_synced() is True
