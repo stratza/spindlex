@@ -13,6 +13,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ### Changed
 *   **Python 3.14 is supported** - added to the package classifiers and the CI compatibility matrix.
 
+### Documentation
+*   **README and comparison page refreshed** - current feature list (SSH/SFTP server, authentication methods, RSA keys, tunneling), an SFTP example, and benchmark numbers from a live OpenSSH server for SpindleX, AsyncSSH and Paramiko; the performance page lists `benchmark_compare.py`.
+
 ## [1.0.3] - 2026-10-08
 
 ### Security

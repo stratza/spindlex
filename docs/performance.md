@@ -18,11 +18,13 @@ SpindleX is engineered for speed, security, and protocol efficiency. Key perform
 
 SpindleX ships repeatable benchmark scripts in `scripts/`:
 
-- **`benchmark_ciphers.py`** - compares upload throughput across all supported ciphers (ChaCha20-Poly1305, AES-256/192/128-CTR) against other SSH libraries on a live server configured in `.env`.
+- **`benchmark_compare.py`** - SpindleX (sync and async) against AsyncSSH and Paramiko on a live server configured in `.env` (or `SSH_HOST`/`SSH_USER`/`SSH_PASSWORD`): handshake, small and large command output, SFTP upload and download, and parallel handshakes.
+- **`benchmark_ciphers.py`** - the same libraries per algorithm: handshake, SFTP upload and SFTP download for each cipher (ChaCha20-Poly1305, AES-256/192/128-CTR), and handshake cost per key exchange and host key type.
 - **`benchmark_production.py`** - full protocol correctness and performance sweep: verifies every cipher, MAC, KEX, and host-key algorithm negotiates and transfers data correctly, then reports timing.
 - **`benchmark_local_baseline.py`** - zero-cost Docker-backed baseline against local OpenSSH and Dropbear services. It writes JSON artifacts for handshake, command execution, SFTP upload/download, and sync/async paths.
 
 ```bash
+python scripts/benchmark_compare.py
 python scripts/benchmark_ciphers.py
 python scripts/benchmark_production.py
 python scripts/benchmark_local_baseline.py --output benchmark-results/local.json
