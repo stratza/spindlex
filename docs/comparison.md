@@ -17,7 +17,7 @@ superiority. Every library has trade-offs.
 | | SpindleX | Paramiko | AsyncSSH |
 |---|---|---|---|
 | **License** | MIT | LGPL-2.1 | Eclipse Public License 2.0 |
-| **Python support** | 3.9–3.13 | 3.8+ | 3.6+ |
+| **Python support** | 3.9–3.14 | 3.8+ | 3.6+ |
 | **Async-first** | Yes | No (add-on) | Yes |
 | **Dependencies** | `cryptography` only | `cryptography`, `bcrypt`, `pynacl` | `cryptography` |
 | **Type hints** | Full, strict mypy | Partial | Partial |
