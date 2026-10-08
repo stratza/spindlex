@@ -104,6 +104,10 @@ class TestSyncExecCommand:
         for i in range(5):
             stdin, stdout, stderr = ssh_client.exec_command(f"echo {i}")
             assert stdout.read().decode().strip() == str(i)
+            # Let the session finish before the next one: Dropbear sometimes
+            # closes a new session without running it while the previous one
+            # is still shutting down.
+            assert stdout.channel.recv_exit_status() == 0
 
     def test_exec_multiline_output(self, ssh_client):
         stdin, stdout, stderr = ssh_client.exec_command("printf 'a\\nb\\nc\\n'")
@@ -358,6 +362,9 @@ class TestAsyncExecCommand:
                     stdin, stdout, stderr = await client.exec_command(f"echo {i}")
                     out = (await stdout.read()).decode().strip()
                     assert out == str(i)
+                    # Let the session finish before the next one (see
+                    # test_exec_multiple_commands).
+                    assert await stdout.channel.recv_exit_status() == 0
 
         asyncio.run(run())
 

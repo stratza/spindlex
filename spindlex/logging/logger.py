@@ -149,6 +149,18 @@ def get_logger(name: str) -> SSHLogger:
     return _loggers[full_name]
 
 
+def _close_handlers(logger: logging.Logger) -> None:
+    """Remove and close a logger's handlers.
+
+    Calling :func:`configure_logging` again must replace the previous
+    configuration: handlers left in place would duplicate every record, and
+    dropping them without closing leaks their log files.
+    """
+    for handler in list(logger.handlers):
+        logger.removeHandler(handler)
+        handler.close()
+
+
 def configure_logging(
     level: Union[str, int] = logging.INFO,
     format_type: str = "standard",
@@ -189,7 +201,7 @@ def configure_logging(
     root_logger.setLevel(level)
 
     # Clear existing handlers
-    root_logger.handlers.clear()
+    _close_handlers(root_logger)
 
     # Choose formatter
     formatter: logging.Formatter
@@ -219,6 +231,7 @@ def configure_logging(
     # Configure security logger
     if security_file or not output_file:
         security_logger = logging.getLogger("spindlex.security")
+        _close_handlers(security_logger)
         security_logger.setLevel(logging.INFO)
         security_handler = SecurityHandler(security_file)
         security_logger.addHandler(security_handler)
@@ -227,6 +240,7 @@ def configure_logging(
     # Configure performance logger
     if performance_file or not output_file:
         perf_logger = logging.getLogger("spindlex.performance")
+        _close_handlers(perf_logger)
         perf_logger.setLevel(logging.INFO)
         perf_handler = PerformanceHandler(performance_file, json_format=True)
         perf_logger.addHandler(perf_handler)

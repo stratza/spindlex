@@ -80,6 +80,14 @@ jobs:
           uv pip install --system -e ".[test]"
           pytest tests/ -m "not integration and not real_server and not slow and not performance" --timeout=120 --timeout-method=thread
 
+      - name: Python 3.14
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+      - run: |
+          uv pip install --system -e ".[test]"
+          pytest tests/ -m "not integration and not real_server and not slow and not performance" --timeout=120 --timeout-method=thread
+
       - name: Track repeated Ubuntu compatibility failures
         if: >
           failure() &&

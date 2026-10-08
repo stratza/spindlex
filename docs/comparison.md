@@ -5,10 +5,10 @@ you choose the right library for your use case, not to claim universal
 superiority. Every library has trade-offs.
 
 !!! info "Benchmark environment"
-    Numbers below are from the SpindleX v0.7.3 production readiness benchmark
-    (`scripts/benchmark_production.py`) run against a Docker-backed OpenSSH
-    server on the same host. They reflect loopback conditions - real-network
-    results will differ. See [Performance](performance.md) for methodology.
+    Numbers below are from `scripts/benchmark_compare.py` (SpindleX 1.0.4,
+    AsyncSSH 2.24, Paramiko 5.0, Python 3.12) run against a live OpenSSH 9.2
+    server on a local network. Results on other networks and hardware will
+    differ. See [Performance](performance.md) for methodology.
 
 ---
 
@@ -17,7 +17,7 @@ superiority. Every library has trade-offs.
 | | SpindleX | Paramiko | AsyncSSH |
 |---|---|---|---|
 | **License** | MIT | LGPL-2.1 | Eclipse Public License 2.0 |
-| **Python support** | 3.9–3.13 | 3.8+ | 3.6+ |
+| **Python support** | 3.9–3.14 | 3.8+ | 3.6+ |
 | **Async-first** | Yes | No (add-on) | Yes |
 | **Dependencies** | `cryptography` only | `cryptography`, `bcrypt`, `pynacl` | `cryptography` |
 | **Type hints** | Full, strict mypy | Partial | Partial |
@@ -34,35 +34,25 @@ superiority. Every library has trade-offs.
 
 ## Performance
 
-The numbers below are median timings over 10 iterations (loopback, same host).
+Median of 5 timed iterations (after one warm-up), lower is better.
 
-### SSH handshake latency
+| Operation | SpindleX | AsyncSSH | Paramiko |
+|---|---|---|---|
+| Handshake (connect + auth + close) | **41 ms** | 50 ms | 84 ms |
+| Command (`echo hello`, warm connection) | **5.5 ms** | 5.7 ms | 49 ms |
+| Command with 1.4 MB output | **20 ms** | 21 ms | 67 ms |
+| SFTP upload (1 MiB) | **14 ms** | 20 ms | 45 ms |
+| SFTP download (1 MiB) | 16 ms | **14 ms** | 360 ms |
+| 10 parallel handshakes | **293 ms** | 319 ms | 319 ms |
 
-| Library | Median |
-|---------|--------|
-| SpindleX | 53–65 ms |
-| AsyncSSH | 60–67 ms |
-| Paramiko | 87–90 ms |
+Handshake cost depends little on the cipher, key exchange or host key type
+(`scripts/benchmark_ciphers.py`): SpindleX stays at roughly 36-51 ms across all
+of them, while Paramiko's `diffie-hellman-group14-sha256` handshake takes about
+150 ms.
 
-### SFTP upload (1 MB file)
-
-| Library | Median |
-|---------|--------|
-| SpindleX | 14–15 ms |
-| AsyncSSH | 19–23 ms |
-| Paramiko | 54–58 ms |
-
-### SFTP download (1 MB file)
-
-| Library | Median |
-|---------|--------|
-| SpindleX | 15–18 ms |
-| AsyncSSH | 15–17 ms |
-| Paramiko | 356–368 ms |
-
-These numbers are loopback only. Network latency dominates in practice. Run
-`scripts/benchmark_production.py` in your own environment to get numbers
-relevant to your servers and network conditions.
+Network latency dominates in practice. Run `scripts/benchmark_compare.py` in
+your own environment to get numbers relevant to your servers and network
+conditions.
 
 ---
 

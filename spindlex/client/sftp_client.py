@@ -194,9 +194,15 @@ class SFTPFile:
             in_flight: list[tuple[int, int]] = []  # (request_id, requested_len)
             eof = False
             offset = self._offset
+            # Size of a short read that may be a server cap; only a cap if
+            # more data follows (a short read can also just be the file's end).
+            possible_cap = 0
 
             while not eof or in_flight:
-                while not eof and len(in_flight) < self._PIPELINE_DEPTH:
+                # After a short read, probe with a single request: at the end
+                # of the file a full pipeline would only collect EOF replies.
+                depth = 1 if possible_cap else self._PIPELINE_DEPTH
+                while not eof and len(in_flight) < depth:
                     rid = self._client._get_next_request_id()
                     self._client._send_message(
                         SFTPReadMessage(rid, self._handle, offset, _CHUNK)
@@ -212,6 +218,10 @@ class SFTPFile:
 
                 if isinstance(response, SFTPDataMessage):
                     result.extend(response.data)
+                    if possible_cap and response.data:
+                        # Data after the short read: the server caps reads.
+                        self._client._note_short_read(possible_cap)
+                        possible_cap = 0
                     if len(response.data) < requested:
                         # Short read (allowed by the SFTP spec): the remaining
                         # in-flight requests now target offsets past a gap.
@@ -224,10 +234,11 @@ class SFTPFile:
                         if not response.data:
                             eof = True
                         elif len(response.data) < _CHUNK:
-                            # The server caps reads below our chunk size: use
-                            # its size so later reads are not all short.
-                            _CHUNK = len(response.data)
-                            self._client._note_short_read(_CHUNK)
+                            # Either the end of the file or a server cap below
+                            # our chunk size. Use the smaller size for the rest
+                            # of this read; remember it for later reads only if
+                            # more data follows (see above).
+                            _CHUNK = possible_cap = len(response.data)
                 elif isinstance(response, SFTPStatusMessage):
                     if response.status_code == SSH_FX_EOF:
                         eof = True
@@ -438,8 +449,9 @@ class SFTPClient:
             pass  # non-fatal: server does not support limits@openssh.com
 
     def _note_short_read(self, length: int) -> None:
-        """A non-final read came back short: the server caps reads at
-        ``length``, so request that much from now on."""
+        """A read came back short and more data followed it: the server caps
+        reads at ``length``, so request that much from now on. (A short read
+        at the end of a file says nothing about the server's limit.)"""
         if 0 < length < self._max_read_len:
             self._max_read_len = length
 
@@ -571,10 +583,17 @@ class SFTPClient:
                     offset = 0
                     in_flight: list[tuple[int, int]] = []  # (id, requested_len)
                     eof = False
+                    # Size of a short read that may be a server cap; only a
+                    # cap if more data follows (it can also be the file's end).
+                    possible_cap = 0
 
                     while not eof or in_flight:
                         # Issue read requests to fill the pipeline
-                        while not eof and len(in_flight) < _DEPTH:
+                        # After a short read, probe with a single request: at
+                        # the end of the file a full pipeline would only
+                        # collect EOF replies.
+                        depth = 1 if possible_cap else _DEPTH
+                        while not eof and len(in_flight) < depth:
                             request_id = self._get_next_request_id()
                             read_msg = SFTPReadMessage(
                                 request_id, handle, offset, _CHUNK
@@ -592,6 +611,11 @@ class SFTPClient:
 
                         if isinstance(response, SFTPDataMessage):
                             local_file.write(response.data)
+                            if possible_cap and response.data:
+                                # Data after the short read: the server caps
+                                # reads at that size.
+                                self._note_short_read(possible_cap)
+                                possible_cap = 0
                             if len(response.data) < requested:
                                 # Short read (allowed by the SFTP spec): the
                                 # remaining in-flight requests now target
@@ -605,8 +629,11 @@ class SFTPClient:
                                 if not response.data:
                                     eof = True
                                 elif len(response.data) < _CHUNK:
-                                    _CHUNK = len(response.data)
-                                    self._note_short_read(_CHUNK)
+                                    # End of file or a server cap: use the
+                                    # smaller size for the rest of this
+                                    # transfer, and remember it only if more
+                                    # data follows (see above).
+                                    _CHUNK = possible_cap = len(response.data)
                         elif isinstance(response, SFTPStatusMessage):
                             if response.status_code == SSH_FX_EOF:
                                 eof = True

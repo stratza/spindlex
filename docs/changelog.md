@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+*   **SFTP downloads slowed down after the first one** - a download whose size is not a multiple of the read size ends with a short read, which 1.0.3 mistook for a server read limit. The read size for the rest of the session dropped to that final fragment (often a few KiB), making every later `get()` / `read()` several times slower (1 MiB: ~44 ms instead of ~14 ms against OpenSSH). A short read now only lowers the read size when more data follows it.
+*   **Async `exec_command()` could hang forever** - when a server closed a session channel instead of answering its `exec` request (seen intermittently with Dropbear when a new session starts while the previous one is still closing), `AsyncChannel` kept waiting for a reply that never came. A close now ends the wait and `exec_command()` / `invoke_shell()` / `invoke_subsystem()` raise `ChannelException`. A reply processed while the request was still being sent is no longer lost either.
+*   **`AsyncTransport.close()` tried to close asyncio's socket wrapper** - closing the stream writer already closes the socket; the extra `close()` failed (logged as `'TransportSocket' object has no attribute 'close'`).
+*   **`configure_logging()` leaked log files and duplicated records when called again** - the previous handlers were dropped without being closed, and the security and performance loggers gained an extra handler on every call, writing each record more than once. Calling it again now closes and replaces the previous handlers.
+
+### Changed
+*   **Python 3.14 is supported** - added to the package classifiers and the CI compatibility matrix.
+
+### Documentation
+*   **README and comparison page refreshed** - current feature list (SSH/SFTP server, authentication methods, RSA keys, tunneling), an SFTP example, and benchmark numbers from a live OpenSSH server for SpindleX, AsyncSSH and Paramiko; the performance page lists `benchmark_compare.py`.
+
 ## [1.0.3] - 2026-10-08
 
 ### Security

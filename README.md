@@ -11,6 +11,7 @@
 [![Security](https://img.shields.io/github/actions/workflow/status/stratza/spindlex/security.yml?branch=main&style=for-the-badge&logo=github&label=Security&labelColor=1a1a1a)](https://github.com/stratza/spindlex/actions/workflows/security.yml)
 [![Coverage](https://img.shields.io/codecov/c/github/stratza/spindlex?style=for-the-badge&logo=codecov&labelColor=1a1a1a)](https://codecov.io/gh/stratza/spindlex)
 [![PyPI Version](https://img.shields.io/pypi/v/spindlex?style=for-the-badge&logo=pypi&logoColor=white&labelColor=1a1a1a)](https://pypi.org/project/spindlex/)
+[![Python Versions](https://img.shields.io/pypi/pyversions/spindlex?style=for-the-badge&logo=python&logoColor=white&labelColor=1a1a1a)](https://pypi.org/project/spindlex/)
 [![License](https://img.shields.io/pypi/l/spindlex?style=for-the-badge&color=bb86fc&labelColor=1a1a1a)](https://github.com/stratza/spindlex/blob/main/LICENSE)
 
 <br />
@@ -23,19 +24,20 @@
 
 ## ⚡ Overview
 
-**SpindleX** is a modern SSH protocol implementation for Python 3.9+. It is designed for high-performance automation and secure file transfers, providing a clean alternative to legacy SSH libraries.
+**SpindleX** is a modern SSH and SFTP implementation for Python 3.9 - 3.14 - client *and* server, sync *and* async. It is designed for high-performance automation and secure file transfers, providing a clean alternative to legacy SSH libraries.
 
 > [!NOTE]
-> **1.0.0 - First stable release.** SpindleX has graduated from beta: the public API surface is frozen under semantic versioning, with `chacha20-poly1305@openssh.com` as the preferred cipher, adaptive SFTP chunks via `limits@openssh.com`, and a hardened sync + async transport. Upgrading from 0.x? Read the [migration guide](docs/migration/0.x-to-1.0.md). See also [SECURITY.md](SECURITY.md) and the [compatibility & API stability policy](docs/compatibility.md).
+> **Stable 1.x.** The public API is frozen under semantic versioning since 1.0.0. The 1.0.x releases have hardened interoperability with OpenSSH and Dropbear, the SpindleX SSH and SFTP servers, and the sync and async transports - see the [changelog](docs/changelog.md). Upgrading from 0.x? Read the [migration guide](docs/migration/0.x-to-1.0.md). See also [SECURITY.md](SECURITY.md) and the [compatibility & API stability policy](docs/compatibility.md).
 
 ### 🔥 Key Features
 
-- 🚀 **High Performance**: Adaptive SFTP write chunks up to 255 KB via `limits@openssh.com` negotiation, pipelined transfers, and zero-copy internal buffering.
-- 🔒 **ChaCha20-Poly1305**: Preferred AEAD cipher - no separate MAC pass, full Terrapin-defense strict-KEX, on par with leading SSH libraries.
+- 🚀 **High Performance**: Pipelined SFTP transfers with read/write sizes negotiated via `limits@openssh.com` (up to 255 KB), and the fastest handshake and command execution in our [benchmarks](#-performance-benchmarks).
+- 🔒 **Modern Cryptography**: ChaCha20-Poly1305 (preferred) and AES-CTR, Curve25519/ECDH/DH-group14 key exchange, Ed25519, ECDSA and RSA (SHA-2) keys, Terrapin-defense strict KEX.
 - 🔄 **Native Async**: First-class `asyncio` support via `AsyncSSHClient` and `AsyncSFTPClient`.
-- 🛡️ **Secure by Default**: Modern primitives only - Ed25519, ECDSA, ChaCha20-Poly1305, AES-CTR. Legacy/weak ciphers are not negotiated.
-- 🔗 **Advanced Tunneling**: ProxyJump (bastion hosts) via `direct-tcpip` channels and TCP port forwarding.
-- 📂 **Recursive SFTP**: Native support for recursive directory uploads and downloads.
+- 🖥️ **SSH & SFTP Server**: Build servers with `SSHServer`, `SSHServerManager` and `SFTPServer` - they work with the OpenSSH `ssh` and `sftp` clients.
+- 🔑 **Authentication**: Password, public key, keyboard-interactive, GSSAPI/Kerberos and multi-factor (partial success).
+- 🔗 **Tunneling**: Local and remote port forwarding, and ProxyJump (bastion hosts) via `direct-tcpip` channels.
+- 📂 **Recursive SFTP**: `get_recursive()` / `put_recursive()` for whole directory trees.
 - 🏷️ **Fully Typed**: Comprehensive type hints for IDE integration and static analysis.
 
 ---
@@ -112,23 +114,47 @@ asyncio.run(main())
 ```
 </details>
 
+<details>
+<summary><b>SFTP Example</b></summary>
+
+```python
+from spindlex import SSHClient
+
+with SSHClient() as client:
+    client.get_host_keys().load()
+    client.connect('example.com', username='admin')
+
+    with client.open_sftp() as sftp:
+        sftp.put('report.csv', '/srv/data/report.csv')
+        sftp.get_recursive('/var/log/app', './app-logs')
+        print(sftp.listdir('/srv/data'))
+```
+</details>
+
+More examples - servers, port forwarding, ProxyJump, multi-factor login - are in the [documentation](https://spindlex.readthedocs.io/) and the [cookbook](docs/cookbook/index.md).
+
 ---
 
 ## 📊 Performance Benchmarks
 
-SpindleX is optimized for high-throughput environments, with SFTP upload throughput in line with leading SSH libraries and ChaCha20-Poly1305 as the preferred cipher. See the [comparison page](docs/comparison.md) for the full benchmark methodology.
+Median of 5 runs against a live OpenSSH 9.2 server on a local network (SpindleX 1.0.4, AsyncSSH 2.24, Paramiko 5.0, Python 3.12). Lower is better.
 
-| Operation | SpindleX | Other libs | Notes |
-|:---|:---:|:---:|:---|
-| **SFTP upload (1 MiB, chacha20)** | ~14 ms | ~14 ms | On par after limits negotiation |
-| **SFTP upload (1 MiB, AES-CTR)** | ~14 ms | ~14 ms | Pipelined, 255 KB chunks |
-| **Handshake** | ~320 ms | ~320 ms | Ed25519 + Curve25519 |
+| Operation | SpindleX | AsyncSSH | Paramiko |
+|:---|:---:|:---:|:---:|
+| **Handshake** (connect + auth + close) | **41 ms** | 50 ms | 84 ms |
+| **Command** (`echo hello`, warm connection) | **5.5 ms** | 5.7 ms | 49 ms |
+| **Command with 1.4 MB output** | **20 ms** | 21 ms | 67 ms |
+| **SFTP upload** (1 MiB) | **14 ms** | 20 ms | 45 ms |
+| **SFTP download** (1 MiB) | 16 ms | **14 ms** | 360 ms |
+
+Network latency dominates in practice, so measure in your own environment. See the [comparison page](docs/comparison.md) for methodology and feature differences.
 
 > [!TIP]
 > Run the benchmark suite on your own hardware:
 > ```bash
-> python scripts/benchmark_ciphers.py     # cipher comparison
-> python scripts/benchmark_production.py  # full protocol correctness + perf
+> python scripts/benchmark_compare.py     # SpindleX vs AsyncSSH vs Paramiko
+> python scripts/benchmark_ciphers.py     # per cipher / key exchange / host key
+> python scripts/benchmark_production.py  # protocol correctness + stability
 > ```
 
 ---
@@ -139,7 +165,9 @@ SpindleX is optimized for high-throughput environments, with SFTP upload through
 - **Log Sanitization**: Credentials and sensitive data are automatically filtered from logs.
 - **AEAD Preferred**: `chacha20-poly1305@openssh.com` is the default cipher - authentication is integral, no separate MAC.
 - **Terrapin Defense**: Strict-KEX (`kex-strict-c-v00@openssh.com`) enabled, sequence numbers reset after NEWKEYS.
-- **Modern Defaults**: Ed25519, ECDSA, ChaCha20-Poly1305, and AES-CTR only. SHA-1 and CBC mode are excluded.
+- **Modern Defaults**: Ed25519, ECDSA, RSA with SHA-2 signatures, ChaCha20-Poly1305 and AES-CTR. CBC mode and SHA-1 (key exchange, MACs, `ssh-rsa` signatures) are off by default.
+- **known_hosts Aware**: Hashed entries, non-standard ports and `@revoked` markers are honoured; private keys are written owner-only (`0600`).
+- **Hardened Server**: Authentication only after key exchange, a login grace deadline, failed-attempt limits, and an SFTP server confined to its root.
 - **Full Policy**: See [SECURITY.md](SECURITY.md) for vulnerability reporting and [Security Guide](docs/security.md) for operational security guidance.
 
 ---

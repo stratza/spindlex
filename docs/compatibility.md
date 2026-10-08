@@ -6,7 +6,7 @@ can rely on after `1.0.0`.
 
 ## Python Versions
 
-SpindleX supports Python `3.9` through `3.13`.
+SpindleX supports Python `3.9` through `3.14`.
 
 This matches package metadata and the Linux compatibility matrix. Python `3.11`
 is the primary CI and release tooling version.
