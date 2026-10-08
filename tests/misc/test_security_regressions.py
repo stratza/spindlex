@@ -174,7 +174,8 @@ def test_removed_host_key_is_deleted_from_disk(tmp_path):
     # Other hosts sharing the line / the key are untouched.
     assert reloaded.lookup("10.0.0.5") == [old]
     assert reloaded.lookup("other.example") == [old]
-    assert open(path).read().startswith("# my hosts\n")
+    with open(path) as fh:
+        assert fh.read().startswith("# my hosts\n")
 
 
 def test_removed_hashed_host_key_is_deleted_from_disk(tmp_path):
