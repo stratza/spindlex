@@ -492,8 +492,21 @@ class TestCloseEdgeCases:
     @pytest.mark.asyncio
     async def test_close_socket_error(self, connected_transport):
         t = connected_transport
+        t._writer = None  # a raw socket, not owned by asyncio streams
         t._socket.close.side_effect = OSError("fail")
         await t.close()  # should not raise
+        t._socket.close.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_close_leaves_stream_owned_socket_to_the_writer(
+        self, connected_transport
+    ):
+        # asyncio's socket wrapper has no close(); closing the writer closes it.
+        t = connected_transport
+        sock, writer = t._socket, t._writer
+        await t.close()
+        writer.close.assert_called_once()
+        sock.close.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_close_channel_error_ignored(self, connected_transport):

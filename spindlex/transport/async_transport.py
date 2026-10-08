@@ -830,6 +830,9 @@ class AsyncTransport(Transport):
             except Exception as e:
                 self._logger.debug(f"Channel close error in transport: {e}")
         async with self._state_lock:
+            # When asyncio streams own the socket, closing the writer closes
+            # it; asyncio's socket wrapper must not be closed directly.
+            owned_by_streams = self._writer is not None
             if self._writer:
                 try:
                     self._writer.close()
@@ -838,7 +841,7 @@ class AsyncTransport(Transport):
                     self._logger.debug(f"Error closing channel in transport: {e}")
                 self._writer = None
             self._reader = None
-            if self._socket:
+            if self._socket and not owned_by_streams:
                 try:
                     self._socket.close()
                 except Exception as e:
