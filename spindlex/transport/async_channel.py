@@ -53,6 +53,9 @@ class AsyncChannel(Channel):
         self._closed = True
         self._close_received = True
         self._closed_event.set()
+        # No reply follows a CLOSE: wake a pending exec/shell/subsystem request
+        # (it then fails) instead of leaving it waiting forever.
+        self._request_event.set()
 
     def _handle_data(self, data: bytes) -> None:
         """Handle incoming channel data."""
@@ -263,12 +266,29 @@ class AsyncChannel(Channel):
         """
         return await self._recv_stream(True, nbytes)
 
-    async def _wait_for_channel_request_result(self) -> bool:
-        """Pump until MSG_CHANNEL_SUCCESS/FAILURE is dispatched to this channel.
-        Returns True on success, False on failure."""
+    async def _send_request_and_wait(self, request_type: str, data: bytes) -> bool:
+        """Send a channel request that wants a reply and wait for it.
+
+        Returns True on MSG_CHANNEL_SUCCESS, False on MSG_CHANNEL_FAILURE or if
+        the peer closes the channel instead of replying (some servers do).
+        The reply flag is reset before sending, so a reply dispatched while
+        the request is still being written is not lost.
+        """
         self._request_event.clear()
-        while not self._request_event.is_set():
+        self._request_success = False
+        await self._transport._send_channel_request_async(
+            self._channel_id, request_type, True, data
+        )
+        return await self._wait_for_channel_request_result()
+
+    async def _wait_for_channel_request_result(self) -> bool:
+        """Pump until MSG_CHANNEL_SUCCESS/FAILURE is dispatched to this channel
+        or the channel is closed. Returns True on success, False otherwise."""
+        while not self._request_event.is_set() and not self._close_received:
             await self._transport._pump_async()
+        # Success only if MSG_CHANNEL_SUCCESS arrived (the flag is reset before
+        # sending); a SUCCESS followed at once by CLOSE - a command that
+        # finished immediately - is still a success.
         return bool(self._request_success)
 
     async def exec_command(self, command: str) -> None:  # type: ignore[override]
@@ -287,10 +307,7 @@ class AsyncChannel(Channel):
         try:
             request_data = bytearray()
             request_data.extend(write_string(command))
-            await self._transport._send_channel_request_async(
-                self._channel_id, "exec", True, bytes(request_data)
-            )
-            if not await self._wait_for_channel_request_result():
+            if not await self._send_request_and_wait("exec", bytes(request_data)):
                 raise ChannelException(f"Command execution failed: {command}")
 
         except Exception as e:
@@ -309,10 +326,7 @@ class AsyncChannel(Channel):
             raise ChannelException("Channel is closed")
 
         try:
-            await self._transport._send_channel_request_async(
-                self._channel_id, "shell", True, b""
-            )
-            if not await self._wait_for_channel_request_result():
+            if not await self._send_request_and_wait("shell", b""):
                 raise ChannelException("Shell invocation failed")
 
         except Exception as e:
@@ -336,10 +350,7 @@ class AsyncChannel(Channel):
         try:
             request_data = bytearray()
             request_data.extend(write_string(subsystem))
-            await self._transport._send_channel_request_async(
-                self._channel_id, "subsystem", True, bytes(request_data)
-            )
-            if not await self._wait_for_channel_request_result():
+            if not await self._send_request_and_wait("subsystem", bytes(request_data)):
                 raise ChannelException(f"Subsystem invocation failed: {subsystem}")
 
         except Exception as e:

@@ -431,6 +431,48 @@ async def test_exec_command_failure_raises():
         await channel.exec_command("bad_command")
 
 
+async def test_exec_command_fails_when_peer_closes_instead_of_replying():
+    """Some servers (seen with Dropbear) close the channel without answering
+    the exec request; waiting for a reply then hung forever."""
+    channel, transport = make_async_channel()
+
+    async def pump_side_effect():
+        await asyncio.sleep(0)  # yield, so a regression times out instead of spinning
+        channel._handle_eof()
+        channel._handle_close()
+
+    transport._pump_async.side_effect = pump_side_effect
+    with pytest.raises(ChannelException, match="failed"):
+        await asyncio.wait_for(channel.exec_command("echo 1"), 2)
+
+
+async def test_exec_command_reply_dispatched_while_sending_is_not_lost():
+    channel, transport = make_async_channel()
+
+    async def send_side_effect(*args):
+        # Another task reads the reply before this one starts waiting.
+        channel._handle_request_success()
+
+    async def pump_side_effect():
+        await asyncio.sleep(0)
+
+    transport._send_channel_request_async.side_effect = send_side_effect
+    transport._pump_async.side_effect = pump_side_effect
+    await asyncio.wait_for(channel.exec_command("echo 1"), 2)
+
+
+async def test_exec_command_success_then_immediate_close_is_success():
+    channel, transport = make_async_channel()
+
+    async def pump_side_effect():
+        await asyncio.sleep(0)
+        channel._handle_request_success()
+        channel._handle_close()
+
+    transport._pump_async.side_effect = pump_side_effect
+    await asyncio.wait_for(channel.exec_command("true"), 2)
+
+
 # ---------------------------------------------------------------------------
 # invoke_shell
 # ---------------------------------------------------------------------------
