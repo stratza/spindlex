@@ -300,6 +300,7 @@ class TestAsyncSFTPClientRecursive:
             return file_attrs
 
         client.stat = mock_stat  # type: ignore[assignment]
+        client.lstat = AsyncMock(return_value=file_attrs)
         client.listdir = AsyncMock(return_value=["item.txt"])
         client.get = AsyncMock()
 

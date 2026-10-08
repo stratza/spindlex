@@ -14,6 +14,7 @@ Key exchange establishes the shared session secret before any user data is sent.
 | Algorithm | RFC / Standard | Hash | Status |
 |-----------|---------------|------|--------|
 | `curve25519-sha256` | RFC 8731 | SHA-256 | **Preferred** |
+| `curve25519-sha256@libssh.org` | RFC 8731 (pre-standard name) | SHA-256 | Active |
 | `ecdh-sha2-nistp256` | RFC 5656 | SHA-256 | Active |
 | `ecdh-sha2-nistp384` | RFC 5656 | SHA-384 | Active |
 | `ecdh-sha2-nistp521` | RFC 5656 | SHA-512 | Active |
@@ -22,6 +23,7 @@ Key exchange establishes the shared session secret before any user data is sent.
 ### Notes
 
 - **`curve25519-sha256`** is the preferred algorithm. It uses Curve25519 elliptic-curve Diffie-Hellman and is the modern default across OpenSSH and most current servers.
+- **`curve25519-sha256@libssh.org`** is the same algorithm under its pre-RFC name, offered for older servers (OpenSSH before 7.4, many embedded SSH stacks).
 - **ECDH NIST curves** (P-256, P-384, P-521) are supported for compatibility with servers and clients that do not offer Curve25519.
 - **`diffie-hellman-group14-sha256`** uses a 2048-bit Diffie-Hellman group and SHA-256. It is retained for compatibility with older servers.
 - SHA-1 based KEX (`diffie-hellman-group14-sha1`, `diffie-hellman-group1-sha1`) is not implemented and will never be negotiated.
@@ -29,6 +31,10 @@ Key exchange establishes the shared session secret before any user data is sent.
 ### Client signaling tokens
 
 SpindleX appends `kex-strict-c-v00@openssh.com` and `ext-info-c` to the client's KEX list as capability signals per OpenSSH extension negotiation. These are **not** real algorithms - they are never selected as the negotiated KEX method and have no implementation behind them.
+
+### Server extension negotiation
+
+When a client offers `ext-info-c`, the SpindleX server sends `SSH_MSG_EXT_INFO` (RFC 8308) after the first key exchange with `server-sig-algs`, listing the public-key signature algorithms it accepts (`ssh-ed25519`, `ecdsa-sha2-nistp256/384/521`, `rsa-sha2-512`, `rsa-sha2-256`). OpenSSH 8.8 and later need this to use RSA keys.
 
 ---
 

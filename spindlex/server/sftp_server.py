@@ -41,6 +41,7 @@ from ..protocol.sftp_messages import (
     SFTPAttrsMessage,
     SFTPCloseMessage,
     SFTPDataMessage,
+    SFTPFSetStatMessage,
     SFTPFStatMessage,
     SFTPHandleMessage,
     SFTPInitMessage,
@@ -51,6 +52,7 @@ from ..protocol.sftp_messages import (
     SFTPOpenDirMessage,
     SFTPOpenMessage,
     SFTPReadDirMessage,
+    SFTPReadLinkMessage,
     SFTPReadMessage,
     SFTPRealPathMessage,
     SFTPRemoveMessage,
@@ -59,6 +61,7 @@ from ..protocol.sftp_messages import (
     SFTPSetStatMessage,
     SFTPStatMessage,
     SFTPStatusMessage,
+    SFTPSymlinkMessage,
     SFTPVersionMessage,
     SFTPWriteMessage,
 )
@@ -66,6 +69,17 @@ from ..transport.channel import Channel
 
 # Maximum accepted SFTP message length; matches OpenSSH's sftp-server limit.
 _MAX_MESSAGE_LENGTH = 256 * 1024
+
+
+def _error_text(e: BaseException) -> str:
+    """Error text that is safe to send to the client.
+
+    ``str(OSError)`` includes the absolute server-side path (revealing where
+    the SFTP root is); only the OS error description is sent.
+    """
+    if isinstance(e, OSError):
+        return e.strerror or "I/O error"
+    return str(e)
 
 
 class SFTPHandle:
@@ -125,7 +139,7 @@ class SFTPHandle:
         try:
             return self.file_obj.read(length)
         except (OSError, ValueError) as e:
-            raise SFTPError(f"Read failed: {e}", SSH_FX_FAILURE)
+            raise SFTPError(f"Read failed: {_error_text(e)}", SSH_FX_FAILURE)
 
     def write(self, data: bytes) -> int:
         """
@@ -152,7 +166,7 @@ class SFTPHandle:
         try:
             return self.file_obj.write(data)
         except (OSError, ValueError) as e:
-            raise SFTPError(f"Write failed: {e}", SSH_FX_FAILURE)
+            raise SFTPError(f"Write failed: {_error_text(e)}", SSH_FX_FAILURE)
 
     def seek(self, offset: int) -> None:
         """
@@ -174,7 +188,7 @@ class SFTPHandle:
             self.file_obj.seek(offset)
             self.position = offset
         except (OSError, ValueError) as e:
-            raise SFTPError(f"Seek failed: {e}", SSH_FX_FAILURE)
+            raise SFTPError(f"Seek failed: {_error_text(e)}", SSH_FX_FAILURE)
 
     def close(self) -> None:
         """Close the handle and cleanup resources."""
@@ -243,6 +257,10 @@ class SFTPServer:
             self._start_sftp_session()
         except (OSError, struct.error, SSHException) as e:
             self._logger.error(f"SFTP server session error: {e}")
+        finally:
+            # However the session ends (client EOF, channel close, error), close
+            # the channel - the client waits for our CLOSE before exiting - and
+            # release the files it left open.
             self.close()
 
     def _start_sftp_session(self) -> None:
@@ -279,7 +297,7 @@ class SFTPServer:
             self._logger.error(f"SFTP session initialization failed: {e}")
             if isinstance(e, SFTPError):
                 raise
-            raise SFTPError(f"SFTP initialization failed: {e}") from e
+            raise SFTPError(f"SFTP initialization failed: {_error_text(e)}") from e
 
     def _generate_handle(self) -> bytes:
         """
@@ -309,7 +327,7 @@ class SFTPServer:
             # desynchronise the SFTP stream.
             self._channel.sendall(data)
         except (OSError, struct.error, SSHException) as e:
-            raise SFTPError(f"Failed to send SFTP message: {e}") from e
+            raise SFTPError(f"Failed to send SFTP message: {_error_text(e)}") from e
 
     def _receive_message(self) -> SFTPMessage:
         """
@@ -340,7 +358,7 @@ class SFTPServer:
 
             return SFTPMessage.unpack(msg_data)
         except (OSError, struct.error, ValueError, SSHException) as e:
-            raise SFTPError(f"Failed to receive SFTP message: {e}") from e
+            raise SFTPError(f"Failed to receive SFTP message: {_error_text(e)}") from e
 
     def _process_messages(self) -> None:
         """
@@ -362,6 +380,10 @@ class SFTPServer:
                 self._logger.debug(f"SFTP session ended: {e}")
                 break
             except (OSError, struct.error, SSHException) as e:
+                if self._channel.closed or self._channel.eof_received:
+                    # The client ended the session (EOF / channel close).
+                    self._logger.debug(f"SFTP session ended: {e}")
+                    break
                 self._logger.error(f"Error processing SFTP message: {e}")
                 try:
                     if (
@@ -370,7 +392,7 @@ class SFTPServer:
                         and message.request_id is not None
                     ):
                         error_msg = SFTPStatusMessage(
-                            message.request_id, SSH_FX_FAILURE, str(e)
+                            message.request_id, SSH_FX_FAILURE, _error_text(e)
                         )
                         self._send_message(error_msg)
                 except (OSError, SFTPError):
@@ -403,6 +425,12 @@ class SFTPServer:
             self._handle_fstat(message)
         elif isinstance(message, SFTPSetStatMessage):
             self._handle_setstat(message)
+        elif isinstance(message, SFTPFSetStatMessage):
+            self._handle_fsetstat(message)
+        elif isinstance(message, SFTPReadLinkMessage):
+            self._handle_readlink(message)
+        elif isinstance(message, SFTPSymlinkMessage):
+            self._handle_symlink(message)
         elif isinstance(message, SFTPOpenDirMessage):
             self._handle_opendir(message)
         elif isinstance(message, SFTPReadDirMessage):
@@ -500,7 +528,7 @@ class SFTPServer:
             raise SFTPError("Path outside root directory", SSH_FX_PERMISSION_DENIED)
         return os.path.join(resolved_parent, name)
 
-    def _path_to_attrs(self, path: str) -> SFTPAttributes:
+    def _path_to_attrs(self, path: str, follow: bool = True) -> SFTPAttributes:
         """
         Convert file system path to SFTP attributes.
 
@@ -514,7 +542,7 @@ class SFTPServer:
             SFTPError: If stat fails
         """
         try:
-            st = os.stat(path)
+            st = os.stat(path) if follow else os.lstat(path)
             attrs = SFTPAttributes()
 
             attrs.flags = (
@@ -535,7 +563,7 @@ class SFTPServer:
             if e.errno == errno.ENOENT:
                 raise SFTPError("No such file or directory", SSH_FX_NO_SUCH_FILE)
             else:
-                raise SFTPError(f"Stat failed: {e}", SSH_FX_FAILURE)
+                raise SFTPError(f"Stat failed: {_error_text(e)}", SSH_FX_FAILURE)
 
     # Message handlers
     def _handle_open(self, message: SFTPOpenMessage) -> None:
@@ -672,7 +700,9 @@ class SFTPServer:
                     )
                 else:
                     error_msg = SFTPStatusMessage(
-                        int(message.request_id), SSH_FX_FAILURE, f"Open failed: {e}"
+                        int(message.request_id),
+                        SSH_FX_FAILURE,
+                        f"Open failed: {_error_text(e)}",
                     )
                 self._send_message(error_msg)
                 return
@@ -680,12 +710,14 @@ class SFTPServer:
         except SFTPError as e:
             assert message.request_id is not None
             error_msg = SFTPStatusMessage(
-                message.request_id, e.status_code or SSH_FX_FAILURE, str(e)
+                message.request_id, e.status_code or SSH_FX_FAILURE, _error_text(e)
             )
             self._send_message(error_msg)
         except (OSError, ValueError, SSHException) as e:
             assert message.request_id is not None
-            error_msg = SFTPStatusMessage(message.request_id, SSH_FX_FAILURE, str(e))
+            error_msg = SFTPStatusMessage(
+                message.request_id, SSH_FX_FAILURE, _error_text(e)
+            )
             self._send_message(error_msg)
 
     def _handle_close(self, message: SFTPCloseMessage) -> None:
@@ -710,7 +742,9 @@ class SFTPServer:
             self._send_message(status_msg)
 
         except (OSError, SSHException) as e:
-            error_msg = SFTPStatusMessage(message.request_id, SSH_FX_FAILURE, str(e))
+            error_msg = SFTPStatusMessage(
+                message.request_id, SSH_FX_FAILURE, _error_text(e)
+            )
             self._send_message(error_msg)
 
     def _handle_read(self, message: SFTPReadMessage) -> None:
@@ -745,12 +779,14 @@ class SFTPServer:
         except SFTPError as e:
             assert message.request_id is not None
             error_msg = SFTPStatusMessage(
-                message.request_id, e.status_code or SSH_FX_FAILURE, str(e)
+                message.request_id, e.status_code or SSH_FX_FAILURE, _error_text(e)
             )
             self._send_message(error_msg)
         except (OSError, ValueError, SSHException) as e:
             assert message.request_id is not None
-            error_msg = SFTPStatusMessage(message.request_id, SSH_FX_FAILURE, str(e))
+            error_msg = SFTPStatusMessage(
+                message.request_id, SSH_FX_FAILURE, _error_text(e)
+            )
             self._send_message(error_msg)
 
     def _handle_write(self, message: SFTPWriteMessage) -> None:
@@ -783,12 +819,14 @@ class SFTPServer:
         except SFTPError as e:
             assert message.request_id is not None
             error_msg = SFTPStatusMessage(
-                message.request_id, e.status_code or SSH_FX_FAILURE, str(e)
+                message.request_id, e.status_code or SSH_FX_FAILURE, _error_text(e)
             )
             self._send_message(error_msg)
         except (OSError, ValueError, SSHException) as e:
             assert message.request_id is not None
-            error_msg = SFTPStatusMessage(message.request_id, SSH_FX_FAILURE, str(e))
+            error_msg = SFTPStatusMessage(
+                message.request_id, SSH_FX_FAILURE, _error_text(e)
+            )
             self._send_message(error_msg)
 
     def _handle_stat(self, message: SFTPStatMessage) -> None:
@@ -816,12 +854,14 @@ class SFTPServer:
         except SFTPError as e:
             assert message.request_id is not None
             error_msg = SFTPStatusMessage(
-                message.request_id, e.status_code or SSH_FX_FAILURE, str(e)
+                message.request_id, e.status_code or SSH_FX_FAILURE, _error_text(e)
             )
             self._send_message(error_msg)
         except (OSError, SSHException) as e:
             assert message.request_id is not None
-            error_msg = SFTPStatusMessage(message.request_id, SSH_FX_FAILURE, str(e))
+            error_msg = SFTPStatusMessage(
+                message.request_id, SSH_FX_FAILURE, _error_text(e)
+            )
             self._send_message(error_msg)
 
     def _handle_lstat(self, message: SFTPLStatMessage) -> None:
@@ -862,7 +902,7 @@ class SFTPServer:
                 if e.errno == errno.ENOENT:
                     raise SFTPError("No such file or directory", SSH_FX_NO_SUCH_FILE)
                 else:
-                    raise SFTPError(f"Lstat failed: {e}", SSH_FX_FAILURE)
+                    raise SFTPError(f"Lstat failed: {_error_text(e)}", SSH_FX_FAILURE)
 
             # Send attributes response
             attrs_msg = SFTPAttrsMessage(message.request_id, attrs)
@@ -871,12 +911,14 @@ class SFTPServer:
         except SFTPError as e:
             assert message.request_id is not None
             error_msg = SFTPStatusMessage(
-                message.request_id, e.status_code or SSH_FX_FAILURE, str(e)
+                message.request_id, e.status_code or SSH_FX_FAILURE, _error_text(e)
             )
             self._send_message(error_msg)
         except (OSError, SSHException) as e:
             assert message.request_id is not None
-            error_msg = SFTPStatusMessage(message.request_id, SSH_FX_FAILURE, str(e))
+            error_msg = SFTPStatusMessage(
+                message.request_id, SSH_FX_FAILURE, _error_text(e)
+            )
             self._send_message(error_msg)
 
     def _handle_fstat(self, message: SFTPFStatMessage) -> None:
@@ -902,12 +944,14 @@ class SFTPServer:
         except SFTPError as e:
             assert message.request_id is not None
             error_msg = SFTPStatusMessage(
-                message.request_id, e.status_code or SSH_FX_FAILURE, str(e)
+                message.request_id, e.status_code or SSH_FX_FAILURE, _error_text(e)
             )
             self._send_message(error_msg)
         except (OSError, SSHException) as e:
             assert message.request_id is not None
-            error_msg = SFTPStatusMessage(message.request_id, SSH_FX_FAILURE, str(e))
+            error_msg = SFTPStatusMessage(
+                message.request_id, SSH_FX_FAILURE, _error_text(e)
+            )
             self._send_message(error_msg)
 
     def _handle_setstat(self, message: SFTPSetStatMessage) -> None:
@@ -925,48 +969,12 @@ class SFTPServer:
                 self._send_message(error_msg)
                 return
 
-            attrs = message.attrs
-
-            # Set permissions
-            if (
-                attrs.flags & SSH_FILEXFER_ATTR_PERMISSIONS
-                and attrs.permissions is not None
-            ):
-                try:
-                    os.chmod(resolved_path, attrs.permissions)
-                except OSError as e:
-                    error_msg = SFTPStatusMessage(
-                        message.request_id, SSH_FX_FAILURE, f"Chmod failed: {e}"
-                    )
-                    self._send_message(error_msg)
-                    return
-
-            # Set access and modification times
-            if (
-                attrs.flags & SSH_FILEXFER_ATTR_ACMODTIME
-                and attrs.atime is not None
-                and attrs.mtime is not None
-            ):
-                try:
-                    os.utime(resolved_path, (attrs.atime, attrs.mtime))
-                except OSError as e:
-                    error_msg = SFTPStatusMessage(
-                        message.request_id, SSH_FX_FAILURE, f"Utime failed: {e}"
-                    )
-                    self._send_message(error_msg)
-                    return
-
-            # Set ownership (if supported and authorized)
-            if attrs.flags & SSH_FILEXFER_ATTR_UIDGID:
-                try:
-                    if hasattr(os, "chown"):
-                        uid = attrs.uid if attrs.uid is not None else -1
-                        gid = attrs.gid if attrs.gid is not None else -1
-                        os.chown(resolved_path, uid, gid)
-                except (OSError, AttributeError):
-                    # chown may not be supported on all platforms
-                    # or user may not have permission
-                    pass
+            failure = self._apply_attrs(resolved_path, message.attrs)
+            if failure:
+                self._send_message(
+                    SFTPStatusMessage(message.request_id, SSH_FX_FAILURE, failure)
+                )
+                return
 
             # Send success response
             status_msg = SFTPStatusMessage(message.request_id, SSH_FX_OK, "")
@@ -975,13 +983,173 @@ class SFTPServer:
         except SFTPError as e:
             assert message.request_id is not None
             error_msg = SFTPStatusMessage(
-                message.request_id, e.status_code or SSH_FX_FAILURE, str(e)
+                message.request_id, e.status_code or SSH_FX_FAILURE, _error_text(e)
             )
             self._send_message(error_msg)
         except (OSError, SSHException) as e:
             assert message.request_id is not None
-            error_msg = SFTPStatusMessage(message.request_id, SSH_FX_FAILURE, str(e))
+            error_msg = SFTPStatusMessage(
+                message.request_id, SSH_FX_FAILURE, _error_text(e)
+            )
             self._send_message(error_msg)
+
+    def _apply_attrs(self, path: str, attrs: SFTPAttributes) -> Optional[str]:
+        """Apply SETSTAT/FSETSTAT attributes to ``path``.
+
+        Returns an error description, or None on success.
+        """
+        # Size first: truncate/extend the file (used by e.g. truncate()).
+        if attrs.flags & SSH_FILEXFER_ATTR_SIZE and attrs.size is not None:
+            try:
+                os.truncate(path, attrs.size)
+            except OSError as e:
+                return f"Truncate failed: {_error_text(e)}"
+
+        if (
+            attrs.flags & SSH_FILEXFER_ATTR_PERMISSIONS
+            and attrs.permissions is not None
+        ):
+            try:
+                os.chmod(path, attrs.permissions & 0o7777)
+            except OSError as e:
+                return f"Chmod failed: {_error_text(e)}"
+
+        if (
+            attrs.flags & SSH_FILEXFER_ATTR_ACMODTIME
+            and attrs.atime is not None
+            and attrs.mtime is not None
+        ):
+            try:
+                os.utime(path, (attrs.atime, attrs.mtime))
+            except OSError as e:
+                return f"Utime failed: {_error_text(e)}"
+
+        # Ownership: best effort (not supported everywhere, usually needs root)
+        if attrs.flags & SSH_FILEXFER_ATTR_UIDGID and hasattr(os, "chown"):
+            try:
+                uid = attrs.uid if attrs.uid is not None else -1
+                gid = attrs.gid if attrs.gid is not None else -1
+                os.chown(path, uid, gid)
+            except (OSError, AttributeError):
+                pass
+        return None
+
+    def _handle_fsetstat(self, message: SFTPFSetStatMessage) -> None:
+        """Handle fsetstat request (set attributes of an open file)."""
+        assert message.request_id is not None
+        try:
+            with self._handle_lock:
+                handle = self._handles.get(message.handle)
+            if handle is None:
+                self._send_message(
+                    SFTPStatusMessage(
+                        message.request_id, SSH_FX_FAILURE, "Invalid handle"
+                    )
+                )
+                return
+            if not self.check_file_access(handle.path, "w"):
+                self._send_message(
+                    SFTPStatusMessage(
+                        message.request_id,
+                        SSH_FX_PERMISSION_DENIED,
+                        "Write access denied",
+                    )
+                )
+                return
+            if handle.file_obj is not None:
+                handle.file_obj.flush()
+            failure = self._apply_attrs(handle.path, message.attrs)
+            status = SSH_FX_FAILURE if failure else SSH_FX_OK
+            self._send_message(
+                SFTPStatusMessage(message.request_id, status, failure or "")
+            )
+        except (OSError, SSHException) as e:
+            self._send_message(
+                SFTPStatusMessage(message.request_id, SSH_FX_FAILURE, _error_text(e))
+            )
+
+    def _sftp_path(self, real_path: str) -> str:
+        """Express a path inside the root as an absolute SFTP path."""
+        relative = os.path.relpath(real_path, self._root_path)
+        if relative == ".":
+            return "/"
+        return "/" + relative.replace(os.sep, "/")
+
+    def _handle_readlink(self, message: SFTPReadLinkMessage) -> None:
+        """Handle readlink request. The target is reported as an SFTP path
+        inside the root; links pointing outside the root are refused."""
+        assert message.request_id is not None
+        try:
+            link_path = self._resolve_path_nofollow(message.path)
+            if not self.check_file_access(link_path, "r"):
+                raise SFTPError("Access denied", SSH_FX_PERMISSION_DENIED)
+            try:
+                text = os.readlink(link_path)
+            except OSError as e:
+                if e.errno == errno.ENOENT:
+                    raise SFTPError("No such file", SSH_FX_NO_SUCH_FILE)
+                raise SFTPError("Not a symbolic link", SSH_FX_FAILURE)
+            target = os.path.realpath(os.path.join(os.path.dirname(link_path), text))
+            if not self._is_within_root(target):
+                raise SFTPError("Link target outside root", SSH_FX_PERMISSION_DENIED)
+            target_path = self._sftp_path(target)
+            names = [(target_path, target_path, SFTPAttributes())]
+            self._send_message(SFTPNameMessage(message.request_id, names))
+        except SFTPError as e:
+            self._send_message(
+                SFTPStatusMessage(
+                    message.request_id, e.status_code or SSH_FX_FAILURE, _error_text(e)
+                )
+            )
+        except (OSError, SSHException) as e:
+            self._send_message(
+                SFTPStatusMessage(message.request_id, SSH_FX_FAILURE, _error_text(e))
+            )
+
+    def _handle_symlink(self, message: SFTPSymlinkMessage) -> None:
+        """Handle symlink request (OpenSSH argument order: target, link).
+
+        The target must resolve inside the root; the link is written as a path
+        relative to its own directory so it stays inside the root.
+        """
+        assert message.request_id is not None
+        try:
+            link_path = self._resolve_path_nofollow(message.linkpath)
+            target = message.targetpath.replace("\\", "/")
+            if target.startswith("/"):
+                target_full = os.path.join(self._root_path, target.lstrip("/"))
+            else:
+                target_full = os.path.join(os.path.dirname(link_path), target)
+            target_full = os.path.normpath(target_full)
+            if not self._is_within_root(os.path.realpath(target_full)):
+                raise SFTPError("Link target outside root", SSH_FX_PERMISSION_DENIED)
+            if not self.check_file_access(link_path, "w"):
+                raise SFTPError("Write access denied", SSH_FX_PERMISSION_DENIED)
+            os.symlink(
+                os.path.relpath(target_full, os.path.dirname(link_path)), link_path
+            )
+            self._send_message(SFTPStatusMessage(message.request_id, SSH_FX_OK, ""))
+        except SFTPError as e:
+            self._send_message(
+                SFTPStatusMessage(
+                    message.request_id, e.status_code or SSH_FX_FAILURE, _error_text(e)
+                )
+            )
+        except (OSError, NotImplementedError, SSHException) as e:
+            self._send_message(
+                SFTPStatusMessage(
+                    message.request_id,
+                    SSH_FX_FAILURE,
+                    f"Symlink failed: {_error_text(e)}",
+                )
+            )
+
+    def _is_within_root(self, real_path: str) -> bool:
+        root_norm = os.path.normcase(self._root_path)
+        path_norm = os.path.normcase(real_path)
+        return path_norm == root_norm or path_norm.startswith(
+            root_norm.rstrip(os.sep) + os.sep
+        )
 
     def _handle_opendir(self, message: SFTPOpenDirMessage) -> None:
         """Handle directory open request."""
@@ -1015,7 +1183,11 @@ class SFTPServer:
                 for name in os.listdir(resolved_path):
                     entry_path = os.path.join(resolved_path, name)
                     try:
-                        attrs = self._path_to_attrs(entry_path)
+                        # Describe symlinks that lead outside the root as the
+                        # link itself: following them would disclose details
+                        # of files the client may not access.
+                        follow = self._is_within_root(os.path.realpath(entry_path))
+                        attrs = self._path_to_attrs(entry_path, follow=follow)
                         # Create long name (ls -l style)
                         longname = self._format_longname(name, attrs)
                         entries.append((name, longname, attrs))
@@ -1039,6 +1211,17 @@ class SFTPServer:
             handle.dir_index = 0
 
             with self._handle_lock:
+                # Directory handles count against the same cap as file
+                # handles: each holds a full listing in memory.
+                if len(self._handles) >= MAX_SFTP_HANDLES:
+                    self._send_message(
+                        SFTPStatusMessage(
+                            message.request_id,
+                            SSH_FX_FAILURE,
+                            "Too many open handles",
+                        )
+                    )
+                    return
                 self._handles[handle_id] = handle
 
             # Send handle response
@@ -1048,12 +1231,14 @@ class SFTPServer:
         except SFTPError as e:
             assert message.request_id is not None
             error_msg = SFTPStatusMessage(
-                message.request_id, e.status_code or SSH_FX_FAILURE, str(e)
+                message.request_id, e.status_code or SSH_FX_FAILURE, _error_text(e)
             )
             self._send_message(error_msg)
         except (OSError, SSHException) as e:
             assert message.request_id is not None
-            error_msg = SFTPStatusMessage(message.request_id, SSH_FX_FAILURE, str(e))
+            error_msg = SFTPStatusMessage(
+                message.request_id, SSH_FX_FAILURE, _error_text(e)
+            )
             self._send_message(error_msg)
 
     def _handle_readdir(self, message: SFTPReadDirMessage) -> None:
@@ -1097,7 +1282,9 @@ class SFTPServer:
             self._send_message(name_msg)
 
         except (OSError, SSHException) as e:
-            error_msg = SFTPStatusMessage(message.request_id, SSH_FX_FAILURE, str(e))
+            error_msg = SFTPStatusMessage(
+                message.request_id, SSH_FX_FAILURE, _error_text(e)
+            )
             self._send_message(error_msg)
 
     def _handle_mkdir(self, message: SFTPMkdirMessage) -> None:
@@ -1137,7 +1324,9 @@ class SFTPServer:
                 return
             except OSError as e:
                 error_msg = SFTPStatusMessage(
-                    message.request_id, SSH_FX_FAILURE, f"Mkdir failed: {e}"
+                    message.request_id,
+                    SSH_FX_FAILURE,
+                    f"Mkdir failed: {_error_text(e)}",
                 )
                 self._send_message(error_msg)
                 return
@@ -1160,12 +1349,14 @@ class SFTPServer:
         except SFTPError as e:
             assert message.request_id is not None
             error_msg = SFTPStatusMessage(
-                message.request_id, e.status_code or SSH_FX_FAILURE, str(e)
+                message.request_id, e.status_code or SSH_FX_FAILURE, _error_text(e)
             )
             self._send_message(error_msg)
         except (OSError, SSHException) as e:
             assert message.request_id is not None
-            error_msg = SFTPStatusMessage(message.request_id, SSH_FX_FAILURE, str(e))
+            error_msg = SFTPStatusMessage(
+                message.request_id, SSH_FX_FAILURE, _error_text(e)
+            )
             self._send_message(error_msg)
 
     def _handle_rmdir(self, message: SFTPRmdirMessage) -> None:
@@ -1196,13 +1387,15 @@ class SFTPServer:
                 self._send_message(error_msg)
                 return
             except OSError as e:
-                if e.errno == 39:  # Directory not empty
+                if e.errno in (errno.ENOTEMPTY, errno.EEXIST):  # not empty
                     error_msg = SFTPStatusMessage(
                         message.request_id, SSH_FX_FAILURE, "Directory not empty"
                     )
                 else:
                     error_msg = SFTPStatusMessage(
-                        message.request_id, SSH_FX_FAILURE, f"Rmdir failed: {e}"
+                        message.request_id,
+                        SSH_FX_FAILURE,
+                        f"Rmdir failed: {_error_text(e)}",
                     )
                 self._send_message(error_msg)
                 return
@@ -1214,12 +1407,14 @@ class SFTPServer:
         except SFTPError as e:
             assert message.request_id is not None
             error_msg = SFTPStatusMessage(
-                message.request_id, e.status_code or SSH_FX_FAILURE, str(e)
+                message.request_id, e.status_code or SSH_FX_FAILURE, _error_text(e)
             )
             self._send_message(error_msg)
         except (OSError, SSHException) as e:
             assert message.request_id is not None
-            error_msg = SFTPStatusMessage(message.request_id, SSH_FX_FAILURE, str(e))
+            error_msg = SFTPStatusMessage(
+                message.request_id, SSH_FX_FAILURE, _error_text(e)
+            )
             self._send_message(error_msg)
 
     def _handle_remove(self, message: SFTPRemoveMessage) -> None:
@@ -1251,7 +1446,9 @@ class SFTPServer:
                 return
             except OSError as e:
                 error_msg = SFTPStatusMessage(
-                    message.request_id, SSH_FX_FAILURE, f"Remove failed: {e}"
+                    message.request_id,
+                    SSH_FX_FAILURE,
+                    f"Remove failed: {_error_text(e)}",
                 )
                 self._send_message(error_msg)
                 return
@@ -1263,12 +1460,14 @@ class SFTPServer:
         except SFTPError as e:
             assert message.request_id is not None
             error_msg = SFTPStatusMessage(
-                message.request_id, e.status_code or SSH_FX_FAILURE, str(e)
+                message.request_id, e.status_code or SSH_FX_FAILURE, _error_text(e)
             )
             self._send_message(error_msg)
         except (OSError, SSHException) as e:
             assert message.request_id is not None
-            error_msg = SFTPStatusMessage(message.request_id, SSH_FX_FAILURE, str(e))
+            error_msg = SFTPStatusMessage(
+                message.request_id, SSH_FX_FAILURE, _error_text(e)
+            )
             self._send_message(error_msg)
 
     def _handle_rename(self, message: SFTPRenameMessage) -> None:
@@ -1311,7 +1510,9 @@ class SFTPServer:
                 return
             except OSError as e:
                 error_msg = SFTPStatusMessage(
-                    message.request_id, SSH_FX_FAILURE, f"Rename failed: {e}"
+                    message.request_id,
+                    SSH_FX_FAILURE,
+                    f"Rename failed: {_error_text(e)}",
                 )
                 self._send_message(error_msg)
                 return
@@ -1323,12 +1524,14 @@ class SFTPServer:
         except SFTPError as e:
             assert message.request_id is not None
             error_msg = SFTPStatusMessage(
-                message.request_id, e.status_code or SSH_FX_FAILURE, str(e)
+                message.request_id, e.status_code or SSH_FX_FAILURE, _error_text(e)
             )
             self._send_message(error_msg)
         except (OSError, SSHException) as e:
             assert message.request_id is not None
-            error_msg = SFTPStatusMessage(message.request_id, SSH_FX_FAILURE, str(e))
+            error_msg = SFTPStatusMessage(
+                message.request_id, SSH_FX_FAILURE, _error_text(e)
+            )
             self._send_message(error_msg)
 
     def _handle_realpath(self, message: SFTPRealPathMessage) -> None:
@@ -1338,12 +1541,9 @@ class SFTPServer:
             # Resolve and validate path
             resolved_path = self._resolve_path(message.path)
 
-            # Convert back to relative path from root
-            relative_path = os.path.relpath(resolved_path, self._root_path)
-            if relative_path == ".":
-                relative_path = "/"
-            elif not relative_path.startswith("/"):
-                relative_path = "/" + relative_path
+            # Convert back to an SFTP path relative to the root ("/"-separated
+            # on every platform)
+            relative_path = self._sftp_path(resolved_path)
 
             # Create attributes for the path (if it exists)
             try:
@@ -1362,12 +1562,14 @@ class SFTPServer:
         except SFTPError as e:
             assert message.request_id is not None
             error_msg = SFTPStatusMessage(
-                message.request_id, e.status_code or SSH_FX_FAILURE, str(e)
+                message.request_id, e.status_code or SSH_FX_FAILURE, _error_text(e)
             )
             self._send_message(error_msg)
         except (OSError, SSHException) as e:
             assert message.request_id is not None
-            error_msg = SFTPStatusMessage(message.request_id, SSH_FX_FAILURE, str(e))
+            error_msg = SFTPStatusMessage(
+                message.request_id, SSH_FX_FAILURE, _error_text(e)
+            )
             self._send_message(error_msg)
 
     def _format_longname(self, filename: str, attrs: SFTPAttributes) -> str:

@@ -106,9 +106,20 @@ class TestSSHServer:
 
     def test_is_channel_authorized_true(self):
         server = SSHServer()
-        server._authenticated_users["alice"] = True
         mock_channel = MagicMock()
+        mock_channel._transport.authenticated = True
+        mock_channel._transport._auth_username = "alice"
         assert server.is_channel_authorized(mock_channel, "alice") is True
+
+    def test_is_channel_authorized_not_by_another_connection(self):
+        # Another connection having authenticated as alice does not authorise
+        # a channel on this (unauthenticated) connection.
+        server = SSHServer()
+        server.on_authentication_successful("alice", "password")
+        mock_channel = MagicMock()
+        mock_channel._transport.authenticated = False
+        mock_channel._transport._auth_username = None
+        assert server.is_channel_authorized(mock_channel, "alice") is False
 
     def test_is_channel_authorized_false_unknown_user(self):
         server = SSHServer()

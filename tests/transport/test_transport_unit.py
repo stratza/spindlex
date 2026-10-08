@@ -18,8 +18,10 @@ from spindlex.protocol.constants import (
     DEFAULT_MAX_PACKET_SIZE,
     DEFAULT_WINDOW_SIZE,
     MAX_CHANNELS,
+    MSG_CHANNEL_CLOSE,
     MSG_CHANNEL_DATA,
     MSG_CHANNEL_OPEN,
+    MSG_CHANNEL_SUCCESS,
     MSG_GLOBAL_REQUEST,
     MSG_REQUEST_FAILURE,
     MSG_USERAUTH_FAILURE,
@@ -231,12 +233,73 @@ class TestOpenChannel:
 class TestCloseChannel:
     def test_close_existing_channel(self):
         t = _make_transport()
+        t._active = True
         ch = Channel(t, 0)
         ch._remote_channel_id = 99
         t._channels[0] = ch
-        with patch.object(t, "_send_message"):
+        with patch.object(t, "_send_message") as send:
             t._close_channel(0)
+        sent = send.call_args[0][0]
+        assert isinstance(sent, ChannelCloseMessage)
+        assert sent.recipient_channel == 99
+        # The number stays reserved until the peer's CLOSE arrives.
+        assert 0 in t._channels
+
+    def test_channel_close_sends_close_once(self):
+        t = _make_transport()
+        t._active = True
+        ch = Channel(t, 0)
+        ch._remote_channel_id = 99
+        t._channels[0] = ch
+        with patch.object(t, "_send_message") as send:
+            ch.close()
+            ch.close()
+        assert send.call_count == 1
+
+    def test_peer_close_is_answered_and_releases_channel(self):
+        t = _make_transport()
+        t._active = True
+        ch = Channel(t, 0)
+        ch._remote_channel_id = 99
+        t._channels[0] = ch
+        with patch.object(t, "_send_message") as send:
+            t._handle_channel_close(ChannelCloseMessage(recipient_channel=0))
+        assert send.call_count == 1
+        assert isinstance(send.call_args[0][0], ChannelCloseMessage)
+        assert ch.closed
         assert 0 not in t._channels
+
+    def test_peer_close_after_local_close_releases_without_resend(self):
+        t = _make_transport()
+        t._active = True
+        ch = Channel(t, 0)
+        ch._remote_channel_id = 99
+        t._channels[0] = ch
+        with patch.object(t, "_send_message") as send:
+            ch.close()
+            t._handle_channel_close(ChannelCloseMessage(recipient_channel=0))
+        assert send.call_count == 1
+        assert 0 not in t._channels
+
+    def test_close_during_request_callback_follows_reply(self):
+        t = _make_transport()
+        t._active = True
+        ch = Channel(t, 0)
+        ch._remote_channel_id = 99
+        t._channels[0] = ch
+
+        def handler(request_type, data):
+            ch.close()
+            return True
+
+        ch._handle_request = handler
+        data = struct.pack(">I", 0) + write_string("exec") + write_boolean(True)
+        msg = MagicMock()
+        msg._data = data
+        with patch.object(t, "_send_message") as send:
+            t._handle_channel_request(msg)
+        sent_types = [c[0][0].msg_type for c in send.call_args_list]
+        assert sent_types == [MSG_CHANNEL_SUCCESS, MSG_CHANNEL_CLOSE]
 
     def test_close_nonexistent_channel(self):
         t = _make_transport()
@@ -563,10 +626,15 @@ class TestChannelHandlers:
     def test_handle_channel_close(self):
         t = _make_transport()
         ch = MagicMock(spec=Channel)
+        ch._handling_request = False
+        ch._close_sent = True
+        ch._close_received = True
+        ch._remote_channel_id = 7
         t._channels[5] = ch
         msg = ChannelCloseMessage(recipient_channel=5)
         t._handle_channel_close(msg)
         ch._handle_close.assert_called_once()
+        assert 5 not in t._channels
 
     def test_handle_channel_data(self):
         t = _make_transport()
@@ -589,6 +657,7 @@ class TestChannelHandlers:
         t = _make_transport()
         ch = MagicMock(spec=Channel)
         ch._remote_channel_id = 99
+        ch._close_deferred = False
         ch._handle_request.return_value = True
         t._channels[0] = ch
         data = struct.pack(">I", 0)
@@ -723,3 +792,247 @@ class TestBuildKeyboardInteractiveData:
         data = t._build_keyboard_interactive_data()
         assert isinstance(data, bytes)
         assert len(data) > 0
+
+
+class TestChannelTransportLockOrder:
+    def test_send_does_not_deadlock_with_reader_dispatching_data(self):
+        """The reader holds the transport lock and then takes the channel lock
+        to deliver data; a concurrent send() must not hold the channel lock
+        while waiting for the transport lock (seen live during a rekey)."""
+        import threading
+        import time
+
+        t = _make_transport()
+        t._active = True
+        ch = Channel(t, 0)
+        ch._remote_channel_id = 9
+        ch._remote_window_size = 1 << 20
+        ch._remote_max_packet_size = 32768
+        t._channels[0] = ch
+        reader_holds_lock = threading.Event()
+
+        def reader():
+            with t._lock:
+                reader_holds_lock.set()
+                time.sleep(0.2)  # the sender is now waiting for t._lock
+                ch._handle_data(b"incoming")
+
+        th = threading.Thread(target=reader, daemon=True)
+        th.start()
+        assert reader_holds_lock.wait(2)
+        sender = threading.Thread(target=lambda: ch.send(b"outgoing"), daemon=True)
+        with patch.object(t, "_send_message"):
+            sender.start()
+            sender.join(5)
+            th.join(5)
+        assert not sender.is_alive() and not th.is_alive(), "deadlocked"
+        assert ch.recv(100) == b"incoming"
+
+
+class TestRecvRobustness:
+    def test_mid_packet_timeout_keeps_waiting(self):
+        """A timeout after part of a packet was consumed must not abandon it."""
+        t = _make_transport()
+        t._active = True
+        t._socket.recv.side_effect = [socket.timeout(), b"rest-of-packet"]
+        assert t._recv_bytes(14, mid_packet=True) == b"rest-of-packet"
+
+    def test_timeout_between_packets_still_raises(self):
+        t = _make_transport()
+        t._active = True
+        t._socket.recv.side_effect = socket.timeout()
+        with pytest.raises(TransportException, match="Timeout"):
+            t._recv_bytes(4)
+
+    def test_mid_packet_timeout_eventually_marks_stream_unusable(self):
+        import spindlex.transport.transport as transport_mod
+
+        t = _make_transport()
+        t._active = True
+        t._socket.recv.side_effect = socket.timeout()
+        with patch.object(transport_mod, "_MID_PACKET_TIMEOUT", 0.0):
+            with pytest.raises(TransportException, match="middle of a packet"):
+                t._recv_bytes(10, mid_packet=True)
+        with pytest.raises(TransportException, match="desynchronised"):
+            t._recv_packet()
+
+    def test_undecodable_text_is_a_protocol_error(self):
+        t = _make_transport()
+        t._active = True
+        with patch.object(t, "_recv_packet", return_value=b"x" * 16):
+            with patch.object(
+                t,
+                "_dispatch_packet",
+                side_effect=UnicodeDecodeError("utf-8", b"\xff", 0, 1, "bad"),
+            ):
+                with pytest.raises(ProtocolException, match="Invalid text"):
+                    t._read_message()
+
+
+class TestUnsolicitedForwardedChannel:
+    def _open_data(self, port: int) -> bytes:
+        return (
+            write_string("127.0.0.1")
+            + struct.pack(">I", port)
+            + write_string("10.0.0.1")
+            + struct.pack(">I", 5555)
+        )
+
+    def test_rejected_without_forward_manager(self):
+        t = _make_transport()
+        with patch.object(t, "_send_message") as send:
+            t._handle_forwarded_tcpip_open(7, 1000, 1000, self._open_data(4000))
+        sent = send.call_args[0][0]
+        assert isinstance(sent, ChannelOpenFailureMessage)
+        assert t._channels == {}
+
+    def test_rejected_for_port_not_requested(self):
+        t = _make_transport()
+        manager = MagicMock()
+        manager.has_remote_forward.return_value = False
+        t._port_forwarding_manager = manager
+        with patch.object(t, "_send_message") as send:
+            t._handle_forwarded_tcpip_open(7, 1000, 1000, self._open_data(4000))
+        assert isinstance(send.call_args[0][0], ChannelOpenFailureMessage)
+        manager.handle_forwarded_connection.assert_not_called()
+
+
+class TestServerAuthAccounting:
+    def _request(self, method: str, method_data: bytes = b"") -> MagicMock:
+        msg = MagicMock()
+        msg._data = (
+            write_string("alice")
+            + write_string("ssh-connection")
+            + write_string(method)
+            + method_data
+        )
+        return msg
+
+    def _server_transport(self):
+        t = _make_transport()
+        t._server_mode = True
+        t._session_id = b"session"
+        t._userauth_service_accepted = True
+        iface = MagicMock()
+        iface.get_banner.return_value = None
+        iface.get_allowed_auths.return_value = ["password"]
+        t._server_interface = iface
+        return t, iface
+
+    def test_none_probe_is_not_a_failed_attempt(self):
+        t, iface = self._server_transport()
+        with patch.object(t, "_send_message") as send:
+            for _ in range(10):
+                t._handle_userauth_request(self._request("none"))
+        assert t._auth_failures == 0
+        iface.on_authentication_failed.assert_not_called()
+        assert isinstance(send.call_args[0][0], UserAuthFailureMessage)
+
+    def test_partial_success_is_reported_and_not_counted(self):
+        from spindlex.protocol.constants import AUTH_PARTIAL
+
+        t, iface = self._server_transport()
+        iface.check_auth_password.return_value = AUTH_PARTIAL
+        data = write_boolean(False) + write_string("pw")
+        with patch.object(t, "_send_message") as send:
+            t._handle_userauth_request(self._request("password", data))
+        reply = send.call_args[0][0]
+        assert isinstance(reply, UserAuthFailureMessage) and reply.partial_success
+        assert t._auth_failures == 0
+        assert not t._authenticated
+
+    def test_banner_sent_once_before_first_reply(self):
+        from spindlex.protocol.messages import UserAuthBannerMessage
+
+        t, iface = self._server_transport()
+        iface.get_banner.return_value = "hello\n"
+        with patch.object(t, "_send_message") as send:
+            t._handle_userauth_request(self._request("none"))
+            t._handle_userauth_request(self._request("none"))
+        sent = [c[0][0] for c in send.call_args_list]
+        assert isinstance(sent[0], UserAuthBannerMessage)
+        assert sum(isinstance(m, UserAuthBannerMessage) for m in sent) == 1
+
+
+class TestPreKeyExchangeAndAuthOrdering:
+    def _server(self):
+        t = _make_transport()
+        t._server_mode = True
+        t._active = True
+        iface = MagicMock()
+        iface.get_banner.return_value = None
+        iface.get_allowed_auths.return_value = ["password"]
+        t._server_interface = iface
+        return t, iface
+
+    def _userauth(self, method="password", data=b""):
+        msg = MagicMock()
+        msg._data = (
+            write_string("root")
+            + write_string("ssh-connection")
+            + write_string(method)
+            + data
+        )
+        return msg
+
+    def test_userauth_before_service_request_disconnects(self):
+        t, iface = self._server()
+        t._session_id = b"session"  # keys done, but no SERVICE_REQUEST
+        data = write_boolean(False) + write_string("guess")
+        with patch.object(t, "_disconnect") as disconnect:
+            t._handle_userauth_request(self._userauth("password", data))
+        disconnect.assert_called_once()
+        iface.check_auth_password.assert_not_called()
+
+    def test_userauth_without_session_disconnects(self):
+        t, iface = self._server()
+        t._userauth_service_accepted = True
+        data = write_boolean(False) + write_string("guess")
+        with patch.object(t, "_disconnect") as disconnect:
+            t._handle_userauth_request(self._userauth("password", data))
+        disconnect.assert_called_once()
+        iface.check_auth_password.assert_not_called()
+
+    @pytest.mark.parametrize("msg_type", [5, 50, 80, 90, 94])
+    def test_non_kex_message_before_newkeys_is_rejected(self, msg_type):
+        t = _make_transport()
+        payload = bytes([msg_type]) + b"\x00" * 16
+        packet = _wrap_packet(payload)
+        with pytest.raises(ProtocolException, match="before key exchange"):
+            t._dispatch_packet(packet)
+
+    def test_ignore_before_newkeys_allowed_without_strict_kex(self):
+        t = _make_transport()
+        packet = _wrap_packet(bytes([2]) + write_string(b"x"))
+        assert t._dispatch_packet(packet) is None
+
+    def test_ignore_before_newkeys_rejected_with_strict_kex(self):
+        t = _make_transport()
+        t._strict_kex = True
+        packet = _wrap_packet(bytes([2]) + write_string(b"x"))
+        with pytest.raises(ProtocolException):
+            t._dispatch_packet(packet)
+
+
+class TestChannelNumberAllocation:
+    def test_inbound_session_does_not_reuse_live_channel_number(self):
+        t = _make_transport()
+        t._server_mode = True
+        with patch.object(t, "_send_message"):
+            t._handle_session_open(500, 1000, 1000)  # gets number 0
+            live = t._channels[0]
+            for i in range(MAX_CHANNELS - 1):  # cycle through the rest
+                t._handle_session_open(600 + i, 1000, 1000)
+                newest = max(k for k in t._channels if k != 0)
+                del t._channels[newest]
+            t._handle_session_open(999, 1000, 1000)
+        assert t._channels[0] is live
+        assert len(t._channels) == 2
+
+
+def _wrap_packet(payload: bytes) -> bytes:
+    padding = 8 - ((len(payload) + 5) % 8)
+    if padding < 4:
+        padding += 8
+    length = len(payload) + 1 + padding
+    return struct.pack(">IB", length, padding) + payload + b"\x00" * padding

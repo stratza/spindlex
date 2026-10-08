@@ -6,6 +6,48 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Security
+*   **Login grace time is a hard deadline** (CWE-400, [GHSA-qg37-cwm7-mpqq](https://github.com/stratza/spindlex/security/advisories/GHSA-qg37-cwm7-mpqq)) - the authentication deadline added in 1.0.2 was only checked between packets, so a client sending data slowly could hold unauthenticated connections open indefinitely and exhaust the connection limit. Connections that have not authenticated within the grace time are now closed regardless of traffic.
+*   **`known_hosts` revocation and removal are honoured** (CWE-295) - `@revoked` entries were ignored, so a revoked host key was accepted (and could be added by permissive policies); it is now refused whatever the policy. Keys deleted with `HostKeyStorage.remove()` are removed from the file on `save()`, including hashed entries, instead of being trusted again after a reload. `copy_from()` keeps hashed and revoked entries.
+*   **Private key files are created owner-only** (CWE-732) - `save_to_file()` wrote private keys with the process umask (often world-readable). Files are now created with mode `0600`.
+*   **Log sanitizer covers child loggers** (CWE-532) - `configure_sanitizing_logging()` did not see records propagated from child loggers such as `spindlex.transport`; sanitization now applies to every logger under the configured one.
+*   **Async channels enforce their receive window** (CWE-770) - the 1.0.2 window enforcement covered sync channels only; a server overrunning an async channel's window now has the channel closed instead of growing the client's buffer without limit.
+*   **Recursive SFTP downloads are bounded** (CWE-674, CWE-770) - `get_recursive()` no longer follows symbolic links to directories (a server could make it loop forever), stops at a maximum depth, and the async version limits concurrent transfers (`max_concurrency`, default 8).
+*   **Additional hardening** - authentication is only accepted after key exchange and the `ssh-userauth` service request; only key-exchange messages are acted on before the first `NEWKEYS`; the client binds the host key and signature to the negotiated host-key algorithm and requires the same host key on re-exchange; channel numbers still in use are never reused; SFTP server error messages no longer include server-side paths, directory handles count against the handle limit, and listings describe symlinks that lead outside the root as links.
+
+### Fixed
+*   **Channels now complete the close handshake** (RFC 4254 §5.3) - `Channel.close()` never actually sent `SSH_MSG_CHANNEL_CLOSE`, and a close from the peer was not answered, so remote sessions were never released (OpenSSH counts them against `MaxSessions`). Each side now sends exactly one CLOSE and the channel number is released once both have closed. A `close()` issued inside a server channel-request callback is sent after the reply to that request.
+*   **Messages are delivered to the thread waiting for them** - `Transport._pump()` returned messages its callers ignored, so replies another thread was waiting for were lost: a client-initiated rekey against `SSHServerManager` timed out, and concurrent channel opens could lose each other's confirmation. Channel waits no longer queue behind a thread that is already reading the socket, which fixes `Channel.recv()` in server handler threads stalling - and with it `SFTPServer`, which did not work over real connections.
+*   **Deadlock between sending and receiving during a rekey** - `Channel.send()` held the channel lock while calling into the transport, while the reader thread took the locks in the opposite order.
+*   **Server session channels advertised a maximum packet size the transport rejects** - full-size data packets from the peer dropped the connection with "Invalid packet length".
+*   **Server public-key authentication** - the key query (`PK_OK`) path treated `AUTH_SUCCESSFUL` (0) as a rejection, so public-key logins to a SpindleX server always failed.
+*   **RSA keys** - the public key format is now `ssh-rsa` as RFC 8332 requires (it was the signature algorithm name), so RSA authentication to non-OpenSSH servers, fingerprints, `.pub` files and `known_hosts` lines match OpenSSH. `RSAKey` loads keys in OpenSSH format (as written by `save_to_file()` and modern `ssh-keygen`), and the server no longer changes its host key blob between connections.
+*   **Async client** - an OpenSSH keepalive (or any request needing a reply) no longer freezes the event loop; rekeying no longer kills the connection; `open_channel()`/`exec_command()` no longer hang while another task is reading; a failed authentication no longer leaves the client marked as connected; `connect(timeout=...)` also bounds the SSH handshake; `close()` stops port forwards; `connected` reflects whether the transport is still up.
+*   **Async channels** - `recv()`/`recv_stderr()` return buffered data and then EOF after the peer closes instead of raising; `readline()` is linear instead of quadratic.
+*   **Remote port forwarding** - the first forwarded connection deadlocked the transport (the handler ran on the reader thread); with `remote_port=0` the port allocated by the server is now used; forwarded-tcpip channels for forwards that were never requested are refused.
+*   **Port forwarding half-close** - EOF from either side is passed on as a half-close instead of closing both directions, so a client that shuts down its write side still receives the reply.
+*   **Transport** - a socket timeout in the middle of a packet no longer desynchronises the stream; a non-UTF-8 text field is reported as a protocol error.
+*   **Sync client** - `connect(timeout=...)` no longer stays on the socket after connecting (a command silent for longer than the timeout failed mid-read); `ChannelFile.read()` raises on a timeout instead of returning partial output; `stdin.close()` sends EOF instead of closing the whole channel; `Channel.shutdown(how)` honours `how`; stderr that arrives just before the peer closes is no longer lost; a partial-success authentication reply continues with the next method instead of raising, so multi-factor logins work.
+*   **GSSAPI authentication** now follows the RFC 4462 `gssapi-with-mic` exchange and succeeds only when the server answers `USERAUTH_SUCCESS`; the target host name (not the peer address) is used for Kerberos.
+*   **SFTP client files** - reads and writes share one file position (a write after a read went to offset 0); mode `r+` can write; modes `w+`, `a`, `a+`, `x` are supported. Read and write sizes default to 32 KiB when the server does not advertise `limits@openssh.com`, and the client adapts to servers that cap reads lower.
+*   **SFTP file names** that are not valid UTF-8 no longer break a whole `listdir()`; their original bytes are preserved.
+*   **SFTP server** - `SETSTAT` honours a size change (`truncate()` silently did nothing); `FSETSTAT`, `SYMLINK` and `READLINK` are supported; `realpath` returns `/`-separated paths on Windows; `rmdir` of a non-empty directory reports the right error on every platform; the session is closed when the client leaves, so the OpenSSH `sftp` client no longer hangs on exit.
+*   **`SSHServerManager.stop_server()`** releases the listening port immediately on Linux.
+*   **Keys and algorithms** - `load_public_key_from_string()` accepts ECDSA P-384 and P-521 keys; `curve25519-sha256@libssh.org` is offered for older servers; `PKey` objects are hashable.
+
+### Added
+*   **Server stderr** - `Channel.send_stderr()` and `Channel.sendall_stderr()`.
+*   **Server keyboard-interactive authentication** - `SSHServer.get_keyboard_interactive_prompts()` and `check_auth_keyboard_interactive_response()`.
+*   **Server hooks now called** - `get_banner()` (sent before the first authentication reply), `check_global_request()` and `on_channel_closed()`; `AUTH_PARTIAL` is supported for multi-factor authentication.
+*   **`EXT_INFO` with `server-sig-algs`** (RFC 8308) - OpenSSH 8.8+ clients can use RSA keys against a SpindleX server.
+*   **`SFTPFile.seek()`, `tell()` and `flush()`.**
+*   `Channel.shutdown_write()` and `AsyncChannel.send_eof()`.
+
+### Changed
+*   `connect(timeout=...)` bounds connecting, the handshake and authentication only; use `Channel.settimeout()` to bound channel I/O.
+*   `SSHServer.is_channel_authorized()` checks that the channel's own connection authenticated as the user.
+*   An unsupported `SERVICE_REQUEST` is answered with a disconnect, and the `none` authentication method no longer counts as a failed attempt.
+
 ## [1.0.2] - 2026-10-06
 
 ### Security

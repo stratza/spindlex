@@ -123,6 +123,11 @@ async def connect_gssapi():
         )
 ```
 
+SpindleX implements the RFC 4462 `gssapi-with-mic` exchange and reports
+success only when the server accepts it. `gss_host` defaults to the host name
+you connect to; set it when the Kerberos service name differs (for example
+when connecting by IP address).
+
 ## Keyboard-Interactive Authentication
 
 Keyboard-interactive authentication is used when the server requires the user to respond to one or more prompts. This is common for multi-factor authentication (MFA).
@@ -167,6 +172,25 @@ Keyboard-interactive authentication is used when the server requires the user to
             # Both sync and async handlers are supported
             await client.auth_keyboard_interactive("user")
     ```
+
+## Multi-Factor Authentication
+
+Some servers require more than one method (for example a key followed by a
+password or one-time code). The server answers the first method with
+"partial success"; SpindleX then continues with the next credential you
+provided:
+
+```python
+client.connect(
+    hostname="server.example.com",
+    username="user",
+    pkey=my_key,          # first factor
+    password="otp-code",  # second factor
+)
+```
+
+If no remaining method succeeds, `AuthenticationException.allowed_methods`
+lists what the server still accepts.
 
 ## Security Best Practices
 

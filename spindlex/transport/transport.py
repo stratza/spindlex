@@ -30,6 +30,7 @@ from ..exceptions import (
 from ..protocol.constants import (
     AUTH_FAILED,
     AUTH_KEYBOARD_INTERACTIVE,
+    AUTH_PARTIAL,
     AUTH_PASSWORD,
     AUTH_PUBLICKEY,
     AUTH_SUCCESSFUL,
@@ -74,7 +75,9 @@ from ..protocol.constants import (
     MSG_SERVICE_ACCEPT,
     MSG_SERVICE_REQUEST,
     MSG_UNIMPLEMENTED,
+    MSG_USERAUTH_BANNER,
     MSG_USERAUTH_FAILURE,
+    MSG_USERAUTH_INFO_RESPONSE,
     MSG_USERAUTH_PK_OK,
     MSG_USERAUTH_REQUEST,
     MSG_USERAUTH_SUCCESS,
@@ -85,6 +88,9 @@ from ..protocol.constants import (
     SERVICE_USERAUTH,
     SSH_DISCONNECT_NO_MORE_AUTH_METHODS_AVAILABLE,
     SSH_DISCONNECT_PROTOCOL_ERROR,
+    SSH_DISCONNECT_SERVICE_NOT_AVAILABLE,
+    SSH_EXTENDED_DATA_STDERR,
+    SSH_OPEN_ADMINISTRATIVELY_PROHIBITED,
     SSH_OPEN_CONNECT_FAILED,
     SSH_OPEN_RESOURCE_SHORTAGE,
     SSH_OPEN_UNKNOWN_CHANNEL_TYPE,
@@ -104,7 +110,10 @@ from ..protocol.messages import (
     Message,
     ServiceAcceptMessage,
     ServiceRequestMessage,
+    UserAuthBannerMessage,
     UserAuthFailureMessage,
+    UserAuthInfoRequestMessage,
+    UserAuthInfoResponseMessage,
     UserAuthRequestMessage,
     UserAuthSuccessMessage,
 )
@@ -129,6 +138,20 @@ _CIPHER_BLOCK_SIZES = {
 }
 
 _AEAD_CIPHERS: frozenset[str] = frozenset(["chacha20-poly1305@openssh.com"])
+
+# Public-key signature algorithms the server verifies (server-sig-algs).
+_SERVER_SIG_ALGS = (
+    "ssh-ed25519",
+    "ecdsa-sha2-nistp256",
+    "ecdsa-sha2-nistp384",
+    "ecdsa-sha2-nistp521",
+    "rsa-sha2-512",
+    "rsa-sha2-256",
+)
+
+# How long to keep waiting for the rest of a packet that has started arriving
+# when the socket times out (see Transport._recv_bytes).
+_MID_PACKET_TIMEOUT = 60.0
 
 
 class PacketProfiler:
@@ -265,6 +288,8 @@ class Transport:
         self._read_lock = threading.RLock()
         self._kex_condition = threading.Condition(self._lock)
         self._server_host_key_blob: Optional[bytes] = None
+        # Server side: EXT_INFO is only allowed after the first NEWKEYS.
+        self._ext_info_sent = False
         # Exact bytes of the peer's last KEXINIT payload, captured on the wire.
         # The exchange hash must use these verbatim; a re-serialised copy of the
         # parsed message can differ (dropped empty tokens, zeroed reserved
@@ -287,6 +312,15 @@ class Transport:
         # MaxAuthTries).
         self._auth_failures = 0
         self._max_auth_attempts = MAX_AUTH_ATTEMPTS
+        # Server side: the banner is sent once, before the first auth reply.
+        self._banner_sent = False
+        # Server side: SERVICE_ACCEPT for ssh-userauth has been sent.
+        self._userauth_service_accepted = False
+        # Server side: username of a keyboard-interactive exchange waiting for
+        # the client's INFO_RESPONSE.
+        self._kbd_interactive_user: Optional[str] = None
+        # Username the peer authenticated as (server side), or None.
+        self._auth_username: Optional[str] = None
 
         # Server interface for authentication callbacks
         self._server_interface: Optional[Any] = None
@@ -296,7 +330,7 @@ class Transport:
 
         # Message dispatching
         self._message_queue: deque[Message] = deque()
-        self._timeout = 10.0
+        self._timeout: Optional[float] = 10.0
 
         self._logger = logging.getLogger(__name__)
         self._strict_kex = False
@@ -316,6 +350,10 @@ class Transport:
             PacketProfiler() if os.environ.get("SPINDLEX_PROFILE") == "1" else None
         )
 
+        # Set when a packet could not be completed; the byte stream cannot be
+        # resynchronised after that.
+        self._stream_desynchronised = False
+
     def get_timeout(self) -> Optional[float]:
         """
         Get transport timeout.
@@ -325,7 +363,7 @@ class Transport:
         """
         return self._socket.gettimeout()
 
-    def set_timeout(self, timeout: float) -> None:
+    def set_timeout(self, timeout: Optional[float]) -> None:
         """Set default timeout for transport operations."""
         self._timeout = timeout
         if self._socket:
@@ -663,7 +701,8 @@ class Transport:
             # Check if partial success
             if msg.partial_success:
                 raise AuthenticationException(
-                    f"Partial success - additional methods required: {', '.join(msg.authentications)}"
+                    f"Partial success - additional methods required: {', '.join(msg.authentications)}",
+                    allowed_methods=list(msg.authentications),
                 )
             else:
                 return False
@@ -720,12 +759,7 @@ class Transport:
             if len(self._channels) >= MAX_CHANNELS:
                 raise TransportException("Maximum number of channels reached")
 
-            # Find next available channel ID (recycling IDs)
-            channel_id = self._next_channel_id
-            while channel_id in self._channels:
-                channel_id = (channel_id + 1) % MAX_CHANNELS
-
-            self._next_channel_id = (channel_id + 1) % MAX_CHANNELS
+            channel_id = self._allocate_channel_id()
 
             # Create channel instance
             channel = Channel(self, channel_id)
@@ -795,6 +829,19 @@ class Transport:
                 raise
             raise TransportException(f"Failed to open channel: {e}") from e
 
+    def _allocate_channel_id(self) -> int:
+        """Return a free local channel number (call with ``self._lock`` held
+        and fewer than MAX_CHANNELS channels open).
+
+        A number stays reserved until both sides have closed the channel, so
+        a new channel never takes over one that is still live.
+        """
+        channel_id = self._next_channel_id
+        while channel_id in self._channels:
+            channel_id = (channel_id + 1) % MAX_CHANNELS
+        self._next_channel_id = (channel_id + 1) % MAX_CHANNELS
+        return channel_id
+
     def _build_direct_tcpip_data(self, dest_addr: tuple[str, int]) -> bytes:
         """Build type-specific data for direct-tcpip channel."""
         try:
@@ -813,25 +860,41 @@ class Transport:
 
     def _close_channel(self, channel_id: int) -> None:
         """
-        Close channel and remove from channels dict.
+        Send SSH_MSG_CHANNEL_CLOSE for a channel (once) and release its number.
+
+        The local channel number is only released once both sides have sent
+        CLOSE (RFC 4254 s5.3); until the peer's CLOSE arrives the entry stays
+        registered so a late CLOSE cannot hit a new channel that reused the id.
 
         Args:
             channel_id: Channel ID to close
         """
         with self._lock:
-            if channel_id in self._channels:
-                channel = self._channels[channel_id]
+            channel = self._channels.get(channel_id)
+            if channel is None:
+                return
 
-                # Send channel close message if not already closed
-                if not channel.closed and channel._remote_channel_id is not None:
+            if getattr(channel, "_handling_request", False):
+                # Sent once the reply to the request being handled is out.
+                channel._close_deferred = True
+                return
+
+            if not channel._close_sent and channel._remote_channel_id is not None:
+                channel._close_sent = True
+                if self._active:
                     try:
                         close_msg = ChannelCloseMessage(channel._remote_channel_id)
                         self._send_message(close_msg)
                     except (OSError, TransportException):
                         pass  # Ignore errors during close
 
-                # Remove from channels dict
+            if channel._close_received or channel._remote_channel_id is None:
                 del self._channels[channel_id]
+                if self._server_mode and self._server_interface is not None:
+                    try:
+                        self._server_interface.on_channel_closed(channel)
+                    except Exception as e:  # application callback
+                        self._logger.warning(f"on_channel_closed failed: {e}")
 
     def _handle_channel_message(self, msg: Message) -> None:
         """
@@ -987,15 +1050,18 @@ class Transport:
                 self._send_message(failure_msg)
                 return
 
-            channel_id = self._next_channel_id
-            self._next_channel_id = (self._next_channel_id + 1) % MAX_CHANNELS
+            channel_id = self._allocate_channel_id()
 
             channel = Channel(self, channel_id)
             channel._remote_channel_id = sender_channel
             channel._remote_window_size = initial_window_size
             channel._remote_max_packet_size = maximum_packet_size
             channel._local_window_size = DEFAULT_WINDOW_SIZE
-            channel._local_max_packet_size = MAX_PACKET_SIZE
+            # The advertised maximum packet size bounds the *data* in a single
+            # CHANNEL_DATA message. It must leave room for the message and
+            # packet headers within MAX_PACKET_SIZE, or a peer sending full-size
+            # data packets gets its packets rejected.
+            channel._local_max_packet_size = DEFAULT_MAX_PACKET_SIZE
             self._channels[channel_id] = channel
 
         # 3. Send confirmation
@@ -1038,6 +1104,21 @@ class Transport:
             connected_address = connected_address_bytes.decode(SSH_STRING_ENCODING)
             originator_address = originator_address_bytes.decode(SSH_STRING_ENCODING)
 
+            # Only accept connections for a remote forward we requested.
+            manager = self._port_forwarding_manager
+            if manager is None or not manager.has_remote_forward(
+                (connected_address, connected_port)
+            ):
+                self._send_message(
+                    ChannelOpenFailureMessage(
+                        sender_channel,
+                        SSH_OPEN_ADMINISTRATIVELY_PROHIBITED,
+                        "No such remote forward",
+                        "",
+                    )
+                )
+                return
+
             # Create local channel
             with self._lock:
                 if len(self._channels) >= MAX_CHANNELS:
@@ -1050,8 +1131,7 @@ class Transport:
                     self._send_message(failure_msg)
                     return
 
-                channel_id = self._next_channel_id
-                self._next_channel_id = (self._next_channel_id + 1) % MAX_CHANNELS
+                channel_id = self._allocate_channel_id()
 
                 channel = Channel(self, channel_id)
                 channel._remote_channel_id = sender_channel
@@ -1072,13 +1152,20 @@ class Transport:
             )
             self._send_message(confirm_msg)
 
-            # Handle the forwarded connection
-            if self._port_forwarding_manager:
+            # Handle the forwarded connection on its own thread. This runs on
+            # whichever thread is reading the transport, with the transport
+            # locks held; the handler connects out and relays data until the
+            # connection ends, and the relay itself needs this thread to keep
+            # reading, so running it inline deadlocks.
+            if manager is not None:
                 origin_addr = (originator_address, originator_port)
                 dest_addr = (connected_address, connected_port)
-                self._port_forwarding_manager.handle_forwarded_connection(
-                    channel, origin_addr, dest_addr
-                )
+                threading.Thread(
+                    target=manager.handle_forwarded_connection,
+                    args=(channel, origin_addr, dest_addr),
+                    name=f"ForwardedTCPIP-{channel_id}",
+                    daemon=True,
+                ).start()
 
         except (
             OSError,
@@ -1087,11 +1174,12 @@ class Transport:
             UnicodeDecodeError,
             SSHException,
         ) as e:
-            # Send failure response
+            # Send failure response (without internal error details)
+            self._logger.debug("Forwarded-tcpip open failed: %s", e)
             failure_msg = ChannelOpenFailureMessage(
                 recipient_channel=sender_channel,
                 reason_code=SSH_OPEN_CONNECT_FAILED,
-                description=f"Forwarded connection failed: {e}",
+                description="Forwarded connection failed",
                 language="",
             )
             self._send_message(failure_msg)
@@ -1136,7 +1224,8 @@ class Transport:
             channel._handle_eof()
 
     def _handle_channel_close(self, msg: Message) -> None:
-        """Handle channel close message."""
+        """Handle channel close message: reply with our CLOSE if we have not
+        sent one yet, then release the channel number."""
         if isinstance(msg, ChannelCloseMessage):
             channel = None
             with self._lock:
@@ -1144,10 +1233,7 @@ class Transport:
 
             if channel:
                 channel._handle_close()
-                # Remove from channels dict
-                with self._lock:
-                    if msg.recipient_channel in self._channels:
-                        del self._channels[msg.recipient_channel]
+                self._close_channel(msg.recipient_channel)
 
     def _handle_channel_window_adjust(self, msg: Message) -> None:
         """Handle channel window adjust message."""
@@ -1202,8 +1288,15 @@ class Transport:
             channel = self._channels.get(recipient_channel)
 
         if channel:
-            # Handle channel request
-            success = channel._handle_request(request_type, request_data)
+            # Handle channel request. A server callback may finish its work and
+            # close the channel before returning (e.g. exec: send output, exit
+            # status, EOF, close). The reply to the request must still precede
+            # our CLOSE, so a close issued during the callback is deferred.
+            channel._handling_request = True
+            try:
+                success = channel._handle_request(request_type, request_data)
+            finally:
+                channel._handling_request = False
 
             # Send reply if requested
             if want_reply:
@@ -1215,6 +1308,10 @@ class Transport:
                 if channel._remote_channel_id is not None:
                     reply_msg.add_uint32(channel._remote_channel_id)
                     self._send_message(reply_msg)
+
+            if channel._close_deferred:
+                channel._close_deferred = False
+                self._close_channel(channel.channel_id)
 
     def _handle_exit_signal_request(self, channel: Channel, data: bytes) -> None:
         """Handle exit signal request data."""
@@ -1268,6 +1365,25 @@ class Transport:
                 data_msg = ChannelDataMessage(channel._remote_channel_id, data)
                 self._send_message(data_msg)
 
+    def _send_channel_extended_data(
+        self, channel_id: int, data: bytes, data_type: int = SSH_EXTENDED_DATA_STDERR
+    ) -> None:
+        """Send SSH_MSG_CHANNEL_EXTENDED_DATA (stderr by default)."""
+        with self._lock:
+            channel = self._channels.get(channel_id)
+            if channel is None:
+                raise TransportException(f"Channel {channel_id} not found")
+            if len(data) > channel._remote_window_size:
+                raise TransportException("Remote window size exceeded")
+            if len(data) > channel._remote_max_packet_size:
+                raise TransportException("Remote max packet size exceeded")
+            if channel._remote_channel_id is not None:
+                msg = Message(MSG_CHANNEL_EXTENDED_DATA)
+                msg.add_uint32(channel._remote_channel_id)
+                msg.add_uint32(data_type)
+                msg.add_string(data)
+                self._send_message(msg)
+
     def _send_channel_window_adjust(self, channel_id: int, bytes_to_add: int) -> None:
         """
         Send channel window adjust message.
@@ -1290,8 +1406,9 @@ class Transport:
 
                 self._send_message(msg)
 
-            # Update local window size
-            channel._local_window_size += bytes_to_add
+            # Update local window size (transport -> channel lock order)
+            with channel._lock:
+                channel._local_window_size += bytes_to_add
 
     def _send_channel_request(
         self, channel_id: int, request_type: str, want_reply: bool, data: bytes
@@ -1341,6 +1458,30 @@ class Transport:
                 msg.add_uint32(channel._remote_channel_id)
 
                 self._send_message(msg)
+
+    def _send_global_request_with_reply(
+        self, request_name: str, data: bytes = b""
+    ) -> Optional[Message]:
+        """Send a global request that wants a reply.
+
+        Returns:
+            The REQUEST_SUCCESS message (its payload carries request-specific
+            reply data, e.g. the allocated port for ``tcpip-forward`` with
+            port 0), or None if the peer answered REQUEST_FAILURE.
+        """
+        if not self._active:
+            raise TransportException("Transport not active")
+        try:
+            msg = Message(MSG_GLOBAL_REQUEST)
+            msg.add_string(request_name)
+            msg.add_boolean(True)
+            if data:
+                msg._data.extend(data)
+            self._send_message(msg)
+            response = self._expect_message(MSG_REQUEST_SUCCESS, MSG_REQUEST_FAILURE)
+            return response if response.msg_type == MSG_REQUEST_SUCCESS else None
+        except (OSError, struct.error) as e:
+            raise TransportException(f"Failed to send global request: {e}") from e
 
     def _send_global_request(
         self, request_name: str, want_reply: bool, data: bytes = b""
@@ -1421,6 +1562,12 @@ class Transport:
                 success = self._handle_tcpip_forward_request(request_data)
             elif request_name == "cancel-tcpip-forward":
                 success = self._handle_cancel_tcpip_forward_request(request_data)
+            elif self._server_mode and self._server_interface:
+                success = bool(
+                    self._server_interface.check_global_request(
+                        request_name, request_data
+                    )
+                )
             else:
                 # Unknown request type
                 success = False
@@ -1671,9 +1818,13 @@ class Transport:
 
         timeout = 30.0
 
-        # Set a temporary timeout for key exchange
-        old_timeout = self._socket.gettimeout()
-        self._socket.settimeout(timeout)
+        # Set a temporary timeout for key exchange. An asyncio transport owns
+        # its socket (only a zero timeout is allowed on it), so leave it alone.
+        is_async = getattr(self, "_is_async", False)
+        old_timeout: Optional[float] = None
+        if not is_async:
+            old_timeout = self._socket.gettimeout()
+            self._socket.settimeout(timeout)
 
         try:
             # Send KEXINIT message with our supported algorithms
@@ -1686,6 +1837,16 @@ class Transport:
             self._logger.debug("Starting DH exchange phase...")
             self._kex.start_kex()
             self._logger.debug("Rekeying handshake complete.")
+
+            # RFC 8308: a server may send EXT_INFO only as the next packet after
+            # its first NEWKEYS. server-sig-algs tells clients which public-key
+            # signature algorithms we accept; without it OpenSSH (8.8+) will
+            # not use RSA keys at all ("no mutual signature algorithm").
+            if self._server_mode and not self._ext_info_sent:
+                self._ext_info_sent = True
+                peer = getattr(self, "_peer_kexinit", None)
+                if peer is not None and "ext-info-c" in peer.kex_algorithms:
+                    self._send_ext_info()
 
         except (OSError, struct.error, SSHException) as e:
             # _kex_in_progress / _active are reset under the lock in finally
@@ -1701,8 +1862,9 @@ class Transport:
                         self._socket.shutdown(socket.SHUT_RDWR)
                     except OSError:
                         pass
-                    self._socket.close()
-            except (OSError, SSHException):
+                    if not is_async:
+                        self._socket.close()
+            except (OSError, SSHException, AttributeError):
                 pass
             if isinstance(e, SSHException):
                 raise
@@ -1717,11 +1879,20 @@ class Transport:
                 self._last_rekey_time = time.monotonic()
                 self._kex_condition.notify_all()
 
-            try:
-                if self._socket and self._socket.fileno() != -1:
-                    self._socket.settimeout(old_timeout)
-            except (OSError, AttributeError):
-                pass
+            if not is_async:
+                try:
+                    if self._socket and self._socket.fileno() != -1:
+                        self._socket.settimeout(old_timeout)
+                except (OSError, AttributeError):
+                    pass
+
+    def _send_ext_info(self) -> None:
+        """Send SSH_MSG_EXT_INFO with server-sig-algs (RFC 8308)."""
+        msg = Message(MSG_EXT_INFO)
+        msg.add_uint32(1)
+        msg.add_string("server-sig-algs")
+        msg.add_string(",".join(_SERVER_SIG_ALGS))
+        self._send_message(msg)
 
     def _send_kexinit(self) -> None:
         """Send KEXINIT message with supported algorithms."""
@@ -1915,23 +2086,28 @@ class Transport:
             # ALWAYS increment sequence number for EVERY packet received
             self._sequence_number_in = (self._sequence_number_in + 1) & 0xFFFFFFFF
 
-            # Strict-KEX (Terrapin defense): during the INITIAL key exchange
-            # (before the first NEWKEYS activates encryption) no spurious
-            # IGNORE/DEBUG/UNIMPLEMENTED packets are permitted - their presence
-            # is exactly the packet-injection the countermeasure forbids.
-            if (
-                self._strict_kex
-                and getattr(self, "_cipher_in_active", None) is None
-                and msg.msg_type in (MSG_IGNORE, MSG_DEBUG, MSG_UNIMPLEMENTED)
-            ):
-                self._logger.warning(
-                    "Strict KEX violation: unexpected message %d during initial "
-                    "key exchange",
-                    msg.msg_type,
+            # Before the first NEWKEYS has been received nothing is encrypted
+            # or authenticated, so only key-exchange messages may be acted on
+            # (RFC 4253 s7.1). Strict KEX (Terrapin defence) additionally
+            # forbids IGNORE/DEBUG/UNIMPLEMENTED there: their presence is
+            # exactly the packet injection the countermeasure prevents.
+            if getattr(self, "_cipher_in_active", None) is None:
+                allowed_before_keys = (
+                    MSG_KEXINIT <= msg.msg_type <= 49
+                    or msg.msg_type == MSG_DISCONNECT
+                    or (
+                        not self._strict_kex
+                        and msg.msg_type in (MSG_IGNORE, MSG_DEBUG, MSG_UNIMPLEMENTED)
+                    )
                 )
-                raise ProtocolException(
-                    "Strict KEX violation: unexpected message during key exchange"
-                )
+                if not allowed_before_keys:
+                    self._logger.warning(
+                        "Unexpected message %d before key exchange completed",
+                        msg.msg_type,
+                    )
+                    raise ProtocolException(
+                        "Unexpected message before key exchange completed"
+                    )
 
             if msg.msg_type in [MSG_IGNORE, MSG_DEBUG, MSG_EXT_INFO]:
                 return HandledMessage() if single_pump else None  # type: ignore[return-value]
@@ -1987,25 +2163,37 @@ class Transport:
                 if msg.msg_type == MSG_USERAUTH_REQUEST:
                     self._handle_userauth_request(msg)
                     return HandledMessage() if single_pump else None  # type: ignore[return-value]
+                if (
+                    msg.msg_type == MSG_USERAUTH_INFO_RESPONSE
+                    and self._kbd_interactive_user is not None
+                ):
+                    self._handle_userauth_info_response(msg)
+                    return HandledMessage() if single_pump else None  # type: ignore[return-value]
 
             return msg
 
-    def _read_message(self, single_pump: bool = False) -> Optional[Message]:
+    def _read_message(
+        self, single_pump: bool = False, enqueue: bool = False
+    ) -> Optional[Message]:
         """
         Read next message from socket and dispatch if needed.
         Does NOT check the message queue.
+
+        With ``enqueue=True`` a message that is not handled internally is put on
+        the message queue *while the read lock is still held*, so the thread
+        that takes the read lock next always finds it there before reading
+        further. This matters during key exchange: the kex thread must see a
+        queued KEX reply before it can read the NEWKEYS that follows it.
         """
         try:
             while True:
                 # If rekeying is in progress, only the rekeying thread is allowed to read from the socket.
-                # Other threads must wait and check the queue (handled in _recv_message and _expect_message).
+                # Other threads must wait and check the queue (handled in _wait_for_message).
                 if (
                     self._kex_in_progress
                     and not getattr(self, "_is_async", False)
                     and threading.current_thread() != self._kex_thread
                 ):
-                    # We should not be here if called from _recv_message or _expect_message
-                    # as they have their own yielding loops, but for safety:
                     return None
 
                 # Hold _read_lock while reading a complete packet to prevent
@@ -2019,66 +2207,158 @@ class Transport:
 
                     msg = self._dispatch_packet(packet, single_pump)
                     if msg is not None:
+                        # msg_type 0 is the HandledMessage sentinel.
+                        if enqueue and msg.msg_type != 0:
+                            self._enqueue_message(msg)
+                            return HandledMessage()  # type: ignore[return-value]
                         return msg
                     # None means handled internally - loop to read the next packet.
 
+        except UnicodeDecodeError as e:
+            raise ProtocolException(f"Invalid text field in message: {e}") from e
         except (OSError, struct.error, SSHException, ProtocolException) as e:
             if isinstance(e, (SSHException, ProtocolException)):
                 raise
             raise TransportException(f"Failed to receive message: {e}") from e
 
+    @staticmethod
+    def _is_awaitable_type(msg_type: int) -> bool:
+        """Whether some caller can be waiting for this message type.
+
+        Only these are worth queuing; anything else (UNIMPLEMENTED, banners,
+        unknown types) would just sit in the queue until it overflows.
+        """
+        return (
+            msg_type == MSG_SERVICE_ACCEPT
+            or (MSG_KEXINIT <= msg_type <= 79 and msg_type != MSG_USERAUTH_BANNER)
+            or msg_type in (MSG_REQUEST_SUCCESS, MSG_REQUEST_FAILURE)
+            or msg_type in (MSG_CHANNEL_OPEN_CONFIRMATION, MSG_CHANNEL_OPEN_FAILURE)
+        )
+
+    def _enqueue_message(self, msg: Message) -> None:
+        """Queue a message for a thread waiting in _expect_message/_recv_message."""
+        if not self._is_awaitable_type(msg.msg_type):
+            self._logger.debug("Dropping unsolicited message type %d", msg.msg_type)
+            return
+        with self._lock:
+            if len(self._message_queue) >= MAX_QUEUE_SIZE:
+                raise TransportException("Message queue size limit exceeded")
+            self._message_queue.append(msg)
+            # _kex_condition doubles as the "transport state changed" signal.
+            self._kex_condition.notify_all()
+
     def _pump(self) -> Optional[Union[Message, type[HandledMessage]]]:
         """
-        Read next message and either handle it or queue it.
-        This is used for background message processing to ensure no
-        messages are lost when multiple threads are waiting for messages.
+        Read and dispatch one packet on behalf of whichever thread needs it.
+
+        Messages that are not handled internally are queued for the thread
+        waiting for them in _expect_message/_recv_message; they are never
+        handed back to the caller (the callers of _pump - channel waits and the
+        server connection loop - have no use for them, and dropping them lost
+        replies other threads were waiting for).
 
         Returns:
-            The message read, or HandledMessage if it was handled internally.
+            HandledMessage after a packet was processed, or None if nothing was
+            read (another thread is driving a key exchange).
         """
-        # First check if we already have messages in the queue
         with self._lock:
-            if self._message_queue:
-                return self._message_queue.popleft()
             # While another thread drives a key exchange, this thread must not
-            # read the socket (_read_message returns None immediately). Wait on
-            # the kex condition instead of returning instantly, so callers like
-            # the server accept loop don't busy-spin at 100% CPU.
+            # read the socket. Wait on the kex condition instead of returning
+            # instantly, so callers like the server connection loop don't
+            # busy-spin at 100% CPU.
             if self._kex_in_progress and threading.current_thread() != self._kex_thread:
                 self._kex_condition.wait(timeout=0.1)
                 return None
 
-        msg = self._read_message(single_pump=True)
-        if msg:
-            return msg
+        return self._read_message(single_pump=True, enqueue=True)
+
+    def _take_queued_message(
+        self, allowed_types: Optional[tuple[int, ...]], channel_id: Optional[int]
+    ) -> Optional[Message]:
+        """Remove and return the first queued message matching the filter.
+
+        Must be called with ``self._lock`` held.
+        """
+        for i, queued in enumerate(self._message_queue):
+            if self._message_matches(queued, allowed_types, channel_id):
+                del self._message_queue[i]
+                return queued
         return None
+
+    @staticmethod
+    def _message_matches(
+        msg: Message,
+        allowed_types: Optional[tuple[int, ...]],
+        channel_id: Optional[int],
+    ) -> bool:
+        if allowed_types is not None and msg.msg_type not in allowed_types:
+            return False
+        if channel_id is not None:
+            msg_channel_id = getattr(msg, "recipient_channel", None)
+            if msg_channel_id is None and len(msg._data) >= 4:
+                # Fallback for messages not fully parsed or without attribute
+                msg_channel_id, _ = read_uint32(msg._data, 0)
+            if msg_channel_id != channel_id:
+                return False
+        return True
+
+    def _wait_for_message(
+        self, allowed_types: Optional[tuple[int, ...]], channel_id: Optional[int]
+    ) -> Message:
+        """Return the next matching message, reading the socket when no other
+        thread is.
+
+        If another thread holds the read lock (for example a channel blocked in
+        recv() or the server connection loop), that thread queues whatever it
+        reads, so this one keeps re-checking the queue instead of blocking on
+        the socket behind it.
+        """
+        while True:
+            with self._lock:
+                queued = self._take_queued_message(allowed_types, channel_id)
+                if queued is not None:
+                    return queued
+                if self._stop_event.is_set():
+                    raise TransportException("Transport is stopping")
+                if (
+                    self._kex_in_progress
+                    and threading.current_thread() != self._kex_thread
+                ):
+                    self._kex_condition.wait(timeout=0.1)
+                    continue
+
+            if not self._read_lock.acquire(timeout=0.05):
+                continue
+            try:
+                # Re-check: the previous reader may have queued our message
+                # just before releasing the read lock.
+                with self._lock:
+                    queued = self._take_queued_message(allowed_types, channel_id)
+                if queued is not None:
+                    return queued
+
+                try:
+                    read_msg = self._read_message()
+                except TransportException:
+                    if not self._active:
+                        raise TransportException("Transport closed")
+                    raise
+
+                if read_msg is None:
+                    continue
+                if self._message_matches(read_msg, allowed_types, channel_id):
+                    return read_msg
+                # Not what we wanted: queue it for others while still holding
+                # the read lock.
+                self._enqueue_message(read_msg)
+            finally:
+                self._read_lock.release()
 
     def _recv_message(self) -> Message:
         """
-        Receive SSH message, checking the queue first.
+        Receive the next SSH message not handled internally, checking the queue first.
         """
-        while True:
-            while True:
-                with self._lock:
-                    if self._message_queue:
-                        return self._message_queue.popleft()
-
-                    # If no rekeying or we are the rekeying thread, proceed to read
-                    if (
-                        not self._kex_in_progress
-                        or threading.current_thread() == self._kex_thread
-                    ):
-                        break
-
-                # Release _lock before waiting so the kex thread can acquire it
-                # (Event.wait does NOT release locks, causing starvation otherwise)
-                if self._stop_event.wait(0.1):
-                    raise TransportException("Transport is stopping")
-
-            # Inner loop exited via break - safe to read from socket now
-            msg = self._read_message()
-            if msg is not None:
-                return msg
+        return self._wait_for_message(None, None)
 
     def _expect_message(
         self, *allowed_types: int, channel_id: Optional[int] = None
@@ -2087,73 +2367,7 @@ class Transport:
         Receive next message and ensure it's one of the allowed types.
         Messages of other types are queued for later processing.
         """
-        while True:
-            # 1. Check queue for allowed message
-            while True:
-                with self._lock:
-                    for i, queued in enumerate(self._message_queue):
-                        if queued.msg_type in allowed_types:
-                            # If channel_id is specified, check if it matches
-                            if channel_id is not None:
-                                msg_channel_id = getattr(
-                                    queued, "recipient_channel", None
-                                )
-                                if msg_channel_id is None and len(queued._data) >= 4:
-                                    # Fallback for messages not fully parsed or without attribute
-                                    msg_channel_id, _ = read_uint32(queued._data, 0)
-
-                                if msg_channel_id != channel_id:
-                                    continue
-
-                            del self._message_queue[i]
-                            return queued
-
-                    # If no rekeying or we are the rekeying thread, proceed to read
-                    if (
-                        not self._kex_in_progress
-                        or threading.current_thread() == self._kex_thread
-                    ):
-                        break
-
-                # Release _lock before waiting so the kex thread can acquire it
-                # (Event.wait does NOT release locks, causing starvation otherwise)
-                if self._stop_event.wait(0.1):
-                    raise TransportException("Transport is stopping")
-
-            # 2. Not in queue, read from socket
-            try:
-                read_msg = self._read_message()
-            except TransportException:
-                if not self._active:
-                    raise TransportException("Transport closed")
-                raise
-
-            if read_msg is None:
-                continue
-
-            if read_msg.msg_type in allowed_types:
-                # Check channel_id if specified
-                if channel_id is not None:
-                    msg_channel_id = getattr(read_msg, "recipient_channel", None)
-                    if msg_channel_id is None and len(read_msg._data) >= 4:
-                        msg_channel_id, _ = read_uint32(read_msg._data, 0)
-
-                    if msg_channel_id != channel_id:
-                        # Not for this channel, queue it for others and continue looking
-                        with self._lock:
-                            if len(self._message_queue) >= MAX_QUEUE_SIZE:
-                                raise TransportException(
-                                    "Message queue size limit exceeded"
-                                )
-                            self._message_queue.append(read_msg)
-                        continue
-                return read_msg
-
-            # 3. Not what we wanted, queue it for others
-            with self._lock:
-                if len(self._message_queue) >= MAX_QUEUE_SIZE:
-                    raise TransportException("Message queue size limit exceeded")
-                self._message_queue.append(read_msg)
+        return self._wait_for_message(tuple(allowed_types), channel_id)
 
     def get_server_host_key(self) -> Optional[Any]:
         """
@@ -2360,6 +2574,11 @@ class Transport:
         Raises:
             TransportException: If receive fails
         """
+        if self._stream_desynchronised:
+            raise TransportException(
+                "Transport stream desynchronised by an earlier mid-packet timeout"
+            )
+
         if getattr(self, "_cipher_in_active", None) == "chacha20-poly1305@openssh.com":
             enc_length = self._recv_bytes(PACKET_LENGTH_SIZE)
             if len(enc_length) < PACKET_LENGTH_SIZE:
@@ -2376,8 +2595,8 @@ class Transport:
             # padding_len(1) + payload(>=1) + padding(>=4), aligned to 8.
             if packet_length < 8 or packet_length > MAX_PACKET_SIZE:
                 raise ProtocolException(f"Invalid packet length: {packet_length}")
-            enc_body = self._recv_bytes(packet_length)
-            tag = self._recv_bytes(16)
+            enc_body = self._recv_bytes(packet_length, mid_packet=True)
+            tag = self._recv_bytes(16, mid_packet=True)
             plain_body = self._crypto_backend.chacha20_poly1305_decrypt_body(
                 self._chacha20_key_in,
                 self._sequence_number_in,
@@ -2406,7 +2625,7 @@ class Transport:
                 raise ProtocolException(f"Invalid packet length: {packet_length}")
 
             # Read rest of packet (encrypted)
-            encrypted_payload = self._recv_bytes(packet_length)
+            encrypted_payload = self._recv_bytes(packet_length, mid_packet=True)
             packet_payload = self._decryptor_instance.update(encrypted_payload)
 
             # Verify MAC
@@ -2415,7 +2634,7 @@ class Transport:
                 mac_info = self._kex._cipher_suite.get_mac_info(self._mac_in_active)
                 mac_len = mac_info["digest_len"]
 
-                received_mac = self._recv_bytes(mac_len)
+                received_mac = self._recv_bytes(mac_len, mid_packet=True)
                 mac_data = (
                     struct.pack(">I", self._sequence_number_in & 0xFFFFFFFF)
                     + length_data
@@ -2443,13 +2662,13 @@ class Transport:
             raise ProtocolException(f"Packet too large: {packet_length}")
 
         # Read rest of packet
-        packet_data = self._recv_bytes(packet_length)
+        packet_data = self._recv_bytes(packet_length, mid_packet=True)
 
         # Verify MAC if present (even if unencrypted)
         if self._mac_in_active and self._mac_key_in_active:
             mac_info = self._kex._cipher_suite.get_mac_info(self._mac_in_active)
             mac_len = mac_info["digest_len"]
-            received_mac = self._recv_bytes(mac_len)
+            received_mac = self._recv_bytes(mac_len, mid_packet=True)
 
             mac_data = (
                 struct.pack(">I", self._sequence_number_in & 0xFFFFFFFF)
@@ -2466,12 +2685,17 @@ class Transport:
         # Return complete packet
         return bytes(length_data + packet_data)
 
-    def _recv_bytes(self, length: int) -> bytes:
+    def _recv_bytes(self, length: int, mid_packet: bool = False) -> bytes:
         """
         Receive exact number of bytes from socket using internal buffering.
 
         Args:
             length: Number of bytes to receive
+            mid_packet: True once part of the current packet has already been
+                consumed (and, for CTR ciphers, decrypted). A socket timeout
+                then must not abandon the packet - the next read would start
+                in the middle of it and the stream could never be parsed
+                again - so keep waiting, up to _MID_PACKET_TIMEOUT.
 
         Returns:
             Received bytes
@@ -2479,6 +2703,7 @@ class Transport:
         Raises:
             TransportException: If receive fails
         """
+        mid_packet_deadline: Optional[float] = None
         # Locking model:
         # * ``self._lock`` guards ``self._packet_buffer`` and is held only for
         #   short, non-blocking buffer slices.
@@ -2515,7 +2740,19 @@ class Transport:
                     to_read = max(self._buffer_size, short_by)
                     chunk = self._socket.recv(to_read)
                 except socket.timeout:
-                    raise TransportException("Timeout receiving data")
+                    if not mid_packet:
+                        raise TransportException("Timeout receiving data")
+                    if mid_packet_deadline is None:
+                        mid_packet_deadline = time.monotonic() + _MID_PACKET_TIMEOUT
+                    if (
+                        time.monotonic() < mid_packet_deadline
+                        and not self._stop_event.is_set()
+                    ):
+                        continue
+                    self._stream_desynchronised = True
+                    raise TransportException(
+                        "Timeout in the middle of a packet; connection unusable"
+                    )
                 except OSError as e:
                     if not self._active:
                         return b""
@@ -2577,8 +2814,14 @@ class Transport:
             if service_name == SERVICE_USERAUTH:
                 accept_msg = ServiceAcceptMessage(SERVICE_USERAUTH)
                 self._send_message(accept_msg)
+                self._userauth_service_accepted = True
             else:
+                # RFC 4253 s10: refuse with a disconnect rather than leaving the
+                # client waiting for a SERVICE_ACCEPT that never comes.
                 self._logger.warning(f"Rejecting unsupported service: {service_name}")
+                self._disconnect(
+                    SSH_DISCONNECT_SERVICE_NOT_AVAILABLE, "Service not available"
+                )
         except (
             OSError,
             struct.error,
@@ -2591,13 +2834,24 @@ class Transport:
     def _handle_userauth_request(self, msg: Message) -> None:
         """Handle user authentication request message (server mode)."""
         if not self._server_interface:
-            self._send_message(UserAuthFailureMessage(["password", "publickey"], False))
+            self._send_userauth_failure("")
             return
 
         # RFC 4252 s5.1: once authentication has succeeded, further requests
         # must be silently ignored (do not re-run the application callbacks).
         if self._authenticated:
             self._logger.debug("Ignoring userauth request after success")
+            return
+
+        # Authentication is only offered over the encrypted channel, after the
+        # client asked for the ssh-userauth service (RFC 4252 s4).
+        if self._session_id is None or not self._userauth_service_accepted:
+            self._logger.warning(
+                "Userauth request before service request; disconnecting"
+            )
+            self._disconnect(
+                SSH_DISCONNECT_PROTOCOL_ERROR, "Authentication requires ssh-userauth"
+            )
             return
 
         username = ""
@@ -2611,14 +2865,15 @@ class Transport:
             service = getattr(auth_req, "service", "ssh-connection")
             if service != "ssh-connection":
                 self._logger.warning("Rejecting userauth for service %r", service)
-                self._send_message(
-                    UserAuthFailureMessage(
-                        self._server_interface.get_allowed_auths(username), False
-                    )
-                )
+                self._send_userauth_failure(username)
                 return
 
             result = AUTH_FAILED
+            if method == "none":
+                # Probing for the allowed methods (every OpenSSH client starts
+                # with this). Not an authentication attempt; never counted.
+                self._send_userauth_failure(username)
+                return
             if method == AUTH_PASSWORD:
                 offset = 0
                 # Read boolean (False) before password
@@ -2626,6 +2881,25 @@ class Transport:
                 password_bytes, offset = read_string(auth_req.method_data, offset)
                 password = password_bytes.decode(SSH_STRING_ENCODING)
                 result = self._server_interface.check_auth_password(username, password)
+            elif method == AUTH_KEYBOARD_INTERACTIVE:
+                offset = 0
+                _language, offset = read_string(auth_req.method_data, offset)
+                submethods_bytes, offset = read_string(auth_req.method_data, offset)
+                submethods = submethods_bytes.decode(SSH_STRING_ENCODING)
+                query = self._server_interface.get_keyboard_interactive_prompts(
+                    username, submethods
+                )
+                if query is not None:
+                    name, instruction, prompts = query
+                    self._send_banner_once()
+                    self._kbd_interactive_user = username
+                    self._send_message(
+                        UserAuthInfoRequestMessage(name, instruction, "", list(prompts))
+                    )
+                    return
+                result = self._server_interface.check_auth_keyboard_interactive(
+                    username, submethods
+                )
             elif method == AUTH_PUBLICKEY:
                 offset = 0
                 has_signature, offset = read_boolean(auth_req.method_data, offset)
@@ -2639,6 +2913,7 @@ class Transport:
                     key = PKey.from_string(key_blob)
                 except (ValueError, struct.error, SSHException):
                     # Invalid key blob
+                    self._send_banner_once()
                     self._send_message(UserAuthFailureMessage(["publickey"], False))
                     return
 
@@ -2658,17 +2933,19 @@ class Transport:
                         key_algo,
                     )
                     self._auth_failures += 1
-                    self._send_message(
-                        UserAuthFailureMessage(
-                            self._server_interface.get_allowed_auths(username), False
-                        )
-                    )
+                    self._send_userauth_failure(username)
                     return
 
                 if not has_signature:
-                    # Client is just querying if the key is acceptable
-                    if self._server_interface.check_auth_publickey(username, key):
+                    # Client is just querying if the key is acceptable.
+                    # check_auth_publickey returns an AUTH_* code, and
+                    # AUTH_SUCCESSFUL is 0 - compare, don't test truthiness.
+                    if (
+                        self._server_interface.check_auth_publickey(username, key)
+                        == AUTH_SUCCESSFUL
+                    ):
                         # Send PK_OK to indicate key is acceptable
+                        self._send_banner_once()
                         pk_ok = Message(MSG_USERAUTH_PK_OK)
                         pk_ok._data.extend(write_string(algo_name))
                         pk_ok._data.extend(write_string(key_blob))
@@ -2684,7 +2961,8 @@ class Transport:
                     # string session_id, byte MSG_USERAUTH_REQUEST, string username,
                     # string service, string "publickey", boolean TRUE,
                     # string algo_name, string key_blob
-                    signed_data = write_string(self._session_id or b"")
+                    assert self._session_id is not None  # checked above
+                    signed_data = write_string(self._session_id)
                     signed_data += write_byte(MSG_USERAUTH_REQUEST)
                     signed_data += write_string(username)
                     signed_data += write_string(auth_req.service)
@@ -2703,25 +2981,7 @@ class Transport:
                         )
                         result = AUTH_FAILED
 
-            # Send response
-            if result == AUTH_SUCCESSFUL:
-                self._authenticated = True
-                self._server_interface.on_authentication_successful(username, method)
-                self._send_message(UserAuthSuccessMessage())
-            else:
-                self._auth_failures += 1
-                self._server_interface.on_authentication_failed(username, method)
-                allowed_methods = self._server_interface.get_allowed_auths(username)
-                self._send_message(UserAuthFailureMessage(allowed_methods, False))
-                if self._auth_failures >= self._max_auth_attempts:
-                    self._logger.warning(
-                        "Too many authentication failures (%d); disconnecting",
-                        self._auth_failures,
-                    )
-                    self._disconnect(
-                        SSH_DISCONNECT_NO_MORE_AUTH_METHODS_AVAILABLE,
-                        "Too many authentication failures",
-                    )
+            self._finish_userauth(username, method, result)
 
         except (
             OSError,
@@ -2731,8 +2991,69 @@ class Transport:
             SSHException,
         ) as e:
             self._logger.error(f"Error handling userauth request: {e}")
+            self._send_userauth_failure(username)
+
+    def _handle_userauth_info_response(self, msg: Message) -> None:
+        """Handle the client's answers to a keyboard-interactive INFO_REQUEST
+        (server mode)."""
+        username = self._kbd_interactive_user or ""
+        self._kbd_interactive_user = None
+        if self._authenticated or not self._server_interface:
+            return
+        try:
+            info = UserAuthInfoResponseMessage._unpack_data(bytes(msg._data))
+            result = self._server_interface.check_auth_keyboard_interactive_response(
+                username, list(info.responses)
+            )
+            self._finish_userauth(username, AUTH_KEYBOARD_INTERACTIVE, result)
+        except (OSError, struct.error, ValueError, SSHException) as e:
+            self._logger.error(f"Error handling keyboard-interactive response: {e}")
+            self._send_userauth_failure(username)
+
+    def _send_banner_once(self) -> None:
+        """Send the server's USERAUTH_BANNER before its first auth reply."""
+        if self._banner_sent or not self._server_interface:
+            return
+        self._banner_sent = True
+        banner = self._server_interface.get_banner()
+        if banner:
+            self._send_message(UserAuthBannerMessage(banner))
+
+    def _send_userauth_failure(self, username: str, partial: bool = False) -> None:
+        self._send_banner_once()
+        allowed: list[str] = ["password", "publickey"]
+        if self._server_interface:
             allowed = self._server_interface.get_allowed_auths(username)
-            self._send_message(UserAuthFailureMessage(allowed, False))
+        self._send_message(UserAuthFailureMessage(allowed, partial))
+
+    def _finish_userauth(self, username: str, method: str, result: Any) -> None:
+        """Answer an authentication attempt with SUCCESS or FAILURE."""
+        assert self._server_interface is not None
+        if result == AUTH_SUCCESSFUL:
+            self._send_banner_once()
+            self._authenticated = True
+            self._auth_username = username
+            self._server_interface.on_authentication_successful(username, method)
+            self._send_message(UserAuthSuccessMessage())
+            return
+
+        if result == AUTH_PARTIAL:
+            # This method succeeded but more are required (RFC 4252 s5.1).
+            self._send_userauth_failure(username, partial=True)
+            return
+
+        self._auth_failures += 1
+        self._server_interface.on_authentication_failed(username, method)
+        self._send_userauth_failure(username)
+        if self._auth_failures >= self._max_auth_attempts:
+            self._logger.warning(
+                "Too many authentication failures (%d); disconnecting",
+                self._auth_failures,
+            )
+            self._disconnect(
+                SSH_DISCONNECT_NO_MORE_AUTH_METHODS_AVAILABLE,
+                "Too many authentication failures",
+            )
 
     def get_port_forwarding_manager(self) -> "PortForwardingManager":
         """

@@ -279,7 +279,7 @@ class TestRemotePortForwarder:
 
     def test_create_tunnel_denied(self):
         t = _make_transport()
-        t._send_global_request.return_value = False
+        t._send_global_request_with_reply.return_value = None
         rpf = RemotePortForwarder(t)
         with pytest.raises(SSHException, match="denied"):
             rpf.create_tunnel(8080, "localhost", 80)
@@ -361,9 +361,9 @@ class TestRemotePortForwarder:
 
     def test_send_tcpip_forward_error(self):
         t = _make_transport()
-        t._send_global_request.side_effect = Exception("fail")
+        t._send_global_request_with_reply.side_effect = Exception("fail")
         rpf = RemotePortForwarder(t)
-        assert rpf._send_tcpip_forward_request("0.0.0.0", 8080) is False
+        assert rpf._send_tcpip_forward_request("0.0.0.0", 8080) is None
 
     def test_send_cancel_forward_error(self):
         t = _make_transport()

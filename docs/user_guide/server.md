@@ -79,13 +79,63 @@ class ExecServer(SSHServer):
         cmd_str = command.decode('utf-8')
         print(f"Client requested: {cmd_str}")
 
-        # In a real server, you might spawn a process
-        # channel.send accepts both bytes and strings
-        channel.send(f"Executed: {cmd_str}\n")
+        # In a real server, you might spawn a process.
+        # sendall()/sendall_stderr() accept both bytes and strings.
+        channel.sendall(f"Executed: {cmd_str}\n")
+        channel.sendall_stderr("warning: this is a demo server\n")
         channel.send_exit_status(0)
+        channel.send_eof()
         channel.close()
         return True
 ```
+
+It is fine to finish the command and close the channel inside the callback:
+SpindleX sends the reply to the exec request before the channel's CLOSE.
+
+Long-running commands should run on their own thread and read the client's
+input with `channel.recv()`, which returns `b""` once the client sends EOF
+(for example after `stdin.close()` on a SpindleX client).
+
+## Authentication Hooks
+
+Besides `check_auth_password()` and `check_auth_publickey()`, `SSHServer`
+offers these hooks:
+
+```python
+from spindlex.protocol.constants import AUTH_FAILED, AUTH_PARTIAL, AUTH_SUCCESSFUL
+
+class MFAServer(SSHServer):
+    def get_banner(self):
+        # Sent once, before the first authentication reply.
+        return "Authorized use only\n"
+
+    def get_allowed_auths(self, username):
+        return ["publickey", "keyboard-interactive"]
+
+    def check_auth_publickey(self, username, key):
+        # AUTH_PARTIAL: the key is accepted, but another method must follow.
+        return AUTH_PARTIAL if key_is_known(username, key) else AUTH_FAILED
+
+    def get_keyboard_interactive_prompts(self, username, submethods):
+        # (name, instruction, [(prompt, echo), ...])
+        return ("Verification", "Enter your one-time code", [("Code: ", False)])
+
+    def check_auth_keyboard_interactive_response(self, username, responses):
+        return AUTH_SUCCESSFUL if otp_is_valid(username, responses[0]) else AUTH_FAILED
+```
+
+`AUTH_PARTIAL` tells the client that the method succeeded but more are needed
+(multi-factor authentication). SpindleX clients continue with the next method
+automatically.
+
+## Connection Hooks
+
+- `check_global_request(kind, msg)`: called for global requests other than
+  `tcpip-forward`/`cancel-tcpip-forward` (for example
+  `keepalive@openssh.com`). Return `True` to accept.
+- `on_channel_closed(channel)`: called once both sides have closed a channel.
+- `is_channel_authorized(channel, username)`: true only when the channel's own
+  connection authenticated as `username`.
 
 ## SFTP Server
 
@@ -102,6 +152,11 @@ class MySFTPServer(SSHServer):
             return True
         return False
 ```
+
+The SFTP server supports the operations OpenSSH's `sftp` client uses,
+including `SETSTAT`/`FSETSTAT` (permissions, times and size - so `truncate()`
+works), `SYMLINK` and `READLINK`. The session ends, and its open files are
+closed, when the client disconnects.
 
 ## Advanced Configuration
 

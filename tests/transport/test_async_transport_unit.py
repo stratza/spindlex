@@ -123,7 +123,7 @@ class TestAsyncTransportUnit:
         msg = MagicMock(spec=Message)
 
         with patch.object(
-            transport, "_recv_message_async", new=AsyncMock(return_value=msg)
+            transport, "_wait_for_message_async", new=AsyncMock(return_value=msg)
         ):
 
             def run_in_thread():
@@ -141,7 +141,7 @@ class TestAsyncTransportUnit:
         msg = MagicMock(spec=Message)
 
         with patch.object(
-            transport, "_expect_message_async", new=AsyncMock(return_value=msg)
+            transport, "_wait_for_message_async", new=AsyncMock(return_value=msg)
         ):
 
             def run_in_thread():

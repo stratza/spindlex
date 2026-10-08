@@ -24,6 +24,9 @@ class CipherSuite:
     # and must not appear in server-bound KEXINIT lists.
     KEX_ALGORITHMS = [
         "curve25519-sha256",
+        # Pre-RFC 8731 name of the same algorithm; older servers (OpenSSH
+        # before 7.4, many embedded SSH stacks) only offer this one.
+        "curve25519-sha256@libssh.org",
         "ecdh-sha2-nistp256",
         "ecdh-sha2-nistp384",
         "ecdh-sha2-nistp521",

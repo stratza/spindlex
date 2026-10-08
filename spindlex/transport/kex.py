@@ -32,6 +32,16 @@ from ..protocol.messages import KexInitMessage, Message
 from ..protocol.utils import read_mpint, read_string, write_mpint, write_string
 
 
+def _ssh_string_at(blob: bytes, offset: int) -> str:
+    """Decode the SSH string at ``offset`` (the type name of a key or
+    signature blob); '' if the blob is malformed."""
+    try:
+        value, _ = read_string(blob, offset)
+        return value.decode("ascii")
+    except (ProtocolException, UnicodeDecodeError):
+        return ""
+
+
 class KeyExchange:
     """
     SSH key exchange implementation.
@@ -80,6 +90,9 @@ class KeyExchange:
         self._dh_public_key: Optional[int] = None
         self._dh_public_key_mpint: Optional[bytes] = None
         self._server_public_key: Optional[bytes] = None
+        # Host key verified on the first key exchange (client side); later
+        # re-exchanges must present the same key.
+        self._verified_host_key_blob: Optional[bytes] = None
 
         # Negotiated algorithms
         self._kex_algorithm: Optional[str] = None
@@ -375,8 +388,32 @@ class KeyExchange:
     def _verify_server_signature(
         self, server_host_key_blob: bytes, signature_blob: bytes
     ) -> None:
-        """Verify server host key signature."""
+        """Verify server host key signature.
+
+        The key type and the signature algorithm must both match the
+        negotiated host-key algorithm, and the host key must be the same one
+        that was verified for this connection on the first key exchange.
+        """
         from ..crypto.pkey import PKey
+
+        negotiated = self._server_host_key_algorithm or ""
+        key_type = _ssh_string_at(server_host_key_blob, 0)
+        sig_type = _ssh_string_at(signature_blob, 0)
+        rsa_sig_algs = ("rsa-sha2-256", "rsa-sha2-512")
+        expected_key_type = "ssh-rsa" if negotiated in rsa_sig_algs else negotiated
+        if key_type != expected_key_type:
+            raise CryptoException(
+                f"Server host key type {key_type!r} does not match negotiated "
+                f"algorithm {negotiated!r}"
+            )
+        if sig_type != negotiated:
+            raise CryptoException(
+                f"Server signature algorithm {sig_type!r} does not match "
+                f"negotiated algorithm {negotiated!r}"
+            )
+        verified = self._verified_host_key_blob
+        if verified is not None and server_host_key_blob != verified:
+            raise CryptoException("Server host key changed during key re-exchange")
 
         try:
             server_key = PKey.from_string(server_host_key_blob)
@@ -384,6 +421,7 @@ class KeyExchange:
                 raise CryptoException("Exchange hash not computed")
             if not server_key.verify(signature_blob, self._exchange_hash):
                 raise CryptoException("Server host key signature verification failed")
+            self._verified_host_key_blob = server_host_key_blob
         except Exception as e:
             if isinstance(e, CryptoException):
                 raise
@@ -748,7 +786,9 @@ class KeyExchange:
             raise CryptoException("Server key not set - cannot sign exchange hash")
         # For RSA keys, sign with the host-key algorithm that was negotiated
         # (rsa-sha2-256 vs rsa-sha2-512) rather than the key's default, so the
-        # signature algorithm matches what the client agreed to verify.
+        # signature algorithm matches what the client agreed to verify. Pass it
+        # per call: the key object is shared by every connection the server
+        # handles, so it must not be mutated.
         negotiated = getattr(self, "_server_host_key_algorithm", None)
         current = getattr(server_key, "algorithm_name", None)
         if negotiated in ("rsa-sha2-256", "rsa-sha2-512") and current in (
@@ -756,8 +796,9 @@ class KeyExchange:
             "rsa-sha2-512",
             "ssh-rsa",
         ):
-            server_key._algorithm_name = negotiated
-        signature = server_key.sign(exchange_hash)
+            signature = server_key.sign(exchange_hash, algorithm=negotiated)
+        else:
+            signature = server_key.sign(exchange_hash)
         if signature is None:
             raise CryptoException("Failed to sign exchange hash")
         return signature  # type: ignore[no-any-return]

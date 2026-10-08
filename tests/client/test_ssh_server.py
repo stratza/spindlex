@@ -65,9 +65,17 @@ class TestSSHServer:
         server.on_authentication_successful("alice", "password")
         assert server._authenticated_users["alice"] is True
 
+        # Authorisation follows the channel's own connection.
         mock_chan = MagicMock()
+        mock_chan._transport.authenticated = True
+        mock_chan._transport._auth_username = "alice"
         assert server.is_channel_authorized(mock_chan, "alice") is True
         assert server.is_channel_authorized(mock_chan, "bob") is False
+
+        other_conn = MagicMock()
+        other_conn._transport.authenticated = False
+        other_conn._transport._auth_username = None
+        assert server.is_channel_authorized(other_conn, "alice") is False
 
     def test_channel_management(self):
         server = SSHServer()

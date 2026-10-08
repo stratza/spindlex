@@ -92,8 +92,16 @@ class TestChannelFileReadAllWithTimeout:
             ChannelException("Timeout receiving data"),
         ]
         cf = ChannelFile(channel, "r")
-        result = cf.read()
-        assert result == b"partial"
+        # A timeout is an error, not a silently truncated result.
+        with pytest.raises(ChannelException, match="Timeout"):
+            cf.read()
+
+    def test_close_stdin_sends_eof_not_close(self):
+        channel = MagicMock()
+        cf = ChannelFile(channel, "w")
+        cf.close()
+        channel.send_eof.assert_called_once()
+        channel.close.assert_not_called()
 
     def test_read_all_closed_channel_with_data(self):
         channel = MagicMock()
@@ -279,7 +287,12 @@ class TestConnectWithTimeout:
         client = SSHClient()
         client.connect("localhost", username="user", password="pass", timeout=10.0)
 
-        mock_transport.set_timeout.assert_called_once_with(10.0)
+        # The timeout bounds connect/handshake/auth, then is cleared so it does
+        # not become an idle timeout on every later read.
+        assert [c.args for c in mock_transport.set_timeout.call_args_list] == [
+            (10.0,),
+            (None,),
+        ]
         mock_transport.start_client.assert_called_once_with(10.0)
 
 
@@ -1110,6 +1123,8 @@ class TestVerifyHostKeyPolicyError:
         client._hostname = "localhost"
 
         storage = MagicMock()
+
+        storage.is_revoked.return_value = False
         storage.lookup.return_value = []
         client._host_key_storage = storage
 

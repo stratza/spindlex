@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import socket
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -72,10 +73,23 @@ class TestChannelProperties:
             pass
         assert ch.closed is True
 
-    def test_shutdown(self):
+    def test_shutdown_rdwr_closes(self):
         ch = _make_channel()
-        ch.shutdown(0)
+        ch.shutdown(socket.SHUT_RDWR)
         assert ch.closed is True
+
+    def test_shutdown_wr_sends_eof_only(self):
+        ch = _make_channel()
+        ch.shutdown(socket.SHUT_WR)
+        ch._transport._send_channel_eof.assert_called_once()
+        assert ch.closed is False
+
+    def test_shutdown_rd_stops_reading(self):
+        ch = _make_channel()
+        ch._recv_buffer.append(b"pending")
+        ch.shutdown(socket.SHUT_RD)
+        assert ch.closed is False
+        assert ch.recv(10) == b""
 
 
 # ---- send ----
@@ -229,10 +243,23 @@ class TestChannelRecvStderr:
         ch._eof_received = True
         assert ch.recv_stderr(100) == b""
 
-    def test_recv_stderr_closed_raises(self):
+    def test_recv_stderr_closed_returns_eof(self):
         ch = _make_channel(closed=True)
-        with pytest.raises(ChannelException, match="closed"):
-            ch.recv_stderr(100)
+        assert ch.recv_stderr(100) == b""
+
+    def test_recv_stderr_returns_data_buffered_before_close(self):
+        # Stderr that arrived before the peer's CLOSE must not be lost.
+        ch = _make_channel()
+        ch._stderr_buffer.append(b"err-line\n")
+        ch._handle_close()
+        assert ch.recv_stderr(100) == b"err-line\n"
+        assert ch.recv_stderr(100) == b""
+
+    def test_recv_after_close_without_eof_returns_eof(self):
+        # A CLOSE without a preceding EOF must not leave recv() pumping forever.
+        ch = _make_channel()
+        ch._handle_close()
+        assert ch.recv(100) == b""
 
 
 # ---- exec_command ----

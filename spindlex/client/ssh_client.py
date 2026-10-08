@@ -81,11 +81,11 @@ class ChannelFile:
                         break
                     result.extend(chunk)
                 except ChannelException as e:
-                    errmsg = str(e).lower()
-                    if ("timeout" in errmsg or "closed" in errmsg) and result:
+                    # A closed channel is end-of-stream. A timeout is an
+                    # error: returning what was read so far would look like
+                    # complete output.
+                    if "closed" in str(e).lower():
                         return bytes(result)
-                    if "closed" in errmsg:
-                        return b""
                     raise
             return bytes(result)
 
@@ -178,10 +178,21 @@ class ChannelFile:
         return self._channel
 
     def close(self) -> None:
-        """Close the file."""
+        """Close the file.
+
+        Closing stdin (mode ``"w"``) sends EOF so the remote command sees the
+        end of its input, while stdout/stderr stay readable. Closing stdout or
+        stderr closes the channel.
+        """
         if not self._closed:
             self._closed = True
-            self._channel.close()
+            if self._mode == "w":
+                try:
+                    self._channel.send_eof()
+                except ChannelException:
+                    pass  # channel already closed
+            else:
+                self._channel.close()
 
     def __enter__(self) -> "ChannelFile":
         """Context manager entry."""
@@ -402,6 +413,13 @@ class SSHClient:
                     keyboard_interactive_handler=keyboard_interactive_handler,
                 )
 
+            # ``timeout`` bounds connecting, the handshake and authentication.
+            # It must not stay on the socket afterwards: a command that is
+            # silent for longer than ``timeout`` would otherwise fail
+            # mid-read. Use Channel.settimeout() to bound channel I/O.
+            if timeout:
+                self._transport.set_timeout(None)
+
             self._logger.info(f"Successfully connected to {hostname}:{port}")
 
         except Exception as e:
@@ -438,6 +456,10 @@ class SSHClient:
 
             if server_key is None:
                 raise SSHException("No host key received from server")
+
+            # A key marked @revoked is refused outright, whatever the policy.
+            if self._host_key_storage.is_revoked(hostname, self._port, server_key):
+                raise BadHostKeyException(hostname, server_key)
 
             # Check if we have any known host keys for this host (port-aware,
             # hashed-aware).
@@ -644,7 +666,8 @@ class SSHClient:
         # Try GSSAPI if requested
         if gss_auth and not authenticated:
             try:
-                self.auth_gssapi(username, gss_host, gss_deleg_creds)
+                # Kerberos needs the host name, not the peer IP address.
+                self.auth_gssapi(username, gss_host or self._hostname, gss_deleg_creds)
                 authenticated = True
             except Exception as e:
                 self._logger.debug(f"GSSAPI authentication failed: {e}")

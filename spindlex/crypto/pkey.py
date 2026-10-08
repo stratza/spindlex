@@ -7,6 +7,7 @@ with support for key loading, fingerprinting, and signature operations.
 
 import base64
 import hashlib
+import os
 import struct
 import warnings
 from typing import Any, Optional
@@ -28,6 +29,26 @@ def _legacy_ssh_rsa_sha1_hash() -> Any:
     """Return SHA-1 only for explicit opt-in legacy ssh-rsa compatibility."""
     sha1_factory = getattr(hashes, "".join(("SHA", "1")))
     return sha1_factory()
+
+
+def _write_private_key_file(filename: str, data: bytes) -> None:
+    """Write private key material readable by the owner only (0600).
+
+    The file is created with restrictive permissions rather than chmod-ed
+    afterwards, so it is never readable by others, not even briefly. An
+    existing file is tightened before it is overwritten.
+    """
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_BINARY", 0)
+    fd = os.open(filename, flags, 0o600)
+    try:
+        if hasattr(os, "fchmod"):
+            os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "wb") as f:
+            fd = -1
+            f.write(data)
+    finally:
+        if fd != -1:
+            os.close(fd)
 
 
 class PKey:
@@ -160,6 +181,13 @@ class PKey:
                 raise CryptoException(f"Unsupported hash algorithm: {hash_algorithm}")
         except Exception as e:
             raise CryptoException(f"Fingerprint generation failed: {e}") from e
+
+    def __hash__(self) -> int:
+        """Hash by public key, consistent with __eq__."""
+        try:
+            return hash(self.get_public_key_bytes())
+        except CryptoException:
+            return id(self)
 
     def __eq__(self, other: object) -> bool:
         """Compare keys for equality."""
@@ -464,8 +492,7 @@ class Ed25519Key(PKey):
                 encryption_algorithm=encryption_algorithm,
             )
 
-            with open(filename, "wb") as f:
-                f.write(pem)
+            _write_private_key_file(filename, pem)
         except Exception as e:
             raise CryptoException(f"Failed to save Ed25519 key: {e}") from e
 
@@ -752,8 +779,7 @@ class ECDSAKey(PKey):
                 encryption_algorithm=encryption_algorithm,
             )
 
-            with open(filename, "wb") as f:
-                f.write(pem)
+            _write_private_key_file(filename, pem)
         except Exception as e:
             raise CryptoException(f"Failed to save ECDSA key: {e}") from e
 
@@ -846,7 +872,14 @@ class RSAKey(PKey):
             CryptoException: If key loading fails
         """
         try:
-            self._key = serialization.load_pem_private_key(key_data, password=password)
+            if b"BEGIN OPENSSH PRIVATE KEY" in key_data:
+                self._key = serialization.load_ssh_private_key(
+                    key_data, password=password
+                )
+            else:
+                self._key = serialization.load_pem_private_key(
+                    key_data, password=password
+                )
             if not isinstance(self._key, rsa.RSAPrivateKey):
                 raise CryptoException("Key is not RSA private key")
         except Exception as e:
@@ -921,8 +954,10 @@ class RSAKey(PKey):
             # Get public numbers
             numbers = public_key.public_numbers()
 
-            # Format as SSH wire format: string <algorithm>, mpint e, mpint n
-            algorithm = self.algorithm_name.encode()
+            # Format as SSH wire format: string "ssh-rsa", mpint e, mpint n.
+            # The key format name is "ssh-rsa" whichever signature algorithm
+            # (rsa-sha2-256 / rsa-sha2-512) is used with it (RFC 8332 s3).
+            algorithm = b"ssh-rsa"
             result = struct.pack(">I", len(algorithm)) + algorithm
             result += write_mpint(numbers.e)
             result += write_mpint(numbers.n)
@@ -931,12 +966,14 @@ class RSAKey(PKey):
         except Exception as e:
             raise CryptoException(f"Failed to get RSA public key bytes: {e}") from e
 
-    def sign(self, data: bytes) -> bytes:
+    def sign(self, data: bytes, algorithm: Optional[str] = None) -> bytes:
         """
-        Sign data with RSA private key using SHA-256.
+        Sign data with RSA private key.
 
         Args:
             data: Data to sign
+            algorithm: Signature algorithm (``rsa-sha2-256``, ``rsa-sha2-512``
+                or ``ssh-rsa``). Defaults to this key's ``algorithm_name``.
 
         Returns:
             Signature bytes in SSH format
@@ -948,8 +985,8 @@ class RSAKey(PKey):
             if not isinstance(self._key, rsa.RSAPrivateKey):
                 raise CryptoException("No RSA private key loaded")
 
-            # Select hash algorithm based on current algorithm name
-            algo_name = self.algorithm_name
+            # Select hash algorithm based on the requested algorithm name
+            algo_name = algorithm or self.algorithm_name
             hash_algo: Any
             if algo_name == "rsa-sha2-512":
                 hash_algo = hashes.SHA512()
@@ -1009,8 +1046,7 @@ class RSAKey(PKey):
                 encryption_algorithm=encryption_algorithm,
             )
 
-            with open(filename, "wb") as f:
-                f.write(pem)
+            _write_private_key_file(filename, pem)
         except Exception as e:
             raise CryptoException(f"Failed to save RSA key: {e}") from e
 
@@ -1142,8 +1178,12 @@ def load_public_key_from_string(key_string: str) -> PKey:
         key: PKey
         if algorithm == "ssh-ed25519":
             key = Ed25519Key()
-        elif algorithm == "ecdsa-sha2-nistp256":
-            key = ECDSAKey()
+        elif algorithm in (
+            "ecdsa-sha2-nistp256",
+            "ecdsa-sha2-nistp384",
+            "ecdsa-sha2-nistp521",
+        ):
+            key = ECDSAKey()  # the curve is read from the key blob
         elif algorithm in ["rsa-sha2-256", "rsa-sha2-512", "ssh-rsa"]:
             key = RSAKey()
         else:

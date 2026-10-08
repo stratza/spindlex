@@ -6,6 +6,7 @@ maintaining known host keys and verification.
 """
 
 import base64
+import fnmatch
 import hashlib
 import hmac
 import logging
@@ -23,6 +24,56 @@ def host_token(hostname: str, port: int = 22) -> str:
     if port and port != 22:
         return f"[{host}]:{port}"
     return host
+
+
+def _key_type(key: PKey) -> str:
+    """The key format name as written in known_hosts (e.g. ``ssh-rsa``).
+
+    This is the first field of the public key blob, which for RSA differs
+    from ``algorithm_name`` (a signature algorithm such as ``rsa-sha2-256``).
+    """
+    blob = key.get_public_key_bytes()
+    length = int.from_bytes(blob[:4], "big")
+    return blob[4 : 4 + length].decode("ascii")
+
+
+def _normalised_blob(blob: bytes) -> bytes:
+    """Public key blob in canonical form (old SpindleX versions wrote RSA keys
+    with an ``rsa-sha2-*`` type name)."""
+    return PKey.from_string(blob).get_public_key_bytes()
+
+
+def _hashed_token_matches(token: str, host: str) -> bool:
+    """Whether a hashed ``|1|salt|hash`` known_hosts token names ``host``."""
+    try:
+        _, _, salt_b64, hash_b64 = token.split("|")
+        salt = base64.b64decode(salt_b64)
+        expected = base64.b64decode(hash_b64)
+    except (ValueError, TypeError):
+        return False
+    digest = hmac.new(salt, host.encode("utf-8"), hashlib.sha1).digest()
+    return hmac.compare_digest(digest, expected)
+
+
+def _pattern_matches(patterns: str, host: str) -> bool:
+    """OpenSSH host-pattern list match (``*``/``?`` wildcards, ``!`` negation,
+    hashed entries)."""
+    matched = False
+    for pattern in patterns.split(","):
+        pattern = pattern.strip()
+        if not pattern:
+            continue
+        negate = pattern.startswith("!")
+        if negate:
+            pattern = pattern[1:]
+        if pattern.startswith("|1|"):
+            hit = _hashed_token_matches(pattern, host)
+        else:
+            hit = fnmatch.fnmatchcase(host, pattern.lower())
+        if hit and negate:
+            return False
+        matched = matched or hit
+    return matched
 
 
 class HostKeyStorage:
@@ -45,6 +96,12 @@ class HostKeyStorage:
         # Hashed (|1|salt|hash) entries, which cannot be keyed by hostname.
         # Each item is (salt_bytes, host_hash_bytes, PKey).
         self._hashed_entries: list[tuple[bytes, bytes, PKey]] = []
+        # @revoked entries: (host patterns, key). A revoked key is never
+        # accepted for a matching host, whatever the missing-key policy.
+        self._revoked: list[tuple[str, PKey]] = []
+        # Keys removed with remove(): (host token, key or None for all keys).
+        # save() drops them from the file, since it otherwise only appends.
+        self._removed: list[tuple[str, Optional[bytes]]] = []
         self._logger = logging.getLogger(__name__)
 
         # Try to load existing keys
@@ -102,8 +159,17 @@ class HostKeyStorage:
         if len(parts) < 3:
             return  # Invalid line format
 
-        # Skip markers we do not evaluate here (@cert-authority, @revoked);
-        # they are preserved on disk by the append-only save().
+        if parts[0] == "@revoked":
+            if len(parts) >= 4:
+                key = self._create_key_from_type_and_data(
+                    parts[2], base64.b64decode(parts[3])
+                )
+                if key is not None:
+                    self._revoked.append((parts[1], key))
+            return
+
+        # Other markers (@cert-authority) are not evaluated here; they are
+        # preserved on disk by save().
         if parts[0].startswith("@"):
             return
 
@@ -213,14 +279,13 @@ class HostKeyStorage:
 
     def save(self) -> None:
         """
-        Persist host keys by APPENDING new entries to the file.
+        Persist host keys: append new entries and drop removed ones.
 
-        The user's ``known_hosts`` is never rewritten: existing lines - including
-        comments, ``@cert-authority``/``@revoked`` markers, hashed ``|1|`` host
-        entries and key types SpindleX does not parse - are preserved byte for
-        byte. Only keys held in memory that are not already present in the file
-        are appended. This avoids silently corrupting or dropping entries that
-        other SSH tooling relies on.
+        Existing lines - including comments, ``@cert-authority``/``@revoked``
+        markers, hashed ``|1|`` host entries and key types SpindleX does not
+        parse - are preserved byte for byte, except host/key pairs deleted
+        with remove(). Keys held in memory that are not already present in the
+        file are appended.
 
         Raises:
             SSHException: If saving fails
@@ -232,6 +297,23 @@ class HostKeyStorage:
                 os.makedirs(dirname, exist_ok=True)
 
             raw_lines, present = self._existing_file_index()
+            if self._removed:
+                # Entries deleted with remove() must not survive on disk; the
+                # rest of the file is preserved byte for byte.
+                filtered = [self._line_without_removed(line) for line in raw_lines]
+                raw_lines = [line for line in filtered if line is not None]
+                present = {
+                    (host, data)
+                    for host, data in present
+                    if not any(
+                        host == removed_host
+                        and (
+                            removed_blob is None
+                            or base64.b64encode(removed_blob).decode("ascii") == data
+                        )
+                        for removed_host, removed_blob in self._removed
+                    )
+                }
 
             new_lines: list[str] = []
             for hostname, keys in self._keys.items():
@@ -246,15 +328,16 @@ class HostKeyStorage:
                     if (hostname, key_data) in present:
                         continue
                     present.add((hostname, key_data))
-                    new_lines.append(f"{hostname} {key.algorithm_name} {key_data}\n")
+                    new_lines.append(f"{hostname} {_key_type(key)} {key_data}\n")
 
-            if not raw_lines and not new_lines:
+            file_exists = os.path.exists(self._filename)
+            if not raw_lines and not new_lines and not (file_exists and self._removed):
                 return  # nothing to write and no existing file to preserve
 
             # If we are creating the file fresh, add a short header; when
             # appending to an existing file leave its content untouched.
             header: list[str] = []
-            if not raw_lines:
+            if not file_exists:
                 header = ["# SSH known hosts file\n", "# Managed by spindlex\n", "\n"]
             # Ensure the preserved content ends with a newline before appending.
             if raw_lines and not raw_lines[-1].endswith("\n"):
@@ -333,6 +416,16 @@ class HostKeyStorage:
         """
         return self._keys.get(hostname.lower(), [])
 
+    def is_revoked(self, hostname: str, port: int, key: PKey) -> bool:
+        """Whether ``key`` is marked ``@revoked`` for (hostname, port)."""
+        token = host_token(hostname, port)
+        blob = key.get_public_key_bytes()
+        return any(
+            hmac.compare_digest(revoked.get_public_key_bytes(), blob)
+            and _pattern_matches(patterns, token)
+            for patterns, revoked in self._revoked
+        )
+
     def lookup(self, hostname: str, port: int = 22) -> list[PKey]:
         """Return all known keys for (hostname, port).
 
@@ -370,6 +463,15 @@ class HostKeyStorage:
             for key in keys:
                 if key not in self._keys[hostname]:
                     self._keys[hostname].append(key)
+        self._hashed_entries.extend(
+            entry
+            for entry in other._hashed_entries
+            if entry not in self._hashed_entries
+        )
+        self._revoked.extend(
+            entry for entry in other._revoked if entry not in self._revoked
+        )
+        self._removed.extend(other._removed)
 
     def remove(self, hostname: str, key: Optional[PKey] = None) -> bool:
         """
@@ -384,19 +486,73 @@ class HostKeyStorage:
         """
         # DNS hostnames are case-insensitive; keys are stored lowercase.
         hostname = hostname.lower()
-        if hostname not in self._keys:
-            return False
+        blob = key.get_public_key_bytes() if key is not None else None
+        removed = False
 
-        if key is None:
-            # Remove all keys for hostname
-            del self._keys[hostname]
-            return True
-        else:
-            # Remove specific key
-            try:
+        if hostname in self._keys:
+            if key is None:
+                del self._keys[hostname]
+                removed = True
+            elif key in self._keys[hostname]:
                 self._keys[hostname].remove(key)
                 if not self._keys[hostname]:
                     del self._keys[hostname]
-                return True
-            except ValueError:
-                return False
+                removed = True
+
+        # Hashed entries for this host.
+        kept = []
+        for salt, host_hash, entry_key in self._hashed_entries:
+            digest = hmac.new(salt, hostname.encode("utf-8"), hashlib.sha1).digest()
+            if hmac.compare_digest(digest, host_hash) and (
+                blob is None or entry_key.get_public_key_bytes() == blob
+            ):
+                removed = True
+                continue
+            kept.append((salt, host_hash, entry_key))
+        self._hashed_entries = kept
+
+        if removed:
+            # Remember it so save() deletes it from the file too.
+            self._removed.append((hostname, blob))
+        return removed
+
+    def _line_without_removed(self, line: str) -> Optional[str]:
+        """Return ``line`` with removed host/key pairs taken out, or None to
+        drop the line entirely."""
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or stripped.startswith("@"):
+            return line
+        parts = stripped.split()
+        if len(parts) < 3:
+            return line
+        try:
+            line_blob: Optional[bytes] = base64.b64decode(parts[2])
+        except (ValueError, TypeError):
+            line_blob = None
+        tokens = parts[0].split(",")
+        remaining = []
+        for token in tokens:
+            drop = False
+            for host, blob in self._removed:
+                if blob is not None and line_blob is not None:
+                    try:
+                        same_key = _normalised_blob(line_blob) == _normalised_blob(blob)
+                    except SSHException:
+                        same_key = False
+                    if not same_key:
+                        continue
+                if token.startswith("|1|"):
+                    hit = _hashed_token_matches(token, host)
+                else:
+                    hit = token.lower() == host
+                if hit:
+                    drop = True
+                    break
+            if not drop:
+                remaining.append(token)
+        if len(remaining) == len(tokens):
+            return line
+        if not remaining:
+            return None
+        rest = stripped[len(parts[0]) :]
+        return ",".join(remaining) + rest + "\n"

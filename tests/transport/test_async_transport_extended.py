@@ -131,7 +131,7 @@ class TestKexAsync:
         kexinit = MagicMock(spec=KexInitMessage)
         kexinit.__class__ = KexInitMessage
         with patch.object(
-            t, "_recv_message_async", new=AsyncMock(return_value=kexinit)
+            t, "_wait_for_message_async", new=AsyncMock(return_value=kexinit)
         ):
             await t._recv_kexinit_async()
         assert t._peer_kexinit is kexinit
@@ -140,7 +140,9 @@ class TestKexAsync:
     async def test_recv_kexinit_wrong_type_raises(self, connected_transport):
         t = connected_transport
         msg = MagicMock(spec=Message)
-        with patch.object(t, "_recv_message_async", new=AsyncMock(return_value=msg)):
+        with patch.object(
+            t, "_wait_for_message_async", new=AsyncMock(return_value=msg)
+        ):
             with pytest.raises(ProtocolException, match="Expected KEXINIT"):
                 await t._recv_kexinit_async()
 
@@ -412,13 +414,25 @@ class TestPumpAsync:
     async def test_pump_queues_non_channel_message(self, connected_transport):
         t = connected_transport
         msg = MagicMock(spec=Message)
-        msg.msg_type = 1  # Non-zero so it's not mistaken for HandledMessage sentinel
+        msg.msg_type = 91  # CHANNEL_OPEN_CONFIRMATION: someone may be waiting
         with patch.object(
             t, "_recv_packet_async", new=AsyncMock(return_value=b"\x00" * 8)
         ):
             with patch.object(t, "_dispatch_packet", return_value=msg):
                 await t._pump_async()
         assert msg in t._message_queue
+
+    @pytest.mark.asyncio
+    async def test_pump_drops_unawaitable_message(self, connected_transport):
+        t = connected_transport
+        msg = MagicMock(spec=Message)
+        msg.msg_type = 3  # UNIMPLEMENTED: nothing ever waits for it
+        with patch.object(
+            t, "_recv_packet_async", new=AsyncMock(return_value=b"\x00" * 8)
+        ):
+            with patch.object(t, "_dispatch_packet", return_value=msg):
+                await t._pump_async()
+        assert msg not in t._message_queue
 
     @pytest.mark.asyncio
     async def test_pump_handled_sentinel_does_not_queue(self, connected_transport):
@@ -530,24 +544,46 @@ class TestExpectMessageFromTransport:
     async def test_reads_and_queues_non_matching(self, connected_transport):
         t = connected_transport
         msg1 = MagicMock(spec=Message)
-        msg1.msg_type = 1
+        msg1.msg_type = 91
         msg1.recipient_channel = None
         msg1._data = b""
         msg2 = MagicMock(spec=Message)
-        msg2.msg_type = 2
+        msg2.msg_type = 81
         msg2.recipient_channel = None
         msg2._data = b""
 
-        call_count = 0
-
-        async def fake_recv(check_queue=True):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                return msg1
-            return msg2
-
-        with patch.object(t, "_recv_message_async", side_effect=fake_recv):
-            result = await t._expect_message_async(2)
+        with patch.object(
+            t, "_recv_packet_async", new=AsyncMock(return_value=b"\x00" * 8)
+        ):
+            with patch.object(t, "_dispatch_packet", side_effect=[msg1, msg2]):
+                result = await t._expect_message_async(81)
         assert result is msg2
         assert msg1 in t._message_queue
+
+    @pytest.mark.asyncio
+    async def test_finds_message_queued_by_concurrent_reader(self, connected_transport):
+        # A task waiting for a reply must not block on the socket behind a
+        # task that is already reading; it must pick the reply up from the
+        # queue once that reader has dispatched it.
+        t = connected_transport
+        reply = MagicMock(spec=Message)
+        reply.msg_type = 91
+        reply.recipient_channel = 4
+        reply._data = b""
+
+        await t._recv_lock.acquire()  # another task is reading
+
+        async def other_reader_delivers():
+            await asyncio.sleep(0.05)
+            t._enqueue_message(reply)
+            t._notify_packet_dispatched()
+
+        deliver = asyncio.create_task(other_reader_delivers())
+        try:
+            result = await asyncio.wait_for(
+                t._expect_message_async(91, channel_id=4), timeout=2
+            )
+        finally:
+            t._recv_lock.release()
+            await deliver
+        assert result is reply

@@ -37,7 +37,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from spindlex.exceptions import SFTPError
+from spindlex.exceptions import SFTPError, SSHException
 from spindlex.protocol.sftp_constants import (
     SSH_FX_FAILURE,
     SSH_FX_NO_SUCH_FILE,
@@ -81,6 +81,8 @@ def temp_root():
 def mock_channel():
     ch = MagicMock()
     ch.channel_id = 99
+    ch.closed = False
+    ch.eof_received = False
     return ch
 
 
@@ -539,3 +541,17 @@ class TestGetFilePermissions:
         """Default file permissions are 0o644 (line 1398)."""
         result = server.get_file_permissions("/some/path")
         assert result == 0o644
+
+
+def test_process_messages_client_disconnect_is_not_an_error(server, caplog):
+    """A client closing the channel ends the session quietly."""
+    server._channel.eof_received = True
+
+    def recv_side_effect():
+        raise SSHException("Connection closed while waiting for data")
+
+    server._receive_message = recv_side_effect
+    with patch.object(server, "_send_message") as send:
+        server._process_messages()
+    send.assert_not_called()
+    assert not [r for r in caplog.records if r.levelname == "ERROR"]

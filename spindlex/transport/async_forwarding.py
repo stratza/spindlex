@@ -21,6 +21,55 @@ from ..protocol.constants import (
 from ..protocol.utils import read_string, read_uint32, write_string, write_uint32
 
 
+async def _close_ends(
+    channel: Any, writer: asyncio.StreamWriter | None, logger: logging.Logger
+) -> None:
+    """Close both ends after an error so the opposite relay stops too."""
+    try:
+        await channel.close()
+    except Exception as e:
+        logger.debug(f"Forwarding cleanup error: {e}")
+    if writer is not None:
+        writer.close()
+
+
+async def _relay_stream_to_channel(
+    reader: asyncio.StreamReader,
+    channel: Any,
+    logger: logging.Logger,
+    writer: asyncio.StreamWriter | None = None,
+) -> None:
+    """Socket -> channel. At EOF send CHANNEL_EOF (half-close), not CLOSE."""
+    try:
+        while True:
+            data = await reader.read(8192)
+            if not data:
+                break
+            await channel.send(data)
+        await channel.send_eof()
+    except Exception as e:
+        logger.debug(f"Forwarding relay ended: {e}")
+        await _close_ends(channel, writer, logger)
+
+
+async def _relay_channel_to_stream(
+    channel: Any, writer: asyncio.StreamWriter, logger: logging.Logger
+) -> None:
+    """Channel -> socket. At EOF shut down the socket's write side."""
+    try:
+        while True:
+            data = await channel.recv(8192)
+            if not data:
+                break
+            writer.write(data)
+            await writer.drain()
+        if writer.can_write_eof():
+            writer.write_eof()
+    except Exception as e:
+        logger.debug(f"Forwarding relay ended: {e}")
+        await _close_ends(channel, writer, logger)
+
+
 class AsyncForwardingTunnel:
     """
     Represents an asynchronous port forwarding tunnel.
@@ -127,14 +176,15 @@ class AsyncLocalPortForwarder:
 
             tunnel.tasks.extend([relay1, relay2])
 
-            # Wait for either relay to finish
-            done, pending = await asyncio.wait(
-                [relay1, relay2], return_when=asyncio.FIRST_COMPLETED
-            )
-
-            # Cancel remaining relay
-            for task in pending:
-                task.cancel()
+            # Wait for both directions: each relay half-closes its
+            # destination at EOF, so the other direction keeps flowing (a
+            # client that sends a request and shuts down its write side still
+            # gets the reply).
+            await asyncio.gather(relay1, relay2, return_exceptions=True)
+            try:
+                await channel.close()
+            except Exception as e:
+                self._logger.debug(f"Forwarding cleanup error: {e}")
 
         except Exception as e:
             self._logger.error(
@@ -153,34 +203,12 @@ class AsyncLocalPortForwarder:
     async def _relay_stream_to_channel(
         self, reader: asyncio.StreamReader, channel: Any
     ) -> None:
-        try:
-            while True:
-                data = await reader.read(8192)
-                if not data:
-                    break
-                await channel.send(data)
-        except Exception as e:
-            self._logger.debug(f"Forwarding cleanup error: {e}")
-        finally:
-            try:
-                await channel.close()
-            except Exception as e:
-                self._logger.debug(f"Forwarding cleanup error: {e}")
+        await _relay_stream_to_channel(reader, channel, self._logger)
 
     async def _relay_channel_to_stream(
         self, channel: Any, writer: asyncio.StreamWriter
     ) -> None:
-        try:
-            while True:
-                data = await channel.recv(8192)
-                if not data:
-                    break
-                writer.write(data)
-                await writer.drain()
-        except Exception as e:
-            self._logger.debug(f"Forwarding cleanup error: {e}")
-        finally:
-            writer.close()
+        await _relay_channel_to_stream(channel, writer, self._logger)
 
     async def close_tunnel(self, tunnel_id: str) -> None:
         if tunnel_id in self._tunnels:
@@ -274,12 +302,13 @@ class AsyncRemotePortForwarder:
             async with self._transport._state_lock:
                 # We need to assign a local ID. The sender_channel from the remote is its ID.
                 # We use our own next_channel_id for local mapping.
-                local_id = self._transport._next_channel_id
-                self._transport._next_channel_id += 1
+                local_id = self._transport._allocate_channel_id()
                 channel._channel_id = local_id  # Update instance ID
                 channel._remote_channel_id = sender_channel
                 channel._remote_window_size = initial_window_size
                 channel._remote_max_packet_size = maximum_packet_size
+                channel._local_window_size = DEFAULT_WINDOW_SIZE
+                channel._local_max_packet_size = DEFAULT_MAX_PACKET_SIZE
                 self._transport._channels[local_id] = channel
 
             # Confirm channel open
@@ -297,16 +326,9 @@ class AsyncRemotePortForwarder:
             reader, writer = await asyncio.open_connection(*tunnel.local_addr)
 
             # Start relay
-            relay1 = asyncio.create_task(
-                self._relay_stream_to_channel(reader, channel, writer)
-            )
-            relay2 = asyncio.create_task(self._relay_channel_to_stream(channel, writer))
-
-            tunnel.tasks.extend([relay1, relay2])
-            relay1.add_done_callback(
-                lambda t: tunnel.tasks.remove(t) if t in tunnel.tasks else None
-            )
-            relay2.add_done_callback(
+            relay = asyncio.create_task(self._run_relays(reader, writer, channel))
+            tunnel.tasks.append(relay)
+            relay.add_done_callback(
                 lambda t: tunnel.tasks.remove(t) if t in tunnel.tasks else None
             )
 
@@ -332,36 +354,27 @@ class AsyncRemotePortForwarder:
         channel: Any,
         writer: asyncio.StreamWriter | None = None,
     ) -> None:
-        try:
-            while True:
-                data = await reader.read(8192)
-                if not data:
-                    break
-                await channel.send(data)
-        except Exception as e:
-            self._logger.debug(f"Forwarding cleanup error: {e}")
-        finally:
-            try:
-                await channel.close()
-            except Exception as e:
-                self._logger.debug(f"Forwarding cleanup error: {e}")
-            if writer is not None:
-                writer.close()
+        await _relay_stream_to_channel(reader, channel, self._logger, writer)
 
     async def _relay_channel_to_stream(
         self, channel: Any, writer: asyncio.StreamWriter
     ) -> None:
+        await _relay_channel_to_stream(channel, writer, self._logger)
+
+    async def _run_relays(
+        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter, channel: Any
+    ) -> None:
+        """Relay both directions until both reach EOF, then close."""
+        await asyncio.gather(
+            self._relay_stream_to_channel(reader, channel, writer),
+            self._relay_channel_to_stream(channel, writer),
+            return_exceptions=True,
+        )
         try:
-            while True:
-                data = await channel.recv(8192)
-                if not data:
-                    break
-                writer.write(data)
-                await writer.drain()
+            await channel.close()
         except Exception as e:
             self._logger.debug(f"Forwarding cleanup error: {e}")
-        finally:
-            writer.close()
+        writer.close()
 
     async def close_tunnel(self, tunnel_id: str) -> None:
         if tunnel_id in self._tunnels:

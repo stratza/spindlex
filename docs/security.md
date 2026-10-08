@@ -91,7 +91,7 @@ Always prefer public key authentication over password authentication.
 
 *   **Use Modern Key Types**: Prefer `Ed25519` keys for new deployments. They offer better security and performance than RSA or ECDSA.
 *   **Use Strong Passphrases**: Always protect your private keys with a strong passphrase.
-*   **Secure File Permissions**: Ensure your private key files have restricted permissions (e.g., `chmod 600` on Unix systems).
+*   **Secure File Permissions**: Ensure your private key files have restricted permissions (e.g., `chmod 600` on Unix systems). `save_to_file()` creates key files with mode `0600`; keys written by SpindleX 1.0.2 or earlier may need a manual `chmod 600`.
 
 ### 2. Host Key Verification
 
@@ -100,6 +100,7 @@ Host key verification is critical to prevent man-in-the-middle (MITM) attacks.
 *   **Avoid `AutoAddPolicy` in Production**: `AutoAddPolicy` is for disposable tests and controlled development environments only. It trusts first-seen host keys and can hide MITM attacks.
 *   **Use `RejectPolicy` (Default)**: Use the default `RejectPolicy` and manage your `known_hosts` file or `HostKeyStorage` securely.
 *   **Verify Host Keys**: Always verify the server's host key fingerprint before connecting for the first time.
+*   **Revoke and remove compromised keys**: a key marked `@revoked` in `known_hosts` is refused whatever the missing-host-key policy, and `HostKeyStorage.remove()` followed by `save()` deletes the entry from the file (hashed entries included).
 
 ### 3. Transport Security
 
@@ -111,14 +112,14 @@ Host key verification is critical to prevent man-in-the-middle (MITM) attacks.
 
 *   **Sensitive Data**: Never hardcode passwords or private keys in your source code. Use environment variables or a secure vault.
 *   **Input Sanitization**: If you are building a server that executes commands based on user input, rigorously sanitize all inputs to prevent command injection.
-*   **Logging**: Be careful not to log sensitive information like passwords or private key data. SpindleX's built-in logging sanitizes most sensitive data by default.
+*   **Logging**: Be careful not to log sensitive information like passwords or private key data. SpindleX's built-in logging sanitizes most sensitive data by default; `configure_sanitizing_logging()` applies to records from every logger under the configured one, including those propagated from `spindlex.*` child loggers.
 
 ### 5. Running a Server
 
 When you build a server with `SSHServer`/`SSHServerManager` or expose files with `SFTPServer`, SpindleX enforces several protections you should rely on and complement:
 
-*   **Authentication gates the connection protocol**: the server refuses channel opens, global requests, and channel operations until authentication has succeeded. Your `check_channel_*` callbacks only run for authenticated sessions.
-*   **Brute-force and resource limits**: the server caps failed authentication attempts per connection, drops connections that do not authenticate within the login grace period, and counts connections at accept time. Keep `set_auth_timeout()` / `set_connection_timeout()` and the maximum-connections limit at sensible values for your environment.
+*   **Authentication gates the connection protocol**: the server only accepts authentication after key exchange and the client's `ssh-userauth` service request, and refuses channel opens, global requests, and channel operations until authentication has succeeded. Your `check_channel_*` callbacks only run for authenticated sessions.
+*   **Brute-force and resource limits**: the server caps failed authentication attempts per connection, closes connections that have not authenticated within the login grace period (`set_auth_timeout()`, a hard deadline however slowly the client sends), and counts connections at accept time. Keep `set_auth_timeout()` / `set_connection_timeout()` and the maximum-connections limit at sensible values for your environment.
 *   **Restrict the SFTP root**: always pass an explicit, restricted `root_path` to `SFTPServer` - never the filesystem root (`/`), which exposes everything the process can read. SpindleX resolves client paths within the root and does not follow a symlink in the final path component for `lstat`/`remove`/`rename`.
 *   **Override the SFTP access checks**: `check_file_access()` and `check_directory_access()` default to allowing everything. Override them to enforce your own authorization policy.
 

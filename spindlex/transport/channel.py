@@ -13,7 +13,11 @@ from collections import deque
 from typing import Any, Optional, Union
 
 from ..exceptions import ChannelException, ProtocolException
-from ..protocol.constants import DEFAULT_WINDOW_SIZE, SSH_STRING_ENCODING
+from ..protocol.constants import (
+    DEFAULT_WINDOW_SIZE,
+    SSH_EXTENDED_DATA_STDERR,
+    SSH_STRING_ENCODING,
+)
 from ..protocol.utils import read_boolean, read_string, read_uint32
 
 
@@ -62,11 +66,29 @@ class Channel:
         self._eof_received = False
         self._eof_sent = False
 
+        # Close handshake (RFC 4254 s5.3): each side sends exactly one
+        # SSH_MSG_CHANNEL_CLOSE, and the channel number may only be reused once
+        # both have been exchanged.
+        self._close_sent = False
+        self._close_received = False
+        # Set by the transport while a peer's channel request is being handled,
+        # so a close() from inside the request callback is sent after the reply.
+        self._handling_request = False
+        self._close_deferred = False
+        # A window adjust is being sent by another reader of this channel.
+        self._window_adjust_pending = False
+
         # Request handling
         self._request_success: Optional[bool] = None
 
-        # Threading
+        # Threading.
+        # Lock order: the transport's reader dispatches incoming packets while
+        # holding the transport lock and then takes this channel's ``_lock``
+        # (transport -> channel). So this channel must never call into the
+        # transport while holding ``_lock``; outgoing operations are serialised
+        # by ``_send_lock`` instead, which the transport never takes.
         self._lock = threading.RLock()
+        self._send_lock = threading.Lock()
         self._data_event = threading.Event()
         self._window_event = threading.Event()
         self._request_event = threading.Event()
@@ -126,6 +148,39 @@ class Channel:
         Raises:
             ChannelException: If send operation fails
         """
+        return self._send_chunk(data, timeout, None)
+
+    def send_stderr(
+        self, data: Union[bytes, str], timeout: Optional[float] = None
+    ) -> int:
+        """
+        Send data on the stderr stream (SSH_MSG_CHANNEL_EXTENDED_DATA).
+
+        Typically used by servers for a command's error output. Like send(),
+        sends at most one packet and returns the number of bytes sent.
+        """
+        return self._send_chunk(data, timeout, SSH_EXTENDED_DATA_STDERR)
+
+    def sendall_stderr(
+        self, data: Union[bytes, str], timeout: Optional[float] = None
+    ) -> None:
+        """Send all of ``data`` on the stderr stream."""
+        if isinstance(data, str):
+            data = data.encode(SSH_STRING_ENCODING)
+        total_sent = 0
+        while total_sent < len(data):
+            sent = self.send_stderr(data[total_sent:], timeout=timeout)
+            if sent <= 0:
+                raise ChannelException("Failed to send data")
+            total_sent += sent
+
+    def _send_chunk(
+        self,
+        data: Union[bytes, str],
+        timeout: Optional[float],
+        data_type: Optional[int],
+    ) -> int:
+        """Send one packet's worth of data (extended data if data_type set)."""
         if not data:
             return 0
 
@@ -138,48 +193,43 @@ class Channel:
         # Use effective timeout
         effective_timeout = timeout if timeout is not None else self._timeout
 
-        with self._lock:
-            if self._closed:
-                raise ChannelException("Channel is closed")
+        deadline = (
+            start_time + effective_timeout if effective_timeout is not None else None
+        )
 
-            if self._eof_sent:
-                raise ChannelException("EOF already sent on channel")
+        with self._send_lock:
+            while True:
+                with self._lock:
+                    if self._closed:
+                        raise ChannelException("Channel is closed")
 
-            if self._remote_channel_id is None:
-                raise ChannelException("Channel not properly opened")
+                    if self._eof_sent:
+                        raise ChannelException("EOF already sent on channel")
 
-            # Wait for window space if it's empty
-            while self._remote_window_size <= 0:
-                # Check timeout
-                if effective_timeout is not None:
-                    elapsed = time.monotonic() - start_time
-                    if elapsed >= effective_timeout:
+                    if self._remote_channel_id is None:
+                        raise ChannelException("Channel not properly opened")
+
+                    if self._remote_window_size > 0:
+                        # Send at most one packet (to match standard send() behavior)
+                        can_send = min(
+                            len(data),
+                            self._remote_window_size,
+                            self._remote_max_packet_size,
+                        )
+                        break
+
+                    # Check timeout
+                    if deadline is not None and time.monotonic() >= deadline:
                         raise ChannelException("Timeout waiting for window space")
-                # Release lock and wait for window adjust or close
-                self._window_event.clear()
-                self._lock.release()
+                    self._window_event.clear()
+
+                # Wait for a window adjust (or close) without holding _lock
                 try:
-                    # If we're waiting for window space, we MUST pump the transport
-                    # to process any incoming WINDOW_ADJUST messages from the server.
-                    # Otherwise, we will wait forever in a single-threaded environment.
-                    if not self._window_event.wait(timeout=0.1):
-                        self._transport._pump()
+                    self._wait_for_transport(self._window_event, deadline)
                 except socket.timeout:
                     pass  # Retry after window adjust
                 except Exception as e:
                     raise ChannelException(f"Transport error during send: {e}") from e
-                finally:
-                    self._lock.acquire()
-
-                # Re-check channel state after waking up
-                if self._closed:
-                    raise ChannelException("Channel is closed while waiting")
-
-            # We have some window space
-            # Send at most one packet (to match standard send() behavior)
-            can_send = min(
-                len(data), self._remote_window_size, self._remote_max_packet_size
-            )
 
             if can_send <= 0:
                 return 0
@@ -187,16 +237,20 @@ class Channel:
             chunk = data[:can_send]
 
             try:
-                # Send data through transport
-                self._transport._send_channel_data(self._channel_id, chunk)
-
-                # Update remote window size
-                self._remote_window_size -= len(chunk)
-
-                return len(chunk)
-
+                # Send data through transport (window can only have grown
+                # since it was checked: other senders are excluded).
+                if data_type is None:
+                    self._transport._send_channel_data(self._channel_id, chunk)
+                else:
+                    self._transport._send_channel_extended_data(
+                        self._channel_id, chunk, data_type
+                    )
             except Exception as e:
                 raise ChannelException(f"Failed to send data: {e}") from e
+
+            with self._lock:
+                self._remote_window_size -= len(chunk)
+            return len(chunk)
 
     def sendall(self, data: Union[bytes, str], timeout: Optional[float] = None) -> None:
         """
@@ -234,6 +288,7 @@ class Channel:
 
         start_time = time.monotonic()
         while True:
+            result: Optional[bytes] = None
             with self._lock:
                 # Check if we have data in buffer
                 if self._recv_buffer:
@@ -243,19 +298,21 @@ class Channel:
                     if len(data_chunk) <= nbytes:
                         # Return entire chunk
                         result = bytes(data_chunk)
-                        self._adjust_window(len(result))
-                        return result
                     else:
                         # Split chunk and put remainder back
-                        result = data_chunk[:nbytes]
-                        remainder = data_chunk[nbytes:]
-                        self._recv_buffer.appendleft(remainder)
-                        self._adjust_window(len(result))
-                        return bytes(result)
+                        result = bytes(data_chunk[:nbytes])
+                        self._recv_buffer.appendleft(data_chunk[nbytes:])
+            if result is not None:
+                self._adjust_window(len(result))
+                return result
+
+            with self._lock:
+                if self._recv_buffer:
+                    continue  # data arrived since the check above
 
                 # No data available in buffer
-                if self._eof_received or not self._transport.active:
-                    return b""  # EOF reached or transport inactive
+                if self._eof_received or self._closed or not self._transport.active:
+                    return b""  # EOF, channel closed, or transport inactive
 
                 # Check total timeout
                 if self._timeout is not None:
@@ -266,48 +323,9 @@ class Channel:
                 # Clear event before we start waiting
                 self._data_event.clear()
 
-            # If a background thread is pumping the transport (e.g. during
-            # rekey or in async mode), wait for it to deliver data via the
-            # event.  Otherwise drive _pump() directly - without this,
-            # sync-mode recv() pays 100ms of dead wait time per packet.
-            has_bg_thread = getattr(self._transport, "_kex_thread", None) is not None
-
-            if has_bg_thread:
-                wait_timeout = 0.1
-                if self._timeout is not None:
-                    elapsed = time.monotonic() - start_time
-                    wait_timeout = max(0, min(0.1, self._timeout - elapsed))
-                self._data_event.wait(timeout=wait_timeout)
-                continue
-
+            deadline = start_time + self._timeout if self._timeout is not None else None
             try:
-                # When a channel timeout is active, bound the socket wait via
-                # select() so the deadline is honoured.  When there is no
-                # channel timeout, _pump() blocks on socket.recv() until a
-                # packet arrives - which is what we want.
-                if self._timeout is not None:
-                    elapsed = time.monotonic() - start_time
-                    remaining = self._timeout - elapsed
-                    if remaining <= 0:
-                        raise ChannelException("Timeout receiving data")
-
-                    has_buffered = bool(getattr(self._transport, "_packet_buffer", b""))
-                    if not has_buffered:
-                        import select as _select
-
-                        sock = getattr(self._transport, "_socket", None)
-                        if sock is not None:
-                            try:
-                                r, _, _ = _select.select(
-                                    [sock], [], [], min(1.0, remaining)
-                                )
-                                if not r:
-                                    continue  # no data yet, loop back
-                            except Exception as e:
-                                self._logger.debug(
-                                    f"Pump error (expected on close): {e}"
-                                )  # fall through to _pump()
-                self._transport._pump()
+                self._wait_for_transport(self._data_event, deadline)
             except socket.timeout:
                 pass  # Loop back so the channel-timeout check at the top fires.
 
@@ -471,23 +489,15 @@ class Channel:
         if self._exit_status is not None:
             return self.get_exit_status()
 
-        has_bg_thread = getattr(self._transport, "_kex_thread", None) is not None
-
-        if has_bg_thread:
-            signaled = self._exit_status_event.wait(timeout=effective_timeout)
-            if not signaled and self._exit_status is None:
-                raise ChannelException("Timeout waiting for exit status")
-            return self.get_exit_status()
-
-        # No background receive thread - pump until exit status arrives.
         start_time = time.monotonic()
+        deadline = (
+            start_time + effective_timeout if effective_timeout is not None else None
+        )
         while self._exit_status is None and not self._closed:
-            if effective_timeout is not None:
-                elapsed = time.monotonic() - start_time
-                if elapsed >= effective_timeout:
-                    raise ChannelException("Timeout waiting for exit status")
+            if deadline is not None and time.monotonic() >= deadline:
+                raise ChannelException("Timeout waiting for exit status")
             try:
-                self._transport._pump()
+                self._wait_for_transport(self._exit_status_event, deadline)
             except Exception:
                 break
 
@@ -528,18 +538,19 @@ class Channel:
         Raises:
             ChannelException: If request fails
         """
-        with self._lock:
-            if self._closed:
-                raise ChannelException("Channel is closed")
+        with self._send_lock:
+            with self._lock:
+                if self._closed:
+                    raise ChannelException("Channel is closed")
 
-            if self._remote_channel_id is None:
-                raise ChannelException("Channel not properly opened")
+                if self._remote_channel_id is None:
+                    raise ChannelException("Channel not properly opened")
 
-            try:
                 if want_reply:
                     self._request_success = None
                     self._request_event.clear()
 
+            try:
                 self._transport._send_channel_request(
                     self._channel_id, request_type, want_reply, data
                 )
@@ -566,18 +577,9 @@ class Channel:
                         "Timeout waiting for channel request response"
                     )
 
-            has_bg_thread = getattr(self._transport, "_kex_thread", None) is not None
-
-            if has_bg_thread:
-                wait_timeout = 0.1
-                if self._timeout is not None:
-                    elapsed = time.monotonic() - start_time
-                    wait_timeout = max(0, min(0.1, self._timeout - elapsed))
-                self._request_event.wait(timeout=wait_timeout)
-                continue
-
+            deadline = start_time + self._timeout if self._timeout is not None else None
             try:
-                self._transport._pump()
+                self._wait_for_transport(self._request_event, deadline)
             except Exception as e:
                 if "timeout" not in str(e).lower():
                     raise ChannelException(
@@ -591,21 +593,23 @@ class Channel:
         Raises:
             ChannelException: If EOF send fails
         """
-        with self._lock:
-            if self._closed:
-                raise ChannelException("Channel is closed")
+        with self._send_lock:
+            with self._lock:
+                if self._closed:
+                    raise ChannelException("Channel is closed")
 
-            if self._eof_sent:
-                return  # Already sent
+                if self._eof_sent:
+                    return  # Already sent
 
-            if self._remote_channel_id is None:
-                raise ChannelException("Channel not properly opened")
+                if self._remote_channel_id is None:
+                    raise ChannelException("Channel not properly opened")
 
             try:
                 self._transport._send_channel_eof(self._channel_id)
-                self._eof_sent = True
             except Exception as e:
                 raise ChannelException(f"Failed to send EOF: {e}") from e
+            with self._lock:
+                self._eof_sent = True
 
     def recv_stderr(self, nbytes: int) -> bytes:
         """
@@ -625,10 +629,8 @@ class Channel:
 
         start_time = time.monotonic()
         while True:
+            result: Optional[bytes] = None
             with self._lock:
-                if self._closed:
-                    raise ChannelException("Channel is closed")
-
                 # Check if we have stderr data in buffer
                 if self._stderr_buffer:
                     # Get data from buffer
@@ -637,18 +639,21 @@ class Channel:
                     if len(data_chunk) <= nbytes:
                         # Return entire chunk
                         result = bytes(data_chunk)
-                        self._adjust_window(len(result))
-                        return result
                     else:
                         # Split chunk and put remainder back
-                        result = data_chunk[:nbytes]
-                        remainder = data_chunk[nbytes:]
-                        self._stderr_buffer.appendleft(remainder)
-                        self._adjust_window(len(result))
-                        return bytes(result)
+                        result = bytes(data_chunk[:nbytes])
+                        self._stderr_buffer.appendleft(data_chunk[nbytes:])
+            if result is not None:
+                self._adjust_window(len(result))
+                return result
 
-                # No stderr data available in buffer
-                if self._eof_received:
+            with self._lock:
+                if self._stderr_buffer:
+                    continue  # data arrived since the check above
+
+                # No stderr data available in buffer. Data that arrived before
+                # the peer closed the channel is still returned above.
+                if self._eof_received or self._closed or not self._transport.active:
                     return b""  # EOF reached and buffer is empty
 
                 # Check total timeout
@@ -660,61 +665,102 @@ class Channel:
                 # Clear event before we start waiting
                 self._data_event.clear()
 
-            # Same fast path as recv(): in sync mode, drive _pump() directly
-            # rather than waiting on _data_event (which nothing else sets).
-            has_bg_thread = getattr(self._transport, "_kex_thread", None) is not None
-
-            if has_bg_thread:
-                wait_timeout = 0.1
-                if self._timeout is not None:
-                    elapsed = time.monotonic() - start_time
-                    wait_timeout = max(0, min(0.1, self._timeout - elapsed))
-                self._data_event.wait(timeout=wait_timeout)
-                continue
-
+            deadline = start_time + self._timeout if self._timeout is not None else None
             try:
-                if self._timeout is not None:
-                    elapsed = time.monotonic() - start_time
-                    remaining = self._timeout - elapsed
-                    if remaining <= 0:
-                        raise ChannelException("Timeout receiving stderr data")
-
-                    has_buffered = bool(getattr(self._transport, "_packet_buffer", b""))
-                    if not has_buffered:
-                        import select as _select
-
-                        sock = getattr(self._transport, "_socket", None)
-                        if sock is not None:
-                            try:
-                                r, _, _ = _select.select(
-                                    [sock], [], [], min(1.0, remaining)
-                                )
-                                if not r:
-                                    continue
-                            except Exception as e:
-                                self._logger.debug(f"Select error: {e}")
-
-                self._transport._pump()
+                self._wait_for_transport(self._data_event, deadline)
             except Exception as e:
                 if "timeout" not in str(e).lower():
                     raise
 
     def close(self) -> None:
-        """Close channel and cleanup resources."""
+        """Close channel and cleanup resources.
+
+        Sends SSH_MSG_CHANNEL_CLOSE unless it was already sent (for example as
+        the reply to the peer's close).
+        """
         with self._lock:
-            if not self._closed:
-                self._closed = True
-                # Notify transport to close channel
-                self._transport._close_channel(self._channel_id)
+            self._closed = True
+            already_sent = self._close_sent
+            self._data_event.set()
+            self._window_event.set()
+        # Call into the transport without holding the channel lock: the
+        # transport's reader takes the transport lock before the channel's.
+        if not already_sent:
+            self._transport._close_channel(self._channel_id)
+
+    def _wait_for_transport(
+        self, event: threading.Event, deadline: Optional[float]
+    ) -> None:
+        """Wait until ``event`` may have been set, reading the transport if no
+        other thread is.
+
+        Only one thread can read the socket at a time. If another thread holds
+        the transport's read lock (a server connection loop, another channel's
+        recv(), ...) it dispatches incoming packets for every channel, so this
+        thread waits on its own event instead of queueing up behind a reader
+        that may be blocked in socket.recv() indefinitely.
+        """
+        transport = self._transport
+        remaining: Optional[float] = None
+        if deadline is not None:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return
+        slice_ = 0.1 if remaining is None else min(0.1, remaining)
+
+        # A key exchange is being driven by a background thread; it delivers
+        # channel traffic as it reads.
+        if getattr(transport, "_kex_thread", None) is not None:
+            event.wait(timeout=slice_)
+            return
+
+        read_lock = getattr(transport, "_read_lock", None)
+        if read_lock is not None and not read_lock.acquire(blocking=False):
+            event.wait(timeout=slice_)
+            return
+        try:
+            if remaining is not None and not getattr(transport, "_packet_buffer", b""):
+                # Bound the socket wait so the caller's deadline is honoured.
+                sock = getattr(transport, "_socket", None)
+                if sock is not None:
+                    import select as _select
+
+                    try:
+                        readable, _, _ = _select.select(
+                            [sock], [], [], min(1.0, remaining)
+                        )
+                    except (OSError, ValueError, TypeError) as e:
+                        self._logger.debug(f"Select error (expected on close): {e}")
+                        readable = [sock]
+                    if not readable:
+                        return
+            transport._pump()
+        finally:
+            if read_lock is not None:
+                read_lock.release()
 
     def shutdown(self, how: int) -> None:
         """
-        Shutdown channel (for socket compatibility).
+        Shutdown channel (socket-compatible).
 
         Args:
-            how: Shutdown type (ignored)
+            how: ``socket.SHUT_WR`` sends EOF (the peer can still send to
+                us), ``socket.SHUT_RD`` stops delivering further data to this
+                end, ``socket.SHUT_RDWR`` closes the channel.
         """
-        self.close()
+        if how == socket.SHUT_WR:
+            self.send_eof()
+        elif how == socket.SHUT_RD:
+            with self._lock:
+                self._eof_received = True
+                self._recv_buffer.clear()
+                self._data_event.set()
+        else:
+            self.close()
+
+    def shutdown_write(self) -> None:
+        """Send EOF; the peer may still send data to us."""
+        self.shutdown(socket.SHUT_WR)
 
     def __enter__(self) -> "Channel":
         return self
@@ -729,16 +775,26 @@ class Channel:
         Args:
             bytes_consumed: Number of bytes consumed from buffer
         """
+        bytes_to_add = 0
         with self._lock:
             self._local_window_size -= bytes_consumed
-
-            # Send window adjust if needed.  _send_channel_window_adjust
-            # increments _local_window_size itself - do not double-count here.
-            if self._local_window_size < DEFAULT_WINDOW_SIZE // 2:
+            if (
+                self._local_window_size < DEFAULT_WINDOW_SIZE // 2
+                and not self._window_adjust_pending
+            ):
                 bytes_to_add = DEFAULT_WINDOW_SIZE - self._local_window_size
-                self._transport._send_channel_window_adjust(
-                    self._channel_id, bytes_to_add
-                )
+                self._window_adjust_pending = True
+
+        if not bytes_to_add:
+            return
+        # Send without holding _lock (see the lock-order note in __init__).
+        # _send_channel_window_adjust increments _local_window_size itself -
+        # do not double-count here.
+        try:
+            self._transport._send_channel_window_adjust(self._channel_id, bytes_to_add)
+        finally:
+            with self._lock:
+                self._window_adjust_pending = False
                 # Credit the same amount back to the inbound-overrun accounting.
                 if self._inbound_window_remaining is not None:
                     self._inbound_window_remaining += bytes_to_add
@@ -750,12 +806,15 @@ class Channel:
         Args:
             data: Received data
         """
+        overrun = False
         with self._lock:
             if not self._closed:
-                if self._check_inbound_window(len(data)):
-                    return
-                self._recv_buffer.append(data)
-                self._data_event.set()
+                overrun = self._check_inbound_window(len(data))
+                if not overrun:
+                    self._recv_buffer.append(data)
+                    self._data_event.set()
+        if overrun:
+            self._close_after_overrun()
 
     def _check_inbound_window(self, nbytes: int) -> bool:
         """Account for inbound bytes against the advertised window.
@@ -785,6 +844,13 @@ class Channel:
             return True
         return False
 
+    def _close_after_overrun(self) -> None:
+        """Tell the peer the channel is closed after it overran our window."""
+        try:
+            self._transport._close_channel(self._channel_id)
+        except Exception as e:  # best effort; the channel is unusable anyway
+            self._logger.debug(f"Close after window overrun failed: {e}")
+
     def _handle_extended_data(self, data_type: int, data: bytes) -> None:
         """
         Handle incoming extended data (stderr) from transport.
@@ -793,12 +859,15 @@ class Channel:
             data_type: Extended data type
             data: Received data
         """
+        overrun = False
         with self._lock:
             if not self._closed and data_type == 1:  # SSH_EXTENDED_DATA_STDERR
-                if self._check_inbound_window(len(data)):
-                    return
-                self._stderr_buffer.append(data)
-                self._data_event.set()
+                overrun = self._check_inbound_window(len(data))
+                if not overrun:
+                    self._stderr_buffer.append(data)
+                    self._data_event.set()
+        if overrun:
+            self._close_after_overrun()
 
     def _handle_eof(self) -> None:
         """Handle EOF from remote side."""
@@ -810,8 +879,10 @@ class Channel:
         """Handle close from remote side."""
         with self._lock:
             self._closed = True
+            self._close_received = True
             self._data_event.set()
             self._window_event.set()
+            self._request_event.set()
 
     def _handle_window_adjust(self, bytes_to_add: int) -> None:
         """

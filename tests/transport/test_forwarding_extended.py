@@ -23,6 +23,7 @@ Covers:
 from __future__ import annotations
 
 import socket
+import struct
 import threading
 from unittest.mock import MagicMock, patch
 
@@ -431,7 +432,7 @@ class TestRemotePortForwarder:
     def test_create_tunnel_request_denied(self):
         """Server denies tcpip-forward → SSHException."""
         transport = make_mock_transport()
-        transport._send_global_request.return_value = False
+        transport._send_global_request_with_reply.return_value = None
         forwarder = RemotePortForwarder(transport)
 
         with pytest.raises(SSHException, match="denied by server"):
@@ -440,7 +441,9 @@ class TestRemotePortForwarder:
     def test_create_tunnel_exception_cleanup(self):
         """Exception during creation cleans up tunnel (lines 477-484)."""
         transport = make_mock_transport()
-        transport._send_global_request.side_effect = RuntimeError("transport error")
+        transport._send_global_request_with_reply.side_effect = RuntimeError(
+            "transport error"
+        )
         forwarder = RemotePortForwarder(transport)
 
         with pytest.raises(
@@ -477,12 +480,26 @@ class TestRemotePortForwarder:
         forwarder.close_tunnel("nonexistent_tunnel")  # should not raise
 
     def test_send_tcpip_forward_request_exception(self):
-        """Exception in _send_global_request returns False (lines 510-512)."""
+        """An error sending the request is reported as a refusal (None)."""
         transport = make_mock_transport()
-        transport._send_global_request.side_effect = Exception("error")
+        transport._send_global_request_with_reply.side_effect = Exception("error")
         forwarder = RemotePortForwarder(transport)
         result = forwarder._send_tcpip_forward_request("127.0.0.1", 22)
-        assert result is False
+        assert result is None
+
+    def test_port_zero_uses_server_allocated_port(self):
+        """tcpip-forward on port 0 tracks the port from the server's reply."""
+        transport = make_mock_transport()
+        reply = MagicMock()
+        reply._data = bytearray(struct.pack(">I", 41234))
+        transport._send_global_request_with_reply.return_value = reply
+        forwarder = RemotePortForwarder(transport)
+
+        tunnel_id = forwarder.create_tunnel(0, "127.0.0.1", 9010, "127.0.0.1")
+
+        assert forwarder._tunnels[tunnel_id].remote_addr == ("127.0.0.1", 41234)
+        assert forwarder.has_forward(("127.0.0.1", 41234))
+        assert not forwarder.has_forward(("127.0.0.1", 41235))
 
     def test_send_cancel_tcpip_forward_request_exception(self):
         """Exception in cancel request returns False (lines 695-697)."""

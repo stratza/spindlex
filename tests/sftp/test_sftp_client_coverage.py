@@ -172,7 +172,7 @@ class TestSFTPFileWritePipelineDrain:
     def test_flush_write_queue_success(self):
         """_flush_write_queue drains queue successfully."""
         f, client = _make_sftp_file(pipeline_depth=32)
-        f._offset = 0
+        f._offset = 15  # write() advances the position when it sends
         f._write_queue = [(1, 10), (2, 5)]
         client._receive_message_for_id.return_value = _make_ok_status()
         f._flush_write_queue()
@@ -446,6 +446,9 @@ class TestSFTPClientRecursive:
             return a
 
         client.stat = mock_stat
+        file_attrs = SFTPAttributes()
+        file_attrs.st_mode = stat_module.S_IFREG | 0o644
+        client.lstat = MagicMock(return_value=file_attrs)
         client.listdir = MagicMock(return_value=["file.txt"])
         client.get = MagicMock()
 
@@ -764,3 +767,38 @@ class TestSFTPClientOpenUnexpected:
         )
         with pytest.raises(SFTPError):
             client.open("/file.txt", "r")
+
+
+class TestRecursiveDownloadSymlinks:
+    def test_symlinked_directory_is_not_followed(self, tmp_path):
+        """A link pointing back up the tree must not recurse forever."""
+        import stat as stat_module
+
+        client, _ = _make_sftp_client()
+        dir_attrs = SFTPAttributes()
+        dir_attrs.st_mode = stat_module.S_IFDIR | 0o755
+        link_attrs = SFTPAttributes()
+        link_attrs.st_mode = stat_module.S_IFLNK | 0o777
+        client.stat = MagicMock(return_value=dir_attrs)  # everything is a dir
+        client.lstat = MagicMock(return_value=link_attrs)  # ...via a symlink
+        client.listdir = MagicMock(return_value=["loop"])
+        client.get = MagicMock()
+
+        client.get_recursive("/remote/dir", str(tmp_path / "out"))
+
+        client.listdir.assert_called_once_with("/remote/dir")
+        client.get.assert_not_called()
+
+    def test_depth_limit(self, tmp_path):
+        import stat as stat_module
+
+        from spindlex.exceptions import SFTPError
+
+        client, _ = _make_sftp_client()
+        dir_attrs = SFTPAttributes()
+        dir_attrs.st_mode = stat_module.S_IFDIR | 0o755
+        client.stat = MagicMock(return_value=dir_attrs)
+        client.lstat = MagicMock(return_value=dir_attrs)
+        client.listdir = MagicMock(return_value=["d"])
+        with pytest.raises(SFTPError, match="too deep"):
+            client.get_recursive("/r", str(tmp_path / "out"))

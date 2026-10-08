@@ -21,8 +21,8 @@ from ..protocol.constants import (
     AUTH_KEYBOARD_INTERACTIVE,
     DEFAULT_MAX_PACKET_SIZE,
     DEFAULT_WINDOW_SIZE,
+    MAX_CHANNELS,
     MAX_PACKET_SIZE,
-    MAX_QUEUE_SIZE,
     MIN_PACKET_SIZE,
     MSG_CHANNEL_OPEN_CONFIRMATION,
     MSG_CHANNEL_OPEN_FAILURE,
@@ -92,6 +92,10 @@ class AsyncTransport(Transport):
         self._recv_lock = asyncio.Lock()
         self._state_lock = asyncio.Lock()
         self._is_async = True
+        # Set (and replaced) each time a packet has been dispatched, so tasks
+        # that find another task reading the socket can wait for it to deliver
+        # instead of queueing behind it. Created lazily on the event loop.
+        self._packet_event: asyncio.Event | None = None
 
     async def connect_existing(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
@@ -175,6 +179,20 @@ class AsyncTransport(Transport):
         if not self._loop or not self._loop.is_running():
             return super()._send_message(message)
 
+        try:
+            running_loop: asyncio.AbstractEventLoop | None = asyncio.get_running_loop()
+        except RuntimeError:
+            running_loop = None
+        if running_loop is self._loop:
+            # Called synchronously on the event loop thread - typically a
+            # handler inside _dispatch_packet replying to the peer (keepalive
+            # global requests, channel requests, channel close). Waiting for
+            # the result here would block the loop that has to run the send,
+            # so schedule it instead; _send_lock keeps sends in order.
+            task = self._loop.create_task(self._send_message_async(message))
+            task.add_done_callback(self._log_scheduled_send_failure)
+            return
+
         # Use run_coroutine_threadsafe to schedule and wait for the result
         # This ensures we have backpressure and catch exceptions.
         # This must be called from a thread OTHER than the event loop thread.
@@ -190,6 +208,13 @@ class AsyncTransport(Transport):
                 f"Failed to send message via async bridge: {e}"
             ) from e
 
+    def _log_scheduled_send_failure(self, task: asyncio.Task) -> None:
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is not None:
+            self._logger.debug(f"Scheduled send failed: {exc}")
+
     def _recv_message(self, allowed_types: list[int] | None = None) -> Message:
         """Bridge sync calls to async recv."""
         if not self._loop:
@@ -201,7 +226,8 @@ class AsyncTransport(Transport):
         except RuntimeError:
             # For debugging the 'bytes' error
             fut = asyncio.run_coroutine_threadsafe(
-                self._recv_message_async(), self._loop
+                self._wait_for_message_async(None, None, self._is_kex_caller()),
+                self._loop,
             )
             return fut.result()
 
@@ -221,14 +247,16 @@ class AsyncTransport(Transport):
             if not self._loop:
                 raise TransportException("Event loop not available")
             fut = asyncio.run_coroutine_threadsafe(
-                self._expect_message_async(*allowed_types, channel_id=channel_id),
+                self._wait_for_message_async(
+                    tuple(allowed_types), channel_id, self._is_kex_caller()
+                ),
                 self._loop,
             )
             return fut.result()
 
     # --- Async Implementation of Packet I/O ---
 
-    def _recv_bytes(self, length: int) -> bytes:
+    def _recv_bytes(self, length: int, mid_packet: bool = False) -> bytes:
         """Bridge sync recv_bytes to async reader."""
         if not self._reader or not self._loop:
             raise TransportException("Transport not initialized with async streams")
@@ -382,82 +410,125 @@ class AsyncTransport(Transport):
                 f"Connection closed while reading packet: {e}"
             ) from e
 
+    def _is_kex_caller(self) -> bool:
+        """Whether the calling thread is the one driving a key exchange."""
+        return self._kex_thread is not None and (
+            threading.current_thread() is self._kex_thread
+        )
+
+    def _notify_packet_dispatched(self) -> None:
+        event = self._packet_event
+        self._packet_event = None
+        if event is not None:
+            event.set()
+
+    async def _wait_for_other_reader(self) -> None:
+        """Wait (briefly) for the task currently reading to dispatch a packet."""
+        if self._packet_event is None:
+            self._packet_event = asyncio.Event()
+        try:
+            await asyncio.wait_for(self._packet_event.wait(), timeout=0.1)
+        except asyncio.TimeoutError:
+            pass
+
     async def _recv_message_async(self, check_queue: bool = True) -> Message:
         """Async version of _recv_message - reads natively from StreamReader."""
-        if check_queue:
-            async with self._state_lock:
-                if self._message_queue:
-                    return self._message_queue.popleft()
-
-        async with self._recv_lock:
-            while True:
-                packet = await self._recv_packet_async()
-                if not packet:
-                    if not self._active:
-                        raise TransportException("Transport closed")
-                    raise TransportException("Empty packet received")
-
-                msg = self._dispatch_packet(packet, single_pump=False)
-                if msg is not None and msg.msg_type != 0:
-                    return msg
-                # None / msg_type==0 sentinel → handled internally; loop for next packet.
+        if not check_queue:
+            # Legacy entry point: read straight from the socket.
+            async with self._recv_lock:
+                while True:
+                    packet = await self._recv_packet_async()
+                    if not packet:
+                        if not self._active:
+                            raise TransportException("Transport closed")
+                        raise TransportException("Empty packet received")
+                    msg = self._dispatch_packet(packet, single_pump=False)
+                    if msg is not None and msg.msg_type != 0:
+                        self._notify_packet_dispatched()
+                        return msg
+        return await self._wait_for_message_async(None, None, False)
 
     async def _pump_async(self) -> None:
         """
-        Pump the transport once to read and dispatch exactly one SSH packet.
-        Used by channels to wait for data/window adjustments.
+        Read and dispatch one SSH packet, or - if another task is already
+        reading - wait for it to dispatch one. Used by channels waiting for
+        data or window adjustments. Messages that are not handled internally
+        are queued for _expect_message_async.
         """
+        if self._kex_in_progress:
+            # The kex thread drives the socket until NEWKEYS; reading here
+            # could consume (and wrongly activate keys for) its packets.
+            await asyncio.sleep(0.01)
+            return
+        if self._recv_lock.locked():
+            await self._wait_for_other_reader()
+            return
+
         async with self._recv_lock:
             packet = await self._recv_packet_async()
             msg = self._dispatch_packet(packet, single_pump=True)
-
-        # Queue protocol messages for _expect_message_async; skip msg_type==0 sentinels.
-        if msg is not None and msg.msg_type != 0:
-            async with self._state_lock:
-                if len(self._message_queue) >= MAX_QUEUE_SIZE:
-                    raise TransportException("Message queue size limit exceeded")
-                self._message_queue.append(msg)
+            # Queue while still holding the read lock, so the next reader sees
+            # it before reading further.
+            if msg is not None and msg.msg_type != 0:
+                self._enqueue_message(msg)
+        self._notify_packet_dispatched()
 
     async def _expect_message_async(
         self, *allowed_types: int, channel_id: int | None = None
     ) -> Message:
         """Async version of expect_message."""
+        return await self._wait_for_message_async(
+            tuple(allowed_types), channel_id, False
+        )
+
+    async def _wait_for_message_async(
+        self,
+        allowed_types: tuple[int, ...] | None,
+        channel_id: int | None,
+        kex_reader: bool,
+    ) -> Message:
+        """Return the next matching message, reading the socket if no other
+        task is.
+
+        ``kex_reader`` marks the key-exchange thread's own requests: while a
+        key exchange is in progress only those may read the socket.
+        """
         while True:
-            # 1. Check queue
-            async with self._state_lock:
-                for i, msg in enumerate(self._message_queue):
-                    if msg.msg_type in allowed_types:
-                        # If channel_id is specified, check if it matches
-                        if channel_id is not None:
-                            msg_channel_id = getattr(msg, "recipient_channel", None)
-                            if msg_channel_id is None and len(msg._data) >= 4:
-                                msg_channel_id = struct.unpack(">I", msg._data[:4])[0]
+            with self._lock:
+                queued = self._take_queued_message(allowed_types, channel_id)
+            if queued is not None:
+                return queued
 
-                            if msg_channel_id != channel_id:
-                                continue
+            if self._kex_in_progress and not kex_reader:
+                await asyncio.sleep(0.01)
+                continue
+            if self._recv_lock.locked():
+                # Another task is reading; it queues what it does not consume.
+                await self._wait_for_other_reader()
+                continue
 
-                        del self._message_queue[i]
-                        return msg
-
-            # 2. Read next
-            msg = await self._recv_message_async(check_queue=False)
-            if msg.msg_type in allowed_types:
-                # If channel_id is specified, check if it matches
-                if channel_id is not None:
-                    msg_channel_id = getattr(msg, "recipient_channel", None)
-                    if msg_channel_id is None and len(msg._data) >= 4:
-                        msg_channel_id = struct.unpack(">I", msg._data[:4])[0]
-
-                    if msg_channel_id == channel_id:
-                        return msg
-                else:
-                    return msg
-
-            # 3. Queue it
-            async with self._state_lock:
-                if len(self._message_queue) >= MAX_QUEUE_SIZE:
-                    raise TransportException("Message queue size limit exceeded")
-                self._message_queue.append(msg)
+            async with self._recv_lock:
+                with self._lock:
+                    queued = self._take_queued_message(allowed_types, channel_id)
+                if queued is not None:
+                    return queued
+                packet = await self._recv_packet_async()
+                if not packet:
+                    if not self._active:
+                        raise TransportException("Transport closed")
+                    raise TransportException("Empty packet received")
+                msg = self._dispatch_packet(packet, single_pump=False)
+                matched = (
+                    msg is not None
+                    and msg.msg_type != 0
+                    and self._message_matches(msg, allowed_types, channel_id)
+                )
+                if msg is not None and msg.msg_type != 0 and not matched:
+                    self._enqueue_message(msg)
+            self._notify_packet_dispatched()
+            if matched:
+                assert msg is not None
+                return msg
 
     # --- Handshake Helpers ---
 
@@ -492,7 +563,7 @@ class AsyncTransport(Transport):
         self._send_kexinit()
 
     async def _recv_kexinit_async(self) -> None:
-        msg = await self._recv_message_async()
+        msg = await self._wait_for_message_async((MSG_KEXINIT,), None, True)
         if not isinstance(msg, KexInitMessage):
             raise ProtocolException("Expected KEXINIT")
         self._peer_kexinit = msg
@@ -633,8 +704,9 @@ class AsyncTransport(Transport):
 
     async def open_channel(self, kind: str, dest_addr: tuple | None = None) -> Any:  # type: ignore[override]
         async with self._state_lock:
-            cid = self._next_channel_id
-            self._next_channel_id += 1
+            if len(self._channels) >= MAX_CHANNELS:
+                raise TransportException("Maximum number of channels reached")
+            cid = self._allocate_channel_id()
 
         from .async_channel import AsyncChannel
 
@@ -667,6 +739,10 @@ class AsyncTransport(Transport):
             chan._remote_channel_id = res.sender_channel
             chan._remote_window_size = res.initial_window_size
             chan._remote_max_packet_size = res.maximum_packet_size
+            # What we advertised in CHANNEL_OPEN; the inbound window is
+            # enforced against it.
+            chan._local_window_size = DEFAULT_WINDOW_SIZE
+            chan._local_max_packet_size = DEFAULT_MAX_PACKET_SIZE
             return chan
 
         async with self._state_lock:

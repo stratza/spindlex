@@ -129,11 +129,50 @@ class SSHServer:
         # Default implementation rejects all public key authentication
         return AUTH_FAILED
 
+    def get_keyboard_interactive_prompts(
+        self, username: str, submethods: str
+    ) -> Optional[tuple[str, str, list[tuple[str, bool]]]]:
+        """
+        Prompts to send for keyboard-interactive authentication.
+
+        Override to enable keyboard-interactive authentication. Return
+        ``(name, instruction, prompts)`` where ``prompts`` is a list of
+        ``(prompt_text, echo)`` tuples; the client's answers are passed to
+        :meth:`check_auth_keyboard_interactive_response`. Return None (the
+        default) to fall back to :meth:`check_auth_keyboard_interactive`.
+
+        Args:
+            username: Username attempting authentication
+            submethods: Comma-separated list of submethods requested by the client
+
+        Returns:
+            Prompt tuple, or None
+        """
+        return None
+
+    def check_auth_keyboard_interactive_response(
+        self, username: str, responses: list[str]
+    ) -> int:
+        """
+        Check the answers to the prompts from
+        :meth:`get_keyboard_interactive_prompts`.
+
+        Args:
+            username: Username attempting authentication
+            responses: One answer per prompt, in order
+
+        Returns:
+            AUTH_SUCCESSFUL, AUTH_PARTIAL or AUTH_FAILED
+        """
+        return AUTH_FAILED
+
     def check_auth_keyboard_interactive(self, username: str, submethods: str) -> int:
         """
-        Check keyboard-interactive authentication.
+        Check keyboard-interactive authentication without prompts.
 
-        Override this method to implement custom keyboard-interactive authentication.
+        Called for a keyboard-interactive request when
+        :meth:`get_keyboard_interactive_prompts` returns None. Override
+        that pair of methods to authenticate with prompts.
         Default implementation rejects all keyboard-interactive authentication attempts.
 
         Args:
@@ -170,8 +209,9 @@ class SSHServer:
         """
         Check GSSAPI authentication with MIC.
 
-        Override this method to implement GSSAPI authentication.
-        Default implementation rejects all GSSAPI authentication attempts.
+        Note: server-side GSSAPI authentication is not implemented by the
+        transport yet, so this hook is currently never called; clients
+        requesting ``gssapi-with-mic`` are refused.
 
         Args:
             username: Username attempting authentication
@@ -409,12 +449,14 @@ class SSHServer:
         """
         Check global request.
 
-        Override this method to implement custom global request handling.
+        Called for global requests other than ``tcpip-forward`` and
+        ``cancel-tcpip-forward`` (for example OpenSSH's
+        ``keepalive@openssh.com``). Override to accept custom requests.
         Default implementation rejects all global requests.
 
         Args:
             kind: Type of global request
-            msg: Request message data
+            msg: Request-specific data (bytes following the want-reply flag)
 
         Returns:
             True if global request is allowed, False otherwise
@@ -486,10 +528,13 @@ class SSHServer:
         Returns:
             True if channel is authorized for the user
         """
-        # Default implementation allows all channels for authenticated users
+        # Authorised when the channel's own connection authenticated as this
+        # user (not merely some other connection that once did).
+        transport = getattr(channel, "_transport", None)
         return (
-            username in self._authenticated_users
-            and self._authenticated_users[username]
+            transport is not None
+            and getattr(transport, "authenticated", False) is True
+            and getattr(transport, "_auth_username", None) == username
         )
 
     def on_channel_opened(self, channel: Channel) -> None:
@@ -760,6 +805,29 @@ class SSHServerManager:
             connection_id: Unique connection identifier
         """
         transport = None
+        holder: dict[str, Any] = {"transport": None}
+
+        def enforce_login_grace() -> None:
+            # Hard deadline for the whole pre-auth phase (handshake, key
+            # exchange and authentication), like OpenSSH's LoginGraceTime.
+            # The socket timeout only bounds each individual recv(), so a peer
+            # trickling one byte at a time would otherwise never hit it.
+            current = holder["transport"]
+            if current is not None and current.authenticated:
+                return
+            self._logger.warning(
+                "Login grace time exceeded for %s; closing", connection_id
+            )
+            try:
+                client_socket.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+            if current is not None:
+                current.close()
+
+        grace_timer = threading.Timer(self._auth_timeout, enforce_login_grace)
+        grace_timer.daemon = True
+        grace_timer.start()
         try:
             # _active_connections was already incremented at accept time.
             # Set socket timeout
@@ -769,6 +837,7 @@ class SSHServerManager:
             transport = self._server_interface.start_server(
                 client_socket, self._auth_timeout
             )
+            holder["transport"] = transport
 
             with self._lock:
                 self._connections[connection_id] = transport
@@ -821,6 +890,7 @@ class SSHServerManager:
                 self._failed_connections += 1
 
         finally:
+            grace_timer.cancel()
             # Cleanup connection
             self._cleanup_connection(connection_id, transport, client_socket)
 
@@ -887,6 +957,13 @@ class SSHServerManager:
     def _cleanup_server_socket(self) -> None:
         """Clean up server socket."""
         if self._server_socket:
+            # shutdown() wakes the accept thread if it is blocked in accept();
+            # close() alone does not interrupt a blocked accept() on Linux,
+            # which keeps the listening port bound until the process exits.
+            try:
+                self._server_socket.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
             try:
                 self._server_socket.close()
             except Exception as e:

@@ -9,7 +9,7 @@ import logging
 import socket
 import threading
 import time
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 from .channel import Channel
 
@@ -18,7 +18,45 @@ if TYPE_CHECKING:
 
 from ..exceptions import SSHException
 from ..protocol.constants import CHANNEL_DIRECT_TCPIP
-from ..protocol.utils import write_string, write_uint32
+from ..protocol.utils import read_uint32, write_string, write_uint32
+
+
+def _relay(
+    source: Union[socket.socket, Channel],
+    destination: Union[socket.socket, Channel],
+    relay_id: str,
+    logger: logging.Logger,
+) -> None:
+    """Copy source -> destination; see LocalPortForwarder._relay_data."""
+    try:
+        while True:
+            data = source.recv(8192)
+            if not data:
+                break
+            # Channel.send() may send only a partial chunk (bounded by the
+            # remote window and max packet size), so both socket and Channel
+            # must use sendall().
+            destination.sendall(data)
+    except (OSError, EOFError, SSHException) as e:
+        logger.info(f"Data relay {relay_id} closed: {e}")
+        for end in (source, destination):
+            try:
+                end.close()
+            except (OSError, SSHException):
+                pass
+        return
+    except Exception as e:
+        logger.error(f"Unexpected error in data relay {relay_id}: {e}")
+        return
+
+    # Source reached EOF: half-close the destination.
+    try:
+        if isinstance(destination, Channel):
+            destination.send_eof()
+        else:
+            destination.shutdown(socket.SHUT_WR)
+    except (OSError, SSHException) as e:
+        logger.debug(f"Half-close for relay {relay_id} failed: {e}")
 
 
 class ForwardingTunnel:
@@ -343,30 +381,20 @@ class LocalPortForwarder:
         relay_id: str,
     ) -> None:
         """
-        Relay data between source and destination.
+        Relay data from source to destination until source reaches EOF.
+
+        EOF is propagated as a half-close (CHANNEL_EOF towards the SSH peer,
+        shutdown(SHUT_WR) towards a socket) so the other direction keeps
+        flowing - protocols that send a request and then wait for the reply
+        after closing their write side depend on this. On an error both ends
+        are closed, which also stops the opposite relay.
 
         Args:
             source: Source to read from (socket or channel)
             destination: Destination to write to (socket or channel)
             relay_id: Identifier for logging
         """
-        try:
-            while True:
-                # Read data from source
-                data = source.recv(8192)
-
-                if not data:
-                    break
-
-                # Write data to destination. Channel.send() may send only a
-                # partial chunk (bounded by the remote window and max packet
-                # size), so both socket and Channel must use sendall().
-                destination.sendall(data)
-
-        except (OSError, EOFError, SSHException) as e:
-            self._logger.info(f"Data relay {relay_id} closed: {e}")
-        except Exception as e:
-            self._logger.error(f"Unexpected error in data relay {relay_id}: {e}")
+        _relay(source, destination, relay_id, self._logger)
 
     def close_tunnel(self, tunnel_id: str) -> None:
         """
@@ -474,11 +502,19 @@ class RemotePortForwarder:
 
             try:
                 # Send global request for remote port forwarding
-                success = self._send_tcpip_forward_request(remote_host, remote_port)
+                bound_port = self._send_tcpip_forward_request(remote_host, remote_port)
 
-                if not success:
+                if bound_port is None:
                     raise SSHException(
                         "Remote port forwarding request denied by server"
+                    )
+
+                if bound_port != remote_port:
+                    # Port 0: the server chose the port. Track the real one so
+                    # incoming connections are matched and cancel works.
+                    remote_addr = (remote_host, bound_port)
+                    tunnel_id = (
+                        f"remote_{remote_host}_{bound_port}_{local_host}_{local_port}"
                     )
 
                 # Create tunnel object
@@ -503,16 +539,19 @@ class RemotePortForwarder:
                     f"Failed to create remote port forwarding: {e}"
                 ) from e
 
-    def _send_tcpip_forward_request(self, bind_address: str, bind_port: int) -> bool:
+    def _send_tcpip_forward_request(
+        self, bind_address: str, bind_port: int
+    ) -> Optional[int]:
         """
         Send tcpip-forward global request.
 
         Args:
             bind_address: Address to bind on remote server
-            bind_port: Port to bind on remote server
+            bind_port: Port to bind on remote server (0 lets the server choose)
 
         Returns:
-            True if request was accepted, False otherwise
+            The port the server is listening on, or None if the request was
+            refused.
         """
         try:
             # Build request data
@@ -520,16 +559,38 @@ class RemotePortForwarder:
             request_data.extend(write_string(bind_address))
             request_data.extend(write_uint32(bind_port))
 
-            # Send global request through transport
-            return bool(
-                self._transport._send_global_request(
-                    "tcpip-forward", True, bytes(request_data)
-                )
+            reply = self._transport._send_global_request_with_reply(
+                "tcpip-forward", bytes(request_data)
             )
+            if reply is None:
+                return None
+            if bind_port == 0:
+                # RFC 4254 s7.1: the reply carries the allocated port.
+                allocated, _ = read_uint32(bytes(reply._data), 0)
+                return int(allocated)
+            return bind_port
 
         except Exception as e:
             self._logger.error(f"Error sending tcpip-forward request: {e}")
-            return False
+            return None
+
+    def has_forward(self, dest_addr: tuple[Any, ...]) -> bool:
+        """Whether a remote forward exists for a server-reported destination."""
+        return self._find_tunnel(dest_addr) is not None
+
+    def _find_tunnel(self, dest_addr: tuple[Any, ...]) -> Optional[ForwardingTunnel]:
+        # Prefer an exact (address, port) match so that multiple forwards on
+        # the same port with different bind addresses route correctly; fall
+        # back to a port-only match for servers that report the destination
+        # address in a different form.
+        tunnel = None
+        for t in list(self._tunnels.values()):
+            if t.remote_addr[1] == dest_addr[1]:
+                if t.remote_addr[0] == dest_addr[0]:
+                    return t
+                if tunnel is None:
+                    tunnel = t
+        return tunnel
 
     def handle_forwarded_connection(
         self,
@@ -545,18 +606,7 @@ class RemotePortForwarder:
             origin_addr: Origin address of the connection (may be 2-tuple or 4-tuple)
             dest_addr: Destination address (should match our tunnel)
         """
-        # Find matching tunnel: prefer an exact (address, port) match so that
-        # multiple forwards on the same port with different bind addresses
-        # route correctly; fall back to a port-only match for servers that
-        # report the destination address in a different form.
-        tunnel = None
-        for t in self._tunnels.values():
-            if t.remote_addr[1] == dest_addr[1]:
-                if t.remote_addr[0] == dest_addr[0]:
-                    tunnel = t
-                    break
-                if tunnel is None:
-                    tunnel = t
+        tunnel = self._find_tunnel(dest_addr)
 
         if not tunnel or not tunnel.active:
             self._logger.warning(
@@ -624,6 +674,10 @@ class RemotePortForwarder:
                     local_socket.close()
                 except Exception as e:
                     self._logger.debug(f"Forwarding close error: {e}")
+            try:
+                channel.close()
+            except Exception as e:
+                self._logger.debug(f"Forwarding close error: {e}")
             with tunnel._lock:
                 if conn_id in tunnel.connections:
                     del tunnel.connections[conn_id]
@@ -637,30 +691,20 @@ class RemotePortForwarder:
         relay_id: str,
     ) -> None:
         """
-        Relay data between source and destination.
+        Relay data from source to destination until source reaches EOF.
+
+        EOF is propagated as a half-close (CHANNEL_EOF towards the SSH peer,
+        shutdown(SHUT_WR) towards a socket) so the other direction keeps
+        flowing - protocols that send a request and then wait for the reply
+        after closing their write side depend on this. On an error both ends
+        are closed, which also stops the opposite relay.
 
         Args:
             source: Source to read from (socket or channel)
             destination: Destination to write to (socket or channel)
             relay_id: Identifier for logging
         """
-        try:
-            while True:
-                # Read data from source
-                data = source.recv(8192)
-
-                if not data:
-                    break
-
-                # Write data to destination. Channel.send() may send only a
-                # partial chunk (bounded by the remote window and max packet
-                # size), so both socket and Channel must use sendall().
-                destination.sendall(data)
-
-        except (OSError, EOFError, SSHException) as e:
-            self._logger.info(f"Data relay {relay_id} closed: {e}")
-        except Exception as e:
-            self._logger.error(f"Unexpected error in data relay {relay_id}: {e}")
+        _relay(source, destination, relay_id, self._logger)
 
     def close_tunnel(self, tunnel_id: str) -> None:
         """
@@ -830,6 +874,10 @@ class PortForwardingManager:
         """Close all port forwarding tunnels."""
         self.local_forwarder.close_all()
         self.remote_forwarder.close_all()
+
+    def has_remote_forward(self, dest_addr: tuple[Any, ...]) -> bool:
+        """Whether we requested a remote forward for this destination."""
+        return self.remote_forwarder.has_forward(dest_addr)
 
     def handle_forwarded_connection(
         self,

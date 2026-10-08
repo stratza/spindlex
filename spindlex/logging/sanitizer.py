@@ -4,7 +4,7 @@ Log sanitization utilities for security-sensitive information.
 
 import logging
 import re
-from typing import Any, Pattern
+from typing import Any, Callable, Optional, Pattern
 
 
 class LogSanitizer:
@@ -167,3 +167,38 @@ def configure_sanitizing_logging(logger_name: str = "") -> None:
     target = logging.getLogger(logger_name)
     if not any(isinstance(f, SanitizingFilter) for f in target.filters):
         target.addFilter(SanitizingFilter())
+
+    # A logger's filters only see records logged directly on that logger, not
+    # records propagated from its children (e.g. "spindlex.transport.*" up to
+    # the root). Sanitize at record creation instead, for every logger at or
+    # below ``logger_name``, so it holds whatever handlers are attached.
+    _install_record_factory(logger_name)
+
+
+_sanitized_prefixes: set[str] = set()
+_original_record_factory: Optional[Callable[..., logging.LogRecord]] = None
+
+
+def _install_record_factory(logger_name: str) -> None:
+    global _original_record_factory
+    _sanitized_prefixes.add(logger_name)
+    if _original_record_factory is not None:
+        return
+    _original_record_factory = logging.getLogRecordFactory()
+    base = _original_record_factory
+    record_filter = SanitizingFilter()
+
+    def factory(*args: Any, **kwargs: Any) -> logging.LogRecord:
+        record = base(*args, **kwargs)
+        name = record.name
+        for prefix in _sanitized_prefixes:
+            if (
+                prefix in ("", "root")
+                or name == prefix
+                or name.startswith(prefix + ".")
+            ):
+                record_filter.filter(record)
+                break
+        return record
+
+    logging.setLogRecordFactory(factory)

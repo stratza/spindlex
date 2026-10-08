@@ -307,6 +307,7 @@ class TestVerifyHostKey:
         known_key.get_public_key_bytes.return_value = b"same"
         known_key.algorithm_name = "ssh-rsa"  # Added to match filtering
         storage = MagicMock(spec=HostKeyStorage)
+        storage.is_revoked.return_value = False
         storage.lookup.return_value = [known_key]
         client._host_key_storage = storage
         # Should not raise
@@ -321,6 +322,7 @@ class TestVerifyHostKey:
         known_key = MagicMock()
         known_key.get_public_key_bytes.return_value = b"old"
         storage = MagicMock(spec=HostKeyStorage)
+        storage.is_revoked.return_value = False
         storage.lookup.return_value = [known_key]
         client._host_key_storage = storage
 
@@ -334,6 +336,8 @@ class TestVerifyHostKey:
         client._transport.get_server_host_key.return_value = server_key
 
         storage = MagicMock(spec=HostKeyStorage)
+
+        storage.is_revoked.return_value = False
         storage.lookup.return_value = []
         client._host_key_storage = storage
         client._host_key_policy = RejectPolicy()
@@ -350,6 +354,8 @@ class TestVerifyHostKey:
         client._transport.get_server_host_key.return_value = server_key
 
         storage = MagicMock(spec=HostKeyStorage)
+
+        storage.is_revoked.return_value = False
         storage.get.return_value = None
         storage.lookup.return_value = []
         client._host_key_storage = storage
@@ -367,6 +373,8 @@ class TestVerifyHostKey:
         client._transport.get_server_host_key.return_value = server_key
 
         storage = MagicMock(spec=HostKeyStorage)
+
+        storage.is_revoked.return_value = False
         storage.lookup.return_value = []
         client._host_key_storage = storage
 
@@ -813,6 +821,7 @@ class TestHostKeyHelpers:
     def test_set_host_key_storage(self):
         client = AsyncSSHClient()
         storage = MagicMock(spec=HostKeyStorage)
+        storage.is_revoked.return_value = False
         client.set_host_key_storage(storage)
         assert client._host_key_storage is storage
 

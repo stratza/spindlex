@@ -50,6 +50,11 @@ The SSH client is the primary interface for connecting to SSH servers and execut
     )
     ```
 
+    `timeout` bounds connecting, the SSH handshake and authentication. It
+    does not limit later reads: a command may stay silent for longer. To bound
+    channel I/O, use `channel.settimeout()`; a read that times out raises
+    instead of returning partial output.
+
 === "Async"
 
     ```python
@@ -133,8 +138,12 @@ The SSH client is the primary interface for connecting to SSH servers and execut
     # Send input to the command
     stdin.write('Hello, World!\n')
     stdin.flush()
-    stdin.close()
+    stdin.close()  # sends EOF; stdout and stderr stay readable
+    print(stdout.read())
     ```
+
+    Closing `stdin` sends EOF so the remote command sees the end of its
+    input. Closing `stdout` or `stderr` closes the whole channel.
 
 === "Async"
 
@@ -259,6 +268,10 @@ Remote port forwarding allows you to forward a port on the remote server to a po
             )
 
             print(f"Remote tunnel {tunnel_id} established.")
+    ```
+
+Pass `remote_port=0` to let the server choose the port; the allocated port is
+reported in the tunnel's `remote_addr` (see `get_port_forwards()` below).
 
 ### Managing Tunnels
 

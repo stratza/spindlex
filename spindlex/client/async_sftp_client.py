@@ -17,12 +17,6 @@ from ..protocol.sftp_constants import (
     SSH_FILEXFER_ATTR_SIZE,
     SSH_FX_EOF,
     SSH_FX_OK,
-    SSH_FXF_APPEND,
-    SSH_FXF_CREAT,
-    SSH_FXF_EXCL,
-    SSH_FXF_READ,
-    SSH_FXF_TRUNC,
-    SSH_FXF_WRITE,
 )
 from ..protocol.sftp_messages import (
     SFTPAttributes,
@@ -50,7 +44,11 @@ from ..protocol.sftp_messages import (
     SFTPVersionMessage,
     SFTPWriteMessage,
 )
-from .sftp_client import _is_unsafe_remote_name
+from .sftp_client import (
+    _MAX_RECURSION_DEPTH,
+    _is_unsafe_remote_name,
+    _mode_to_flags,
+)
 
 # Sentinel key for the init VERSION response - intentionally outside uint32 range
 _SFTP_INIT_SENTINEL: int = -2
@@ -322,19 +320,39 @@ class AsyncSFTPClient:
                 raise
             raise SFTPError(f"File upload failed: {e}") from e
 
-    async def get_recursive(self, remotepath: str, localpath: str) -> None:
+    async def get_recursive(
+        self, remotepath: str, localpath: str, max_concurrency: int = 8
+    ) -> None:
         """
         Download directory recursively and asynchronously.
+
+        Symbolic links to directories are not followed; at most
+        ``max_concurrency`` files are transferred at once.
 
         Args:
             remotepath: Remote directory path
             localpath: Local destination path
+            max_concurrency: Maximum simultaneous file downloads
         """
+        limit = asyncio.Semaphore(max(1, max_concurrency))
+        await self._get_recursive(remotepath, localpath, limit, 0)
+
+    async def _get_recursive(
+        self,
+        remotepath: str,
+        localpath: str,
+        limit: asyncio.Semaphore,
+        depth: int,
+    ) -> None:
         import stat
 
+        if depth > _MAX_RECURSION_DEPTH:
+            raise SFTPError(f"Directory tree too deep at {remotepath}")
+
         attrs = await self.stat(remotepath)
-        if not stat.S_ISDIR(attrs.st_mode):
-            await self.get(remotepath, localpath)
+        if not stat.S_ISDIR(attrs.st_mode or 0):
+            async with limit:
+                await self.get(remotepath, localpath)
             return
 
         if not os.path.exists(localpath):
@@ -357,7 +375,17 @@ class AsyncSFTPClient:
                 else f"{remotepath}{item}"
             )
             local_item = os.path.join(localpath, item)
-            tasks.append(self.get_recursive(remote_item, local_item))
+            link_attrs = await self.lstat(remote_item)
+            if stat.S_ISLNK(link_attrs.st_mode or 0):
+                target = await self.stat(remote_item)
+                if stat.S_ISDIR(target.st_mode or 0):
+                    self._logger.warning(
+                        "Not following symlinked directory during recursive "
+                        "download: %r",
+                        remote_item,
+                    )
+                    continue
+            tasks.append(self._get_recursive(remote_item, local_item, limit, depth + 1))
 
         if tasks:
             await asyncio.gather(*tasks)
@@ -838,19 +866,8 @@ class AsyncSFTPClient:
         return self._request_id
 
     def _mode_to_flags(self, mode: str) -> int:
-        """Convert file mode string to SFTP flags."""
-        flags = 0
-
-        if "r" in mode:
-            flags |= SSH_FXF_READ
-        if "w" in mode:
-            flags |= SSH_FXF_WRITE | SSH_FXF_CREAT | SSH_FXF_TRUNC
-        if "a" in mode:
-            flags |= SSH_FXF_WRITE | SSH_FXF_CREAT | SSH_FXF_APPEND
-        if "x" in mode:
-            flags |= SSH_FXF_WRITE | SSH_FXF_CREAT | SSH_FXF_EXCL
-
-        return flags
+        """Convert a Python file mode string to SFTP open flags."""
+        return _mode_to_flags(mode)
 
     async def _send_message(self, message: Any) -> None:
         """Send SFTP message through channel (with locking)."""

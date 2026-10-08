@@ -247,10 +247,12 @@ class TestAsyncRemoteRelayExceptionPaths:
         reader.read = AsyncMock(return_value=b"")  # EOF immediately
         channel = MagicMock()
         channel.close = AsyncMock()
+        channel.send_eof = AsyncMock()
 
         # writer=None is default, should succeed without error
         await rpf._relay_stream_to_channel(reader, channel, writer=None)
-        channel.close.assert_awaited_once()
+        channel.send_eof.assert_awaited_once()
+        channel.close.assert_not_awaited()
 
     async def test_relay_stream_to_channel_exception_in_read(self, mock_transport):
         """Exception during read is caught."""
@@ -294,7 +296,10 @@ class TestAsyncRemoteRelayExceptionPaths:
 
         await rpf._relay_channel_to_stream(channel, writer)
         writer.write.assert_called_once_with(b"hello")
-        writer.close.assert_called()
+        # EOF from the channel half-closes the socket (the other direction
+        # may still be sending); the connection is closed once both finish.
+        writer.write_eof.assert_called_once()
+        writer.close.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

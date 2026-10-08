@@ -35,8 +35,39 @@ def ed25519_key():
 def test_rsa_key_properties(rsa_key):
     assert rsa_key.algorithm_name == "rsa-sha2-256"
     blob = rsa_key.get_public_key_bytes()
-    # get_public_key_bytes() uses self.algorithm_name so the prefix reflects the negotiated algo
-    assert blob.startswith(b"\x00\x00\x00\x0crsa-sha2-256")
+    # The key format is always "ssh-rsa" (RFC 8332 s3); the SHA-2 names only
+    # identify signature algorithms.
+    assert blob.startswith(b"\x00\x00\x00\x07ssh-rsa")
+
+
+def test_rsa_public_blob_matches_openssh_encoding(rsa_key):
+    import base64
+
+    from cryptography.hazmat.primitives import serialization
+
+    openssh_line = rsa_key._key.public_key().public_bytes(
+        serialization.Encoding.OpenSSH, serialization.PublicFormat.OpenSSH
+    )
+    assert base64.b64decode(openssh_line.split()[1]) == rsa_key.get_public_key_bytes()
+    assert rsa_key.get_openssh_string().startswith("ssh-rsa ")
+
+
+def test_rsa_sign_with_explicit_algorithm_does_not_mutate_key(rsa_key):
+    data = b"exchange hash"
+    sig = rsa_key.sign(data, algorithm="rsa-sha2-512")
+    assert sig[4:16] == b"rsa-sha2-512"
+    assert rsa_key.algorithm_name == "rsa-sha2-256"
+    assert rsa_key.verify(sig, data)
+
+
+def test_rsa_openssh_private_key_round_trip(tmp_path, rsa_key):
+    from spindlex.crypto.pkey import load_key_from_file
+
+    path = tmp_path / "id_rsa"
+    rsa_key.save_to_file(str(path))
+    assert path.read_text().startswith("-----BEGIN OPENSSH PRIVATE KEY-----")
+    loaded = load_key_from_file(str(path))
+    assert loaded.get_public_key_bytes() == rsa_key.get_public_key_bytes()
 
 
 def test_rsa_sign_verify(rsa_key):
@@ -105,3 +136,21 @@ def test_fingerprint(rsa_key):
 def test_unsupported_key_type():
     with pytest.raises(CryptoException):
         PKey.from_string(b"\x00\x00\x00\x07unknown")
+
+
+@pytest.mark.parametrize("bits", [256, 384, 521])
+def test_load_public_key_from_string_all_ecdsa_curves(bits):
+    from spindlex.crypto.pkey import ECDSAKey, load_public_key_from_string
+
+    key = ECDSAKey.generate(bits=bits)
+    loaded = load_public_key_from_string(key.get_openssh_string() + " comment")
+    assert loaded.get_public_key_bytes() == key.get_public_key_bytes()
+
+
+def test_pkeys_are_hashable_and_consistent_with_eq(rsa_key):
+    from spindlex.crypto.pkey import PKey
+
+    copy = PKey.from_string(rsa_key.get_public_key_bytes())
+    assert copy == rsa_key
+    assert hash(copy) == hash(rsa_key)
+    assert len({copy, rsa_key}) == 1

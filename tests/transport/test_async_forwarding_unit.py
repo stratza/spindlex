@@ -122,10 +122,13 @@ class TestAsyncLocalPortForwarder:
         channel = MagicMock()
         channel.send = AsyncMock()
         channel.close = AsyncMock()
+        channel.send_eof = AsyncMock()
 
         await lpf._relay_stream_to_channel(reader, channel)
         channel.send.assert_awaited_once_with(b"data")
-        channel.close.assert_awaited_once()
+        # Client EOF is passed on as CHANNEL_EOF; the reply can still arrive.
+        channel.send_eof.assert_awaited_once()
+        channel.close.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_relay_channel_to_stream(self, mock_transport):
@@ -199,11 +202,13 @@ class TestAsyncRemotePortForwarder:
         channel = MagicMock()
         channel.send = AsyncMock()
         channel.close = AsyncMock()
+        channel.send_eof = AsyncMock()
         writer = MagicMock()
 
         await rpf._relay_stream_to_channel(reader, channel, writer)
         channel.send.assert_awaited_once_with(b"data")
-        writer.close.assert_called_once()
+        channel.send_eof.assert_awaited_once()
+        writer.close.assert_not_called()
 
 
 # ---- AsyncPortForwardingManager ----

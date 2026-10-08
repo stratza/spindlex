@@ -68,6 +68,28 @@ The SSH File Transfer Protocol (SFTP) provides secure file transfer capabilities
         await sftp.get('/remote/path/file.txt', '/local/path/file.txt')
     ```
 
+### Working with Remote Files
+
+`open()` returns a file object. Modes follow Python's `open()`: `r`, `w`,
+`a`, `x`, each optionally with `+` (read and write) and `b`.
+
+```python
+with client.open_sftp() as sftp:
+    with sftp.open('/remote/data.bin', 'w+') as f:
+        f.write(b'hello world')
+        f.seek(0)              # reads and writes share one position
+        print(f.read(5))       # b'hello'
+        print(f.tell())        # 5
+        f.flush()              # wait until written data is acknowledged
+
+    sftp.truncate('/remote/data.bin', 5)
+```
+
+Writes are pipelined; `flush()`, `close()`, a read or a `seek()` wait for
+outstanding writes. When the server does not advertise its limits
+(`limits@openssh.com`), reads and writes use 32 KiB requests, and the client
+adapts to servers that return less per read.
+
 ## Directory Operations
 
 ### Listing Directories
@@ -89,6 +111,23 @@ The SSH File Transfer Protocol (SFTP) provides secure file transfer capabilities
         for filename in files:
             print(filename)
     ```
+
+### Recursive Downloads
+
+```python
+with client.open_sftp() as sftp:
+    sftp.get_recursive('/remote/project', '/local/project')
+```
+
+```python
+async with client.open_sftp() as sftp:
+    await sftp.get_recursive('/remote/project', '/local/project', max_concurrency=8)
+```
+
+Symbolic links to directories are not followed (links to files are downloaded
+as files), entry names that could escape the local directory are rejected, and
+very deep trees stop with an error. The async version transfers at most
+`max_concurrency` files at once.
 
 ### Creating and Removing Directories
 
@@ -129,6 +168,18 @@ with client.open_sftp() as sftp:
 with client.open_sftp() as sftp:
     sftp.chmod('/remote/file.txt', 0o644)  # rw-r--r--
 ```
+
+### Symbolic Links
+
+```python
+with client.open_sftp() as sftp:
+    sftp.symlink('/remote/target.txt', '/remote/link.txt')
+    print(sftp.readlink('/remote/link.txt'))  # /remote/target.txt
+```
+
+File names that are not valid UTF-8 on the server are returned with their
+undecodable bytes escaped (`surrogateescape`), and are sent back unchanged when
+you pass them to other SFTP calls.
 
 ## SFTP Server
 

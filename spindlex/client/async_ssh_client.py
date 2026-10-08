@@ -145,8 +145,23 @@ class AsyncSSHClient:
                     if reader and writer:
                         await self._transport.connect_existing(reader, writer)
 
-                    # Start client transport
-                    await self._transport.start_client(timeout)
+                    # Start client transport. ``timeout`` also bounds the
+                    # protocol handshake: a peer that accepts the TCP
+                    # connection but never answers must not hang connect().
+                    if timeout:
+                        try:
+                            await asyncio.wait_for(
+                                self._transport.start_client(timeout),
+                                timeout=timeout,
+                            )
+                        except asyncio.TimeoutError as e:
+                            # Not retried: the peer is up but not speaking SSH.
+                            raise SSHException(
+                                f"Timed out waiting for SSH handshake with "
+                                f"{hostname}:{port}"
+                            ) from e
+                    else:
+                        await self._transport.start_client(timeout)
 
                     # Store connection info before host key verification so hostname is available
                     self._hostname = hostname
@@ -180,6 +195,7 @@ class AsyncSSHClient:
                     OSError,
                 ) as e:
                     # Cleanup failed attempt
+                    self._connected = False
                     if self._transport:
                         await self._transport.close()
                         self._transport = None
@@ -222,10 +238,13 @@ class AsyncSSHClient:
                     )
                     await asyncio.sleep(wait)
         except Exception as e:
+            self._connected = False
             if self._transport:
                 await self._transport.close()
                 self._transport = None
 
+            if isinstance(e, asyncio.TimeoutError):
+                raise SSHException(f"Connection timeout to {hostname}:{port}") from e
             if isinstance(
                 e, (SSHException, AuthenticationException, BadHostKeyException)
             ):
@@ -253,6 +272,10 @@ class AsyncSSHClient:
 
             if server_key is None:
                 raise SSHException("No server host key received")
+
+            # A key marked @revoked is refused outright, whatever the policy.
+            if self._host_key_storage.is_revoked(hostname, self._port, server_key):
+                raise BadHostKeyException(hostname, server_key)
 
             # Check all stored keys for this host (port-aware, hashed-aware).
             known_keys = self._host_key_storage.lookup(hostname, self._port)
@@ -581,7 +604,10 @@ class AsyncSSHClient:
         # Try GSSAPI if requested
         if gss_auth and not authenticated:
             try:
-                await self.auth_gssapi(username, gss_host, gss_deleg_creds)
+                # Kerberos needs the host name, not the peer IP address.
+                await self.auth_gssapi(
+                    username, gss_host or self._hostname, gss_deleg_creds
+                )
                 authenticated = True
             except Exception as e:
                 self._logger.debug(f"GSSAPI authentication failed: {e}")
@@ -784,6 +810,14 @@ class AsyncSSHClient:
     async def close(self) -> None:
         """Close SSH connection and cleanup resources."""
         if self._transport:
+            # Stop port forwards first: their listening sockets would otherwise
+            # stay bound after the connection is gone.
+            manager = self._transport._port_forwarding_manager
+            if manager is not None:
+                try:
+                    await manager.close_all_tunnels()
+                except Exception as e:
+                    self._logger.warning(f"Error closing port forwarding tunnels: {e}")
             await self._transport.close()
             self._transport = None
 
@@ -802,8 +836,10 @@ class AsyncSSHClient:
 
     @property
     def connected(self) -> bool:
-        """Check if client is connected."""
-        return self._connected and self._transport is not None
+        """Check if client is connected (and the connection is still up)."""
+        return (
+            self._connected and self._transport is not None and self._transport.active
+        )
 
     @property
     def hostname(self) -> str | None:

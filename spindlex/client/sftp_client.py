@@ -14,7 +14,6 @@ from typing import Any, Optional
 
 from ..exceptions import SFTPError, SSHException
 from ..protocol.sftp_constants import (
-    SFTP_MAX_PACKET_SIZE,
     SFTP_MAX_READ_SIZE,
     SFTP_SUBSYSTEM,
     SFTP_VERSION,
@@ -24,6 +23,7 @@ from ..protocol.sftp_constants import (
     SSH_FX_OK,
     SSH_FXF_APPEND,
     SSH_FXF_CREAT,
+    SSH_FXF_EXCL,
     SSH_FXF_READ,
     SSH_FXF_TRUNC,
     SSH_FXF_WRITE,
@@ -46,8 +46,36 @@ from ..protocol.sftp_messages import (
 from ..transport.channel import Channel
 from ..transport.transport import Transport
 
-# Fallback write chunk when limits@openssh.com is not supported.
-_DEFAULT_MAX_WRITE = SFTP_MAX_PACKET_SIZE - 1024  # 64 KB minus SFTP header overhead
+# Read/write chunk sizes when the server does not advertise its limits via
+# limits@openssh.com. 32 KiB is the largest size every SFTP server must accept
+# (draft-ietf-secsh-filexfer); bigger requests may be truncated or refused.
+_DEFAULT_MAX_WRITE = 32768
+_DEFAULT_MAX_READ = 32768
+
+
+# Recursive transfers stop below this many directory levels.
+_MAX_RECURSION_DEPTH = 64
+
+
+def _mode_to_flags(mode: str) -> int:
+    """Convert a Python file mode string to SFTP open flags.
+
+    ``r`` read, ``w`` create/truncate, ``a`` create/append, ``x`` exclusive
+    create; ``+`` adds the other direction (so ``r+`` can write and ``w+``
+    can read).
+    """
+    flags = 0
+    if "r" in mode:
+        flags |= SSH_FXF_READ
+    if "w" in mode:
+        flags |= SSH_FXF_WRITE | SSH_FXF_CREAT | SSH_FXF_TRUNC
+    if "a" in mode:
+        flags |= SSH_FXF_WRITE | SSH_FXF_CREAT | SSH_FXF_APPEND
+    if "x" in mode:
+        flags |= SSH_FXF_WRITE | SSH_FXF_CREAT | SSH_FXF_EXCL
+    if "+" in mode:
+        flags |= SSH_FXF_READ | SSH_FXF_WRITE
+    return flags
 
 
 def _is_unsafe_remote_name(name: str) -> bool:
@@ -71,7 +99,12 @@ def _is_unsafe_remote_name(name: str) -> bool:
 
 
 class SFTPFile:
-    """SFTP file object for remote file operations."""
+    """SFTP file object for remote file operations.
+
+    Reads and writes share one file position (like a local file object);
+    writes are pipelined and their acknowledgements collected lazily, so a
+    read or seek first waits for outstanding writes.
+    """
 
     _PIPELINE_DEPTH = 32
 
@@ -88,9 +121,55 @@ class SFTPFile:
         self._handle = handle
         self._mode = mode
         self._offset = 0
-        self._send_offset = 0
         self._closed = False
         self._write_queue: list[tuple[int, int]] = []  # (request_id, data_length)
+
+    def tell(self) -> int:
+        """Return the current file position."""
+        return self._offset
+
+    def seek(self, offset: int, whence: int = 0) -> int:
+        """
+        Move the file position.
+
+        Args:
+            offset: Position (whence=0), delta from the current position
+                (whence=1) or from the end of the file (whence=2)
+            whence: os.SEEK_SET, os.SEEK_CUR or os.SEEK_END
+
+        Returns:
+            The new position
+        """
+        if self._closed:
+            raise SFTPError("File is closed")
+        self._flush_write_queue()
+        if whence == 0:
+            new = offset
+        elif whence == 1:
+            new = self._offset + offset
+        elif whence == 2:
+            new = (self.stat().st_size or 0) + offset
+        else:
+            raise ValueError(f"Invalid whence: {whence}")
+        if new < 0:
+            raise ValueError("Negative seek position")
+        self._offset = new
+        return new
+
+    def stat(self) -> SFTPAttributes:
+        """Return the attributes of the open file (SSH_FXP_FSTAT)."""
+        from ..protocol.sftp_messages import SFTPAttrsMessage, SFTPFStatMessage
+
+        self._flush_write_queue()
+        rid = self._client._get_next_request_id()
+        response = self._client._send_request_and_wait_response(
+            SFTPFStatMessage(rid, self._handle)
+        )
+        if isinstance(response, SFTPAttrsMessage):
+            return response.attrs
+        if isinstance(response, SFTPStatusMessage):
+            raise SFTPError.from_status(response.status_code, response.message)
+        raise SFTPError("Unexpected response to fstat request")
 
     def read(self, size: int = -1) -> bytes:
         """
@@ -105,9 +184,12 @@ class SFTPFile:
         if self._closed:
             raise SFTPError("File is closed")
 
+        # Outstanding writes must land before reading the same region.
+        self._flush_write_queue()
+
         if size < 0:
             # Read until EOF using a pipelined window of concurrent requests.
-            _CHUNK = min(SFTP_MAX_READ_SIZE, self._client._max_read_len)
+            _CHUNK = self._client._max_read_len
             result = bytearray()
             in_flight: list[tuple[int, int]] = []  # (request_id, requested_len)
             eof = False
@@ -141,6 +223,11 @@ class SFTPFile:
                         offset = self._offset + len(result)
                         if not response.data:
                             eof = True
+                        elif len(response.data) < _CHUNK:
+                            # The server caps reads below our chunk size: use
+                            # its size so later reads are not all short.
+                            _CHUNK = len(response.data)
+                            self._client._note_short_read(_CHUNK)
                 elif isinstance(response, SFTPStatusMessage):
                     if response.status_code == SSH_FX_EOF:
                         eof = True
@@ -171,7 +258,7 @@ class SFTPFile:
 
     def write(self, data: bytes) -> int:
         """
-        Write data to remote file.
+        Write data to remote file at the current position.
 
         Args:
             data: Data to write
@@ -187,43 +274,39 @@ class SFTPFile:
         while offset < len(data):
             chunk = data[offset : offset + _MAX_CHUNK]
             request_id = self._client._get_next_request_id()
-            write_msg = SFTPWriteMessage(
-                request_id, self._handle, self._send_offset, chunk
-            )
+            write_msg = SFTPWriteMessage(request_id, self._handle, self._offset, chunk)
             self._client._send_message(write_msg)
             chunk_len = len(chunk)
-            self._send_offset += chunk_len
+            self._offset += chunk_len
             self._write_queue.append((request_id, chunk_len))
 
             # Collect the oldest pending ACK when the pipeline is full so we
             # surface write errors promptly and keep memory usage bounded.
             if len(self._write_queue) >= self._PIPELINE_DEPTH:
-                rid, nbytes = self._write_queue.pop(0)
-                response = self._client._receive_message_for_id(rid)
-                if isinstance(response, SFTPStatusMessage):
-                    if response.status_code != SSH_FX_OK:
-                        raise SFTPError.from_status(
-                            response.status_code, response.message
-                        )
-                    self._offset += nbytes
-                else:
-                    raise SFTPError("Unexpected response to write request")
+                rid, _nbytes = self._write_queue.pop(0)
+                self._check_write_ack(self._client._receive_message_for_id(rid))
 
             offset += chunk_len
 
         return len(data)
 
+    @staticmethod
+    def _check_write_ack(response: SFTPMessage) -> None:
+        if isinstance(response, SFTPStatusMessage):
+            if response.status_code != SSH_FX_OK:
+                raise SFTPError.from_status(response.status_code, response.message)
+        else:
+            raise SFTPError("Unexpected response to write request")
+
     def _flush_write_queue(self) -> None:
         """Drain all outstanding pipelined write ACKs."""
-        for rid, nbytes in self._write_queue:
-            response = self._client._receive_message_for_id(rid)
-            if isinstance(response, SFTPStatusMessage):
-                if response.status_code != SSH_FX_OK:
-                    raise SFTPError.from_status(response.status_code, response.message)
-                self._offset += nbytes
-            else:
-                raise SFTPError("Unexpected response to write request")
-        self._write_queue.clear()
+        queue, self._write_queue = self._write_queue, []
+        for rid, _nbytes in queue:
+            self._check_write_ack(self._client._receive_message_for_id(rid))
+
+    def flush(self) -> None:
+        """Wait until all written data has been acknowledged by the server."""
+        self._flush_write_queue()
 
     def close(self) -> None:
         """Close remote file."""
@@ -272,7 +355,7 @@ class SFTPClient:
         self._server_extensions: dict[str, str] = {}
         self._pending_responses: dict[int, SFTPMessage] = {}
         self._max_write_len: int = _DEFAULT_MAX_WRITE
-        self._max_read_len: int = SFTP_MAX_READ_SIZE
+        self._max_read_len: int = _DEFAULT_MAX_READ
 
         # Initialize SFTP session
         self._initialize_sftp()
@@ -348,8 +431,17 @@ class SFTPClient:
                         self._max_write_len = int(max_write)
                     if max_read > 0:
                         self._max_read_len = int(max_read)
+                    else:
+                        # 0 means "no limit": use the largest size we request.
+                        self._max_read_len = SFTP_MAX_READ_SIZE
         except (SFTPError, SSHException, struct.error, OSError):
             pass  # non-fatal: server does not support limits@openssh.com
+
+    def _note_short_read(self, length: int) -> None:
+        """A non-final read came back short: the server caps reads at
+        ``length``, so request that much from now on."""
+        if 0 < length < self._max_read_len:
+            self._max_read_len = length
 
     def _get_next_request_id(self) -> int:
         """Get next request ID for SFTP messages."""
@@ -473,7 +565,7 @@ class SFTPClient:
 
             try:
                 # Open local file for writing
-                _CHUNK = min(32768, self._max_read_len)
+                _CHUNK = self._max_read_len
                 _DEPTH = 32
                 with open(localpath, "wb") as local_file:
                     offset = 0
@@ -512,6 +604,9 @@ class SFTPClient:
                                 offset = local_file.tell()
                                 if not response.data:
                                     eof = True
+                                elif len(response.data) < _CHUNK:
+                                    _CHUNK = len(response.data)
+                                    self._note_short_read(_CHUNK)
                         elif isinstance(response, SFTPStatusMessage):
                             if response.status_code == SSH_FX_EOF:
                                 eof = True
@@ -615,15 +710,22 @@ class SFTPClient:
                 raise
             raise SFTPError(f"File upload failed: {e}", filename=localpath)
 
-    def get_recursive(self, remotepath: str, localpath: str) -> None:
+    def get_recursive(self, remotepath: str, localpath: str, _depth: int = 0) -> None:
         """
         Download directory recursively.
+
+        Symbolic links to directories are not followed (a server could
+        otherwise point a link at an ancestor and make the download endless);
+        links to files are downloaded as files.
 
         Args:
             remotepath: Remote directory path
             localpath: Local destination path
         """
         import stat
+
+        if _depth > _MAX_RECURSION_DEPTH:
+            raise SFTPError(f"Directory tree too deep at {remotepath}")
 
         attrs = self.stat(remotepath)
         if not stat.S_ISDIR(attrs.st_mode or 0):
@@ -649,7 +751,19 @@ class SFTPClient:
                 else f"{remotepath}{item}"
             )
             local_item = os.path.join(localpath, item)
-            self.get_recursive(remote_item, local_item)
+            link_attrs = self.lstat(remote_item)
+            if stat.S_ISLNK(link_attrs.st_mode or 0):
+                target = self.stat(remote_item)
+                if stat.S_ISDIR(target.st_mode or 0):
+                    self._logger.warning(
+                        "Not following symlinked directory during recursive "
+                        "download: %r",
+                        remote_item,
+                    )
+                    continue
+                self.get(remote_item, local_item)
+                continue
+            self.get_recursive(remote_item, local_item, _depth + 1)
 
     def put_recursive(self, localpath: str, remotepath: str) -> None:
         """
@@ -1213,15 +1327,9 @@ class SFTPClient:
             raise SFTPError(f"File open failed: {e}", filename=filename)
 
     def _mode_to_flags(self, mode: str) -> int:
-        """Convert file mode string to SFTP flags."""
-        flags = 0
-        if "r" in mode:
-            flags |= SSH_FXF_READ
-        if "w" in mode:
-            flags |= SSH_FXF_WRITE | SSH_FXF_CREAT | SSH_FXF_TRUNC
-        if "a" in mode:
-            flags |= SSH_FXF_WRITE | SSH_FXF_CREAT | SSH_FXF_APPEND
-        return flags
+        """Convert a Python file mode string (r, w, a, x, optionally with +
+        and b) to SFTP open flags."""
+        return _mode_to_flags(mode)
 
     def close(self) -> None:
         """Close SFTP session and cleanup resources."""

@@ -112,6 +112,7 @@ class SFTPMessage:
             SSH_FXP_LSTAT: SFTPLStatMessage,
             SSH_FXP_FSTAT: SFTPFStatMessage,
             SSH_FXP_SETSTAT: SFTPSetStatMessage,
+            SSH_FXP_FSETSTAT: SFTPFSetStatMessage,
             SSH_FXP_OPENDIR: SFTPOpenDirMessage,
             SSH_FXP_READDIR: SFTPReadDirMessage,
             SSH_FXP_REMOVE: SFTPRemoveMessage,
@@ -168,7 +169,14 @@ class SFTPMessage:
         self._data.extend(write_uint64(value))
 
     def add_string(self, value: Union[str, bytes]) -> None:
-        """Add string to message."""
+        """Add string to message.
+
+        Text is encoded as UTF-8 with ``surrogateescape``, so a file name that
+        was not valid UTF-8 on the remote side (and was decoded with
+        surrogateescape) is sent back with its original bytes.
+        """
+        if isinstance(value, str):
+            value = value.encode("utf-8", "surrogateescape")
         self._data.extend(write_string(value))
 
     def add_byte(self, value: int) -> None:
@@ -351,8 +359,8 @@ class SFTPAttributes:
             for _ in range(count):
                 key_bytes, offset = read_string(data, offset)
                 value_bytes, offset = read_string(data, offset)
-                key = key_bytes.decode("utf-8")
-                value = value_bytes.decode("utf-8")
+                key = key_bytes.decode("utf-8", "surrogateescape")
+                value = value_bytes.decode("utf-8", "surrogateescape")
                 attrs.extended[key] = value
 
         return attrs, offset
@@ -432,8 +440,8 @@ class SFTPVersionMessage(SFTPMessage):
         while offset < len(data):
             name_bytes, offset = read_string(data, offset)
             data_bytes, offset = read_string(data, offset)
-            name = name_bytes.decode("utf-8")
-            ext_data = data_bytes.decode("utf-8")
+            name = name_bytes.decode("utf-8", "surrogateescape")
+            ext_data = data_bytes.decode("utf-8", "surrogateescape")
             extensions[name] = ext_data
 
         return cls(version, extensions)
@@ -513,7 +521,7 @@ class SFTPOpenMessage(SFTPMessage):
         pflags, offset = read_uint32(data, offset)
         attrs, offset = SFTPAttributes.unpack(data, offset)
 
-        filename = filename_bytes.decode("utf-8")
+        filename = filename_bytes.decode("utf-8", "surrogateescape")
         return cls(request_id, filename, pflags, attrs)
 
     def validate(self) -> bool:
@@ -730,7 +738,7 @@ class SFTPStatMessage(SFTPMessage):
         request_id, offset = read_uint32(data, offset)
         path_bytes, offset = read_string(data, offset)
 
-        path = path_bytes.decode("utf-8")
+        path = path_bytes.decode("utf-8", "surrogateescape")
         return cls(request_id, path)
 
 
@@ -758,7 +766,7 @@ class SFTPLStatMessage(SFTPMessage):
         request_id, offset = read_uint32(data, offset)
         path_bytes, offset = read_string(data, offset)
 
-        path = path_bytes.decode("utf-8")
+        path = path_bytes.decode("utf-8", "surrogateescape")
         return cls(request_id, path)
 
 
@@ -844,8 +852,28 @@ class SFTPSetStatMessage(SFTPMessage):
         path_bytes, offset = read_string(data, offset)
         attrs, offset = SFTPAttributes.unpack(data, offset)
 
-        path = path_bytes.decode("utf-8")
+        path = path_bytes.decode("utf-8", "surrogateescape")
         return cls(request_id, path, attrs)
+
+
+class SFTPFSetStatMessage(SFTPMessage):
+    """SFTP fsetstat message (SSH_FXP_FSETSTAT)."""
+
+    def __init__(self, request_id: int, handle: bytes, attrs: SFTPAttributes) -> None:
+        super().__init__(SSH_FXP_FSETSTAT, request_id)
+        self.handle = handle
+        self.attrs = attrs
+        self.add_string(handle)
+        self._data.extend(attrs.pack())
+
+    @classmethod
+    def _unpack_data(cls, data: bytes) -> "SFTPFSetStatMessage":
+        """Unpack SFTP fsetstat message data."""
+        offset = 0
+        request_id, offset = read_uint32(data, offset)
+        handle, offset = read_string(data, offset)
+        attrs, offset = SFTPAttributes.unpack(data, offset)
+        return cls(request_id, handle, attrs)
 
 
 class SFTPOpenDirMessage(SFTPMessage):
@@ -872,7 +900,7 @@ class SFTPOpenDirMessage(SFTPMessage):
         request_id, offset = read_uint32(data, offset)
         path_bytes, offset = read_string(data, offset)
 
-        path = path_bytes.decode("utf-8")
+        path = path_bytes.decode("utf-8", "surrogateescape")
         return cls(request_id, path)
 
 
@@ -939,8 +967,8 @@ class SFTPNameMessage(SFTPMessage):
             longname_bytes, offset = read_string(data, offset)
             attrs, offset = SFTPAttributes.unpack(data, offset)
 
-            filename = filename_bytes.decode("utf-8")
-            longname = longname_bytes.decode("utf-8")
+            filename = filename_bytes.decode("utf-8", "surrogateescape")
+            longname = longname_bytes.decode("utf-8", "surrogateescape")
             names.append((filename, longname, attrs))
 
         return cls(request_id, names)
@@ -970,7 +998,7 @@ class SFTPRemoveMessage(SFTPMessage):
         request_id, offset = read_uint32(data, offset)
         filename_bytes, offset = read_string(data, offset)
 
-        filename = filename_bytes.decode("utf-8")
+        filename = filename_bytes.decode("utf-8", "surrogateescape")
         return cls(request_id, filename)
 
 
@@ -1002,7 +1030,7 @@ class SFTPMkdirMessage(SFTPMessage):
         path_bytes, offset = read_string(data, offset)
         attrs, offset = SFTPAttributes.unpack(data, offset)
 
-        path = path_bytes.decode("utf-8")
+        path = path_bytes.decode("utf-8", "surrogateescape")
         return cls(request_id, path, attrs)
 
 
@@ -1030,7 +1058,7 @@ class SFTPRmdirMessage(SFTPMessage):
         request_id, offset = read_uint32(data, offset)
         path_bytes, offset = read_string(data, offset)
 
-        path = path_bytes.decode("utf-8")
+        path = path_bytes.decode("utf-8", "surrogateescape")
         return cls(request_id, path)
 
 
@@ -1058,7 +1086,7 @@ class SFTPRealPathMessage(SFTPMessage):
         request_id, offset = read_uint32(data, offset)
         path_bytes, offset = read_string(data, offset)
 
-        path = path_bytes.decode("utf-8")
+        path = path_bytes.decode("utf-8", "surrogateescape")
         return cls(request_id, path)
 
 
@@ -1090,8 +1118,8 @@ class SFTPRenameMessage(SFTPMessage):
         oldpath_bytes, offset = read_string(data, offset)
         newpath_bytes, offset = read_string(data, offset)
 
-        oldpath = oldpath_bytes.decode("utf-8")
-        newpath = newpath_bytes.decode("utf-8")
+        oldpath = oldpath_bytes.decode("utf-8", "surrogateescape")
+        newpath = newpath_bytes.decode("utf-8", "surrogateescape")
         return cls(request_id, oldpath, newpath)
 
 
@@ -1119,7 +1147,7 @@ class SFTPReadLinkMessage(SFTPMessage):
         request_id, offset = read_uint32(data, offset)
         path_bytes, offset = read_string(data, offset)
 
-        path = path_bytes.decode("utf-8")
+        path = path_bytes.decode("utf-8", "surrogateescape")
         return cls(request_id, path)
 
 
@@ -1151,8 +1179,8 @@ class SFTPSymlinkMessage(SFTPMessage):
         targetpath_bytes, offset = read_string(data, offset)
         linkpath_bytes, offset = read_string(data, offset)
 
-        targetpath = targetpath_bytes.decode("utf-8")
-        linkpath = linkpath_bytes.decode("utf-8")
+        targetpath = targetpath_bytes.decode("utf-8", "surrogateescape")
+        linkpath = linkpath_bytes.decode("utf-8", "surrogateescape")
         return cls(request_id, targetpath, linkpath)
 
 
@@ -1184,8 +1212,8 @@ class SFTPLinkMessage(SFTPMessage):
         linkpath_bytes, offset = read_string(data, offset)
         targetpath_bytes, offset = read_string(data, offset)
 
-        linkpath = linkpath_bytes.decode("utf-8")
-        targetpath = targetpath_bytes.decode("utf-8")
+        linkpath = linkpath_bytes.decode("utf-8", "surrogateescape")
+        targetpath = targetpath_bytes.decode("utf-8", "surrogateescape")
         return cls(request_id, linkpath, targetpath)
 
 
@@ -1219,7 +1247,7 @@ class SFTPExtendedMessage(SFTPMessage):
         request_id, offset = read_uint32(data, offset)
         extended_request_bytes, offset = read_string(data, offset)
 
-        extended_request = extended_request_bytes.decode("utf-8")
+        extended_request = extended_request_bytes.decode("utf-8", "surrogateescape")
         extended_data = data[offset:] if offset < len(data) else b""
 
         return cls(request_id, extended_request, extended_data)

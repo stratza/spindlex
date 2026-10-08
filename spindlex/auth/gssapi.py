@@ -11,16 +11,17 @@ from typing import TYPE_CHECKING, Any
 from ..exceptions import AuthenticationException
 from ..protocol.constants import (
     AUTH_GSSAPI_WITH_MIC,
+    MSG_USERAUTH_FAILURE,
+    MSG_USERAUTH_GSSAPI_ERROR,
+    MSG_USERAUTH_GSSAPI_ERRTOK,
+    MSG_USERAUTH_GSSAPI_MIC,
     MSG_USERAUTH_GSSAPI_RESPONSE,
     MSG_USERAUTH_GSSAPI_TOKEN,
+    MSG_USERAUTH_REQUEST,
+    MSG_USERAUTH_SUCCESS,
     SERVICE_CONNECTION,
 )
-from ..protocol.messages import (
-    Message,
-    UserAuthFailureMessage,
-    UserAuthRequestMessage,
-    UserAuthSuccessMessage,
-)
+from ..protocol.messages import Message, UserAuthRequestMessage
 from ..protocol.utils import read_string, write_string, write_uint32
 
 if TYPE_CHECKING:
@@ -215,187 +216,100 @@ class GSSAPIAuth:
                 f"Failed to initialize GSSAPI context: {e}"
             ) from e
 
+    # Kerberos v5 mechanism OID 1.2.840.113554.1.2.2, DER encoded (RFC 4462 s3.2)
+    _KRB5_OID = b"\x06\x09\x2a\x86\x48\x86\xf7\x12\x01\x02\x02"
+
     def _perform_gssapi_exchange(self, username: str) -> bool:
         """
-        Perform the GSSAPI authentication exchange.
+        Run the gssapi-with-mic exchange (RFC 4462 s3).
 
-        Args:
-            username: Username for authentication
-
-        Returns:
-            True if authentication successful
-        """
-        try:
-            # Start GSSAPI authentication
-            token = None
-
-            while self._gss_context and not self._gss_context.complete:
-                # Generate GSSAPI token
-                try:
-                    token = self._gss_context.step(token)
-                except Exception as e:
-                    raise AuthenticationException(
-                        f"GSSAPI context step failed: {e}"
-                    ) from e
-
-                if token:
-                    # Send GSSAPI authentication request
-                    if not self._send_gssapi_request(username, token):
-                        return False
-
-                    # Receive response if context not complete
-                    if self._gss_context and not self._gss_context.complete:
-                        token = self._receive_gssapi_response()
-                        # If authenticated successfully during response receive
-                        if self._transport.authenticated:
-                            return True
-                        if token is None:
-                            return False
-
-            # Authentication successful
-            return True
-
-        except Exception as e:
-            if isinstance(e, AuthenticationException):
-                raise
-            raise AuthenticationException(f"GSSAPI exchange failed: {e}") from e
-
-    def _send_gssapi_request(self, username: str, token: bytes) -> bool:
-        """
-        Send GSSAPI authentication request.
-
-        Args:
-            username: Username for authentication
-            token: GSSAPI token to send
+        1. USERAUTH_REQUEST listing the mechanism OID; the server answers
+           USERAUTH_GSSAPI_RESPONSE with the OID it selected.
+        2. Context tokens are exchanged as USERAUTH_GSSAPI_TOKEN messages
+           until the security context is established.
+        3. USERAUTH_GSSAPI_MIC carries a MIC over the session data.
+        4. The server's USERAUTH_SUCCESS / USERAUTH_FAILURE decides the result.
 
         Returns:
-            True if request sent successfully
+            True only if the server answered USERAUTH_SUCCESS
         """
-        try:
-            # Build GSSAPI authentication method data
-            method_data = self._build_gssapi_method_data(token)
+        context = self._gss_context
+        if context is None:
+            raise AuthenticationException("GSSAPI context not initialised")
 
-            # Create authentication request
-            auth_request = UserAuthRequestMessage(
+        # 1. Propose the Kerberos mechanism.
+        self._transport._send_message(
+            UserAuthRequestMessage(
                 username=username,
                 service=SERVICE_CONNECTION,
                 method=AUTH_GSSAPI_WITH_MIC,
-                method_data=method_data,
+                method_data=write_uint32(1) + write_string(self._KRB5_OID),
             )
+        )
+        reply = self._transport._expect_message(
+            MSG_USERAUTH_GSSAPI_RESPONSE, MSG_USERAUTH_FAILURE
+        )
+        if reply.msg_type == MSG_USERAUTH_FAILURE:
+            return False
+        selected, _ = read_string(bytes(reply._data), 0)
+        if selected != self._KRB5_OID:
+            raise AuthenticationException("Server selected an unsupported mechanism")
 
-            # Send request
-            self._transport._send_message(auth_request)
-            return True
-
-        except Exception as e:
-            raise AuthenticationException(f"Failed to send GSSAPI request: {e}") from e
-
-    def _build_gssapi_method_data(self, token: bytes) -> bytes:
-        """
-        Build GSSAPI method data for authentication request.
-
-        Args:
-            token: GSSAPI token
-
-        Returns:
-            Encoded method data
-        """
-        data = bytearray()
-
-        # Add number of OIDs (1 for Kerberos v5)
-        data.extend(write_uint32(1))
-
-        # Add Kerberos v5 OID (1.2.840.113554.1.2.2)
-        krb5_oid = b"\x06\x09\x2a\x86\x48\x86\xf7\x12\x01\x02\x02"
-        data.extend(write_string(krb5_oid))
-
-        # Add GSSAPI token
-        data.extend(write_string(token))
-
-        return bytes(data)
-
-    def _receive_gssapi_response(self) -> bytes | None:
-        """
-        Receive GSSAPI authentication response.
-
-        Returns:
-            GSSAPI token from server or None if authentication failed
-        """
-        try:
-            msg = self._transport._recv_message()
-
-            if isinstance(msg, UserAuthSuccessMessage):
-                # Authentication successful
-                self._transport._authenticated = True
-                return None
-
-            elif isinstance(msg, UserAuthFailureMessage):
-                # Authentication failed
-                return None
-
-            elif msg.msg_type == MSG_USERAUTH_GSSAPI_RESPONSE:
-                # Parse GSSAPI response
-                return self._parse_gssapi_response(msg)
-
-            elif msg.msg_type == MSG_USERAUTH_GSSAPI_TOKEN:
-                # Parse GSSAPI token
-                return self._parse_gssapi_token(msg)
-
-            else:
+        # 2. Establish the security context.
+        in_token: bytes | None = None
+        while True:
+            try:
+                out_token = context.step(in_token)
+            except Exception as e:
+                raise AuthenticationException(f"GSSAPI context step failed: {e}") from e
+            if out_token:
+                msg = Message(MSG_USERAUTH_GSSAPI_TOKEN)
+                msg.add_string(out_token)
+                self._transport._send_message(msg)
+            if context.complete:
+                break
+            reply = self._transport._expect_message(
+                MSG_USERAUTH_GSSAPI_TOKEN,
+                MSG_USERAUTH_GSSAPI_ERROR,
+                MSG_USERAUTH_GSSAPI_ERRTOK,
+                MSG_USERAUTH_FAILURE,
+            )
+            if reply.msg_type == MSG_USERAUTH_FAILURE:
+                return False
+            if reply.msg_type in (
+                MSG_USERAUTH_GSSAPI_ERROR,
+                MSG_USERAUTH_GSSAPI_ERRTOK,
+            ):
                 raise AuthenticationException(
-                    f"Unexpected message during GSSAPI auth: {type(msg).__name__}"
+                    "GSSAPI authentication rejected by server"
                 )
+            in_token, _ = read_string(bytes(reply._data), 0)
 
-        except Exception as e:
-            if isinstance(e, AuthenticationException):
-                raise
-            raise AuthenticationException(
-                f"Failed to receive GSSAPI response: {e}"
-            ) from e
-
-    def _parse_gssapi_response(self, msg: Message) -> bytes:
-        """
-        Parse GSSAPI response message.
-
-        Args:
-            msg: GSSAPI response message
-
-        Returns:
-            GSSAPI token from response
-        """
+        # 3. Prove possession of the context over the session identifier.
+        session_id = self._transport.session_id or b""
+        mic_data = (
+            write_string(session_id)
+            + bytes([MSG_USERAUTH_REQUEST])
+            + write_string(username)
+            + write_string(SERVICE_CONNECTION)
+            + write_string(AUTH_GSSAPI_WITH_MIC)
+        )
         try:
-            data = msg._data
-            offset = 0
-
-            # Read token
-            token, offset = read_string(data, offset)
-            return token
-
+            mic = context.get_signature(mic_data)
         except Exception as e:
-            raise AuthenticationException(
-                f"Failed to parse GSSAPI response: {e}"
-            ) from e
+            raise AuthenticationException(f"GSSAPI MIC generation failed: {e}") from e
+        mic_msg = Message(MSG_USERAUTH_GSSAPI_MIC)
+        mic_msg.add_string(mic)
+        self._transport._send_message(mic_msg)
 
-    def _parse_gssapi_token(self, msg: Message) -> bytes:
-        """
-        Parse GSSAPI token message.
-
-        Args:
-            msg: GSSAPI token message
-
-        Returns:
-            GSSAPI token from message
-        """
-        try:
-            data = msg._data
-            offset = 0
-
-            # Read token
-            token, offset = read_string(data, offset)
-            return token
-
-        except Exception as e:
-            raise AuthenticationException(f"Failed to parse GSSAPI token: {e}") from e
+        # 4. The server decides.
+        result = self._transport._expect_message(
+            MSG_USERAUTH_SUCCESS, MSG_USERAUTH_FAILURE
+        )
+        if result.msg_type == MSG_USERAUTH_SUCCESS:
+            self._transport._authenticated = True
+            return True
+        return False
 
     def get_gss_context(self) -> SecurityContext | None:
         """

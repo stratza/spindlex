@@ -233,11 +233,19 @@ async def test_recv_eof_returns_empty():
     assert data == b""
 
 
-async def test_recv_closed_raises():
+async def test_recv_closed_returns_eof():
+    # Like the sync Channel: a closed channel with nothing buffered is EOF.
     channel, _ = make_async_channel()
     channel._closed = True
-    with pytest.raises(ChannelException, match="closed"):
-        await channel.recv(10)
+    assert await channel.recv(10) == b""
+
+
+async def test_recv_returns_data_buffered_before_close():
+    channel, _ = make_async_channel()
+    channel._handle_data(b"last words")
+    channel._handle_close()
+    assert await channel.recv(100) == b"last words"
+    assert await channel.recv(100) == b""
 
 
 async def test_recv_pumps_when_buffer_empty():
@@ -308,12 +316,11 @@ async def test_recv_exactly_accumulates_chunks():
 # ---------------------------------------------------------------------------
 
 
-async def test_recv_stderr_closed_and_empty_raises():
+async def test_recv_stderr_closed_and_empty_returns_eof():
     channel, _ = make_async_channel()
     channel._closed = True
     channel._stderr_buffer = b""
-    with pytest.raises(ChannelException, match="closed"):
-        await channel.recv_stderr(10)
+    assert await channel.recv_stderr(10) == b""
 
 
 async def test_recv_stderr_returns_data():
@@ -568,11 +575,23 @@ async def test_close_idempotent():
     assert transport._send_channel_eof_async.call_count == 1
 
 
-async def test_close_removes_from_transport_channels():
+async def test_close_keeps_channel_until_peer_close():
     channel, transport = make_async_channel()
     transport._channels = {1: channel}
     await channel.close()
+    # The number stays reserved until the peer's CLOSE arrives.
+    assert 1 in transport._channels
+    transport._send_channel_close_async.assert_awaited_once()
+
+
+async def test_close_after_peer_close_releases_without_resend():
+    channel, transport = make_async_channel()
+    transport._channels = {1: channel}
+    channel._handle_close()
+    channel._close_sent = True  # the transport already replied
+    await channel.close()
     assert 1 not in transport._channels
+    transport._send_channel_close_async.assert_not_awaited()
 
 
 async def test_wait_closed_returns_after_close():
@@ -690,20 +709,38 @@ async def test_channel_file_close_idempotent():
 async def test_channel_file_readline():
     channel, transport = make_async_channel()
 
-    # Simulate reading "hi\n" one byte at a time
-    chars = iter([b"h", b"i", b"\n"])
-
-    async def mock_recv(nbytes):
-        try:
-            return next(chars)
-        except StopIteration:
-            return b""
-
-    channel.recv = mock_recv
+    channel._handle_data(b"hi\nsecond")
+    channel._eof_received = True
 
     f = AsyncChannelFile(channel, mode="r")
-    line = await f.readline()
-    assert line == "hi\n"
+    assert await f.readline() == "hi\n"
+    assert await f.readline() == "second"
+    assert await f.readline() == ""
+
+
+async def test_channel_file_readline_spans_packets():
+    channel, transport = make_async_channel()
+    channel._handle_data(b"par")
+
+    async def deliver_rest():
+        channel._handle_data(b"tial line\nnext")
+
+    transport._pump_async.side_effect = deliver_rest
+    f = AsyncChannelFile(channel, mode="r")
+    assert await f.readline() == "partial line\n"
+
+
+async def test_channel_file_readline_large_buffer_is_linear():
+    # 50k lines buffered at once must not be re-copied per line or per byte.
+    channel, _ = make_async_channel()
+    channel._local_window_size = 1 << 30
+    lines = [f"line {n}\n".encode() for n in range(50_000)]
+    channel._handle_data(b"".join(lines))
+    channel._eof_received = True
+    f = AsyncChannelFile(channel, mode="r")
+    got = [line async for line in f]
+    assert len(got) == 50_000
+    assert got[-1] == "line 49999\n"
 
 
 async def test_channel_file_aiter():

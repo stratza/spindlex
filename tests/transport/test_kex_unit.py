@@ -734,3 +734,60 @@ class TestComputeCurve25519ExchangeHash:
         )
         assert isinstance(kex._exchange_hash, bytes)
         assert len(kex._exchange_hash) > 0
+
+
+class TestServerSignatureBinding:
+    """The client must bind the host key and signature to the negotiated
+    host-key algorithm, and refuse a different host key on re-exchange."""
+
+    def _kex(self, negotiated):
+        from spindlex.transport.kex import KeyExchange
+
+        kex = KeyExchange(MagicMock())
+        kex._server_host_key_algorithm = negotiated
+        kex._exchange_hash = b"H" * 32
+        return kex
+
+    def test_accepts_matching_ed25519(self):
+        from spindlex.crypto.pkey import Ed25519Key
+
+        key = Ed25519Key.generate()
+        kex = self._kex("ssh-ed25519")
+        kex._verify_server_signature(
+            key.get_public_key_bytes(), key.sign(kex._exchange_hash)
+        )
+
+    def test_rejects_key_type_not_negotiated(self):
+        from spindlex.crypto.pkey import Ed25519Key
+        from spindlex.exceptions import CryptoException
+
+        key = Ed25519Key.generate()
+        kex = self._kex("ecdsa-sha2-nistp256")
+        with pytest.raises(CryptoException, match="does not match"):
+            kex._verify_server_signature(
+                key.get_public_key_bytes(), key.sign(kex._exchange_hash)
+            )
+
+    def test_rejects_rsa_signature_algorithm_downgrade(self):
+        from spindlex.crypto.pkey import RSAKey
+        from spindlex.exceptions import CryptoException
+
+        key = RSAKey.generate(bits=2048)
+        kex = self._kex("rsa-sha2-512")
+        sig = key.sign(kex._exchange_hash, algorithm="rsa-sha2-256")
+        with pytest.raises(CryptoException, match="signature algorithm"):
+            kex._verify_server_signature(key.get_public_key_bytes(), sig)
+
+    def test_rejects_changed_host_key_on_rekey(self):
+        from spindlex.crypto.pkey import Ed25519Key
+        from spindlex.exceptions import CryptoException
+
+        first, second = Ed25519Key.generate(), Ed25519Key.generate()
+        kex = self._kex("ssh-ed25519")
+        kex._verify_server_signature(
+            first.get_public_key_bytes(), first.sign(kex._exchange_hash)
+        )
+        with pytest.raises(CryptoException, match="changed"):
+            kex._verify_server_signature(
+                second.get_public_key_bytes(), second.sign(kex._exchange_hash)
+            )

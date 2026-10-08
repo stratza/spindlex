@@ -6,7 +6,7 @@ Provides asynchronous SSH channel functionality for command execution and data t
 
 import asyncio
 import threading
-from typing import Any, Union
+from typing import Any, Optional, Union
 
 from ..exceptions import ChannelException
 from ..protocol.constants import DEFAULT_WINDOW_SIZE, SSH_EXTENDED_DATA_STDERR
@@ -35,55 +35,100 @@ class AsyncChannel(Channel):
         self._recv_queue: asyncio.Queue[Any] = asyncio.Queue()
         self._closed_event = asyncio.Event()
 
-        # Override parent's deque buffers with flat bytes for async I/O path
-        self._recv_buffer = b""
-        self._stderr_buffer = b""
+        # Override parent's deque buffers with flat byte buffers for the async
+        # I/O path. bytearray appends in place and deleting from the front is
+        # amortised O(1) in CPython, so draining a large buffer in small reads
+        # (readline) stays linear.
+        self._recv_buffer = bytearray()
+        self._stderr_buffer = bytearray()
         self._buffer_lock = threading.Lock()
 
     def _handle_close(self) -> None:
         """Handle incoming channel-close message.
 
-        Overrides the base-class implementation to avoid calling _send_message()
-        synchronously when this method is invoked from the event-loop thread
-        (via the native async receive path).  Sends the EOF+CLOSE handshake as
-        a scheduled coroutine instead.
+        The transport replies with our CLOSE (if not sent yet) and releases the
+        channel number; on the event loop that send is scheduled rather than
+        awaited.
         """
         self._closed = True
+        self._close_received = True
         self._closed_event.set()
-        loop = getattr(self._transport, "_loop", None)
-        if loop:
-            try:
-                asyncio.get_running_loop()
-                # On the event-loop thread - schedule as a fire-and-forget task.
-                asyncio.ensure_future(self._async_close_handshake())
-            except RuntimeError:
-                # Called from a worker thread - safe to use run_coroutine_threadsafe.
-                asyncio.run_coroutine_threadsafe(self._async_close_handshake(), loop)
-        else:
-            # Sync transport fallback.
-            if not self._eof_sent:
-                self.send_eof()
-            self._transport._close_channel(self._channel_id)
-
-    async def _async_close_handshake(self) -> None:
-        """Send EOF + CLOSE responses for an incoming channel-close message."""
-        try:
-            if not self._eof_sent:
-                await self._transport._send_channel_eof_async(self._channel_id)
-            await self._transport._send_channel_close_async(self._channel_id)
-        except Exception:  # nosec B110
-            pass  # Best-effort; connection may already be gone.
 
     def _handle_data(self, data: bytes) -> None:
         """Handle incoming channel data."""
+        if self._closed:
+            return
+        # Enforce the advertised receive window (a peer overrunning it is
+        # violating flow control and would otherwise grow our buffer without
+        # bound).
+        with self._lock:
+            overrun = self._check_inbound_window(len(data))
+        if overrun:
+            self._close_after_overrun()
+            return
         with self._buffer_lock:
+            self._recv_buffer = self._as_bytearray(self._recv_buffer)
             self._recv_buffer += data
 
     def _handle_extended_data(self, data_type: int, data: bytes) -> None:
         """Handle incoming channel extended data."""
-        if data_type == SSH_EXTENDED_DATA_STDERR:
-            with self._buffer_lock:
-                self._stderr_buffer += data
+        if data_type != SSH_EXTENDED_DATA_STDERR or self._closed:
+            return
+        with self._lock:
+            overrun = self._check_inbound_window(len(data))
+        if overrun:
+            self._close_after_overrun()
+            return
+        with self._buffer_lock:
+            self._stderr_buffer = self._as_bytearray(self._stderr_buffer)
+            self._stderr_buffer += data
+
+    @staticmethod
+    def _as_bytearray(buf: Any) -> bytearray:
+        return buf if isinstance(buf, bytearray) else bytearray(buf)
+
+    def _take_buffered(
+        self, stderr: bool, nbytes: int, until_newline: bool = False
+    ) -> Optional[bytes]:
+        """Remove and return up to ``nbytes`` buffered bytes (all if
+        ``nbytes <= 0``; up to and including the first newline if
+        ``until_newline``), or None if nothing is buffered."""
+        name = "_stderr_buffer" if stderr else "_recv_buffer"
+        with self._buffer_lock:
+            buf = self._as_bytearray(getattr(self, name))
+            setattr(self, name, buf)
+            if not buf:
+                return None
+            end = len(buf) if nbytes <= 0 else min(nbytes, len(buf))
+            if until_newline:
+                newline = buf.find(b"\n", 0, end)
+                if newline != -1:
+                    end = newline + 1
+            data = bytes(buf[:end])
+            del buf[:end]
+            return data
+
+    async def _recv_stream(
+        self, stderr: bool, nbytes: int, until_newline: bool = False
+    ) -> bytes:
+        try:
+            while True:
+                data = self._take_buffered(stderr, nbytes, until_newline)
+                if data is not None:
+                    await self._adjust_window_async(len(data))
+                    return data
+
+                # Nothing buffered: EOF, or the channel is closed.
+                if self.eof_received or self.closed:
+                    return b""
+
+                # Wait for more data by pumping the transport
+                await self._transport._pump_async()
+
+        except Exception as e:
+            if isinstance(e, ChannelException):
+                raise
+            raise ChannelException(f"Receive failed: {e}") from e
 
     def _handle_eof(self) -> None:
         """Handle incoming channel EOF."""
@@ -115,10 +160,13 @@ class AsyncChannel(Channel):
             data = data.encode(SSH_STRING_ENCODING)
 
         total_sent = 0
+        # Slice a memoryview: re-slicing the bytes object on every packet would
+        # copy the remainder each time (quadratic for large sends).
+        view = memoryview(data)
 
         try:
             # Check if we have enough window space
-            while len(data) > 0:
+            while len(view) > 0:
                 if self._remote_window_size == 0:
                     # Wait for window adjustment by pumping the transport
                     await self._transport._pump_async()
@@ -126,7 +174,7 @@ class AsyncChannel(Channel):
 
                 # Send what we can fit in the window and max packet size
                 chunk_size = min(
-                    len(data), self._remote_window_size, self._remote_max_packet_size
+                    len(view), self._remote_window_size, self._remote_max_packet_size
                 )
                 if (
                     chunk_size == 0
@@ -134,10 +182,10 @@ class AsyncChannel(Channel):
                     await self._transport._pump_async()
                     continue
 
-                chunk = data[:chunk_size]
+                chunk = bytes(view[:chunk_size])
                 await self._transport._send_channel_data_async(self._channel_id, chunk)
 
-                data = data[chunk_size:]
+                view = view[chunk_size:]
                 self._remote_window_size -= chunk_size
                 total_sent += chunk_size
 
@@ -147,6 +195,13 @@ class AsyncChannel(Channel):
             if isinstance(e, ChannelException):
                 raise
             raise ChannelException(f"Send failed: {e}") from e
+
+    async def send_eof(self) -> None:  # type: ignore[override]
+        """Send EOF (half-close): the peer can still send to us."""
+        if self._eof_sent or self._closed:
+            return
+        self._eof_sent = True
+        await self._transport._send_channel_eof_async(self._channel_id)
 
     async def sendall(self, data: Union[bytes, str]) -> None:  # type: ignore[override]
         """
@@ -170,42 +225,7 @@ class AsyncChannel(Channel):
         Raises:
             ChannelException: If receive fails
         """
-        try:
-            # Wait for data or channel close
-            while True:
-                with self._buffer_lock:
-                    if self._recv_buffer:
-                        # Return available data
-                        if nbytes <= 0:
-                            data = self._recv_buffer
-                            self._recv_buffer = b""
-                        else:
-                            data = self._recv_buffer[:nbytes]
-                            self._recv_buffer = self._recv_buffer[nbytes:]
-
-                        bytes_read = bytes(data)
-
-                    else:
-                        bytes_read = None
-
-                if bytes_read is not None:
-                    if len(bytes_read) > 0:
-                        await self._adjust_window_async(len(bytes_read))
-                    return bytes_read
-
-                if self.eof_received:
-                    return b""
-
-                if self.closed:
-                    raise ChannelException("Channel is closed")
-
-                # Wait for more data by pumping the transport
-                await self._transport._pump_async()
-
-        except Exception as e:
-            if isinstance(e, ChannelException):
-                raise
-            raise ChannelException(f"Receive failed: {e}") from e
+        return await self._recv_stream(False, nbytes)
 
     async def recv_exactly(self, nbytes: int) -> bytes:  # type: ignore[override]
         """
@@ -220,13 +240,13 @@ class AsyncChannel(Channel):
         Raises:
             ChannelException: If receive fails or channel closed
         """
-        data = b""
+        data = bytearray()
         while len(data) < nbytes:
             chunk = await self.recv(nbytes - len(data))
             if not chunk:
                 raise ChannelException("Connection closed while waiting for data")
             data += chunk
-        return data
+        return bytes(data)
 
     async def recv_stderr(self, nbytes: int) -> bytes:  # type: ignore[override]
         """
@@ -241,41 +261,7 @@ class AsyncChannel(Channel):
         Raises:
             ChannelException: If receive fails
         """
-        if self.closed and not self._stderr_buffer:
-            raise ChannelException("Channel is closed")
-
-        try:
-            # Wait for data or channel close
-            while True:
-                with self._buffer_lock:
-                    if self._stderr_buffer:
-                        # Return available data
-                        if nbytes <= 0:
-                            data = self._stderr_buffer
-                            self._stderr_buffer = b""
-                        else:
-                            data = self._stderr_buffer[:nbytes]
-                            self._stderr_buffer = self._stderr_buffer[nbytes:]
-
-                        bytes_read = bytes(data)
-                    else:
-                        bytes_read = None
-
-                if bytes_read is not None:
-                    if len(bytes_read) > 0:
-                        await self._adjust_window_async(len(bytes_read))
-                    return bytes_read
-
-                if not self._stderr_buffer and self.eof_received:
-                    return b""
-
-                # Wait for more data by pumping the transport
-                await self._transport._pump_async()
-
-        except Exception as e:
-            if isinstance(e, ChannelException):
-                raise
-            raise ChannelException(f"Receive failed: {e}") from e
+        return await self._recv_stream(True, nbytes)
 
     async def _wait_for_channel_request_result(self) -> bool:
         """Pump until MSG_CHANNEL_SUCCESS/FAILURE is dispatched to this channel.
@@ -399,28 +385,30 @@ class AsyncChannel(Channel):
         return self.get_exit_status()
 
     async def close(self) -> None:  # type: ignore[override]
-        """Close channel asynchronously."""
-        if not self._closed:
+        """Close channel asynchronously.
+
+        Sends EOF and CLOSE unless CLOSE was already sent (for example as the
+        reply to the peer's close). The channel number is released once both
+        sides have sent CLOSE.
+        """
+        if not self._close_sent:
+            self._close_sent = True
             try:
-                # Send EOF first
-                await self._transport._send_channel_eof_async(self._channel_id)
-
-                # Send close
+                if not self._eof_sent and not self._close_received:
+                    await self._transport._send_channel_eof_async(self._channel_id)
+                    self._eof_sent = True
                 await self._transport._send_channel_close_async(self._channel_id)
-
             except Exception as e:
                 self._logger.debug(f"Error during async channel close: {e}")
-            finally:  # Remove from transport
-                if (
-                    hasattr(self._transport, "_channels")
-                    and self._channel_id in self._transport._channels
-                ):
-                    async with getattr(self._transport, "_state_lock", asyncio.Lock()):
-                        if self._channel_id in self._transport._channels:
-                            del self._transport._channels[self._channel_id]
 
-                self._closed = True
-                self._closed_event.set()
+        if self._close_received or self._remote_channel_id is None:
+            channels = getattr(self._transport, "_channels", None)
+            if channels is not None and self._channel_id in channels:
+                async with getattr(self._transport, "_state_lock", asyncio.Lock()):
+                    channels.pop(self._channel_id, None)
+
+        self._closed = True
+        self._closed_event.set()
 
     async def wait_closed(self) -> None:
         """Wait for channel to be closed."""
@@ -442,6 +430,9 @@ class AsyncChannel(Channel):
                 self._channel_id, bytes_to_add
             )
             self._local_window_size += bytes_to_add
+            # Credit the same amount back to the inbound-overrun accounting.
+            if self._inbound_window_remaining is not None:
+                self._inbound_window_remaining += bytes_to_add
 
     def makefile(self, mode: str = "r", bufsize: int = -1) -> Any:
         """
@@ -516,7 +507,7 @@ class AsyncChannelFile:
         if size == 0:
             return b""
 
-        res = b""
+        res = bytearray()
         while True:
             # How many bytes to request in this iteration
             if size < 0:
@@ -536,7 +527,7 @@ class AsyncChannelFile:
 
             res += chunk
 
-        return res
+        return bytes(res)
 
     def get_exit_status(self) -> int:
         """
@@ -587,13 +578,17 @@ class AsyncChannelFile:
         Returns:
             Read line
         """
+        if self._closed:
+            raise ValueError("I/O operation on closed file")
         result = bytearray()
         while True:
-            char = await self.read(1)
-            if not char:
+            chunk = await self._channel._recv_stream(
+                self._is_stderr, 65536, until_newline=True
+            )
+            if not chunk:
                 break
-            result.extend(char)
-            if char == b"\n":
+            result += chunk
+            if chunk.endswith(b"\n"):
                 break
         return result.decode("utf-8", errors="replace")
 

@@ -75,6 +75,7 @@ def test_ssh_client_verify_host_key_reject():
 
     # Mock storage to return None (unknown host)
     client._host_key_storage = MagicMock()
+    client._host_key_storage.is_revoked.return_value = False
     client._host_key_storage.get.return_value = None
 
     # RejectPolicy should raise BadHostKeyException
@@ -95,6 +96,8 @@ def test_ssh_client_verify_host_key_auto_add():
     transport.get_server_host_key.return_value = server_key
 
     client._host_key_storage = MagicMock()
+
+    client._host_key_storage.is_revoked.return_value = False
     client._host_key_storage.lookup.return_value = []
 
     client.set_missing_host_key_policy(AutoAddPolicy(accept_risk=True))
@@ -116,6 +119,7 @@ def test_ssh_client_verify_host_key_mismatch():
     known_key = MagicMock()
     known_key.get_public_key_bytes.return_value = b"old_key"
     client._host_key_storage = MagicMock()
+    client._host_key_storage.is_revoked.return_value = False
     client._host_key_storage.lookup.return_value = [known_key]
 
     with pytest.raises(BadHostKeyException):
