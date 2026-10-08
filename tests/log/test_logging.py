@@ -305,3 +305,39 @@ def test_configure_logging(tmp_path):
     content = out_file.read_text()
     assert "Test message" in content
     assert "password=[PASSWORD_REDACTED]" in content
+
+
+def test_configure_logging_twice_replaces_and_closes_handlers(tmp_path):
+    """Reconfiguring must close the previous log files and not stack
+    handlers (which duplicated every security/performance record)."""
+    configure_logging(
+        output_file=str(tmp_path / "one.log"),
+        security_file=str(tmp_path / "sec1.log"),
+        performance_file=str(tmp_path / "perf1.log"),
+    )
+    names = ("spindlex", "spindlex.security", "spindlex.performance")
+    first = {name: list(logging.getLogger(name).handlers) for name in names}
+    # Files opened by the first configuration (the custom security and
+    # performance handlers wrap a file handler).
+    first_files = {
+        name: [getattr(h, "file_handler", h).stream for h in handlers]
+        for name, handlers in first.items()
+    }
+    for name, files in first_files.items():
+        assert files and all(not f.closed for f in files), name
+    configure_logging(
+        output_file=str(tmp_path / "two.log"),
+        security_file=str(tmp_path / "sec2.log"),
+        performance_file=str(tmp_path / "perf2.log"),
+    )
+    try:
+        for name, old_handlers in first.items():
+            current = logging.getLogger(name).handlers
+            assert len(current) == 1, name
+            assert not any(h in current for h in old_handlers), name
+            assert all(f.closed for f in first_files[name]), name
+    finally:
+        for name in first:
+            for handler in list(logging.getLogger(name).handlers):
+                logging.getLogger(name).removeHandler(handler)
+                handler.close()
