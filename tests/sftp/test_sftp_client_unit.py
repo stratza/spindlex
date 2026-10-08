@@ -212,6 +212,40 @@ class TestSFTPFile:
         assert f.read(-1) == file_data
         assert f._offset == len(file_data)
 
+    def _serve(self, f, client, file_data, cap=None):
+        requests: dict[int, tuple[int, int]] = {}
+
+        def record_send(msg):
+            requests[msg.request_id] = (msg.offset, msg.length)
+
+        def respond(rid):
+            offset, length = requests[rid]
+            chunk = file_data[offset : offset + min(length, cap or length)]
+            if not chunk:
+                return SFTPStatusMessage(rid, SSH_FX_EOF, "EOF")
+            return _make_data_msg(data=chunk)
+
+        client._send_message.side_effect = record_send
+        client._receive_message_for_id.side_effect = respond
+
+    def test_read_all_short_final_read_is_not_a_read_cap(self):
+        """The last read of a file is usually short; that is the end of the
+        file, not a server limit, so later reads keep the full size."""
+        f, client = self._make_file()
+        client._max_read_len = 10000
+        file_data = bytes(range(256)) * 100  # 25600 bytes: 10000+10000+5600
+        self._serve(f, client, file_data)
+        assert f.read(-1) == file_data
+        assert client._max_read_len == 10000
+
+    def test_read_all_server_read_cap_is_remembered(self):
+        f, client = self._make_file()
+        client._max_read_len = 10000
+        file_data = bytes(range(256)) * 100
+        self._serve(f, client, file_data, cap=4000)
+        assert f.read(-1) == file_data
+        assert client._max_read_len == 4000
+
     def test_read_all_empty_data_response_treated_as_eof(self):
         """An empty data response must terminate the loop, not spin forever."""
         f, client = self._make_file()
@@ -455,6 +489,49 @@ class TestSFTPClientGet:
         client.get("/remote/big.bin", local)
         with open(local, "rb") as fh:
             assert fh.read() == file_data
+
+    def _get_with_server(self, client, tmp_path, file_data, cap=None):
+        local = str(tmp_path / "dl.bin")
+        client._send_request_and_wait_response.side_effect = [
+            _make_handle_msg(handle=b"dl_handle"),
+            _make_ok_status(),
+        ]
+        requests: dict[int, tuple[int, int]] = {}
+
+        def record_send(msg):
+            requests[msg.request_id] = (msg.offset, msg.length)
+
+        def respond(rid):
+            offset, length = requests[rid]
+            chunk = file_data[offset : offset + min(length, cap or length)]
+            if not chunk:
+                return SFTPStatusMessage(rid, SSH_FX_EOF, "EOF")
+            return _make_data_msg(data=chunk)
+
+        client._send_message = MagicMock(side_effect=record_send)
+        client._receive_message_for_id = MagicMock(side_effect=respond)
+        client.get("/remote/file.bin", local)
+        with open(local, "rb") as fh:
+            assert fh.read() == file_data
+
+    def test_get_short_final_read_keeps_read_size(self, tmp_path):
+        """A download whose size is not a multiple of the read size ends with
+        a short read. That must not shrink the read size for later downloads
+        (it did, making every later download several times slower)."""
+        client = self._client()
+        client._max_read_len = 10000
+        file_data = bytes(range(256)) * 100  # 25600 bytes: 10000+10000+5600
+        self._get_with_server(client, tmp_path, file_data)
+        assert client._max_read_len == 10000
+        self._get_with_server(client, tmp_path, file_data)
+        assert client._max_read_len == 10000
+
+    def test_get_server_read_cap_is_remembered(self, tmp_path):
+        client = self._client()
+        client._max_read_len = 10000
+        file_data = bytes(range(256)) * 100
+        self._get_with_server(client, tmp_path, file_data, cap=4000)
+        assert client._max_read_len == 4000
 
     def test_get_empty_data_response_treated_as_eof(self, tmp_path):
         """An empty data response must terminate the loop, not spin forever."""
