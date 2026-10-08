@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-10-08
+
 ### Fixed
 *   **SFTP downloads slowed down after the first one** - a download whose size is not a multiple of the read size ends with a short read, which 1.0.3 mistook for a server read limit. The read size for the rest of the session dropped to that final fragment (often a few KiB), making every later `get()` / `read()` several times slower (1 MiB: ~44 ms instead of ~14 ms against OpenSSH). A short read now only lowers the read size when more data follows it.
 *   **Async `exec_command()` could hang forever** - when a server closed a session channel instead of answering its `exec` request (seen intermittently with Dropbear when a new session starts while the previous one is still closing), `AsyncChannel` kept waiting for a reply that never came. A close now ends the wait and `exec_command()` / `invoke_shell()` / `invoke_subsystem()` raise `ChannelException`. A reply processed while the request was still being sent is no longer lost either.
