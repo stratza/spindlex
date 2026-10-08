@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-10-08
+
 ### Security
 *   **Login grace time is a hard deadline** (CWE-400, [GHSA-qg37-cwm7-mpqq](https://github.com/stratza/spindlex/security/advisories/GHSA-qg37-cwm7-mpqq)) - the authentication deadline added in 1.0.2 was only checked between packets, so a client sending data slowly could hold unauthenticated connections open indefinitely and exhaust the connection limit. Connections that have not authenticated within the grace time are now closed regardless of traffic.
 *   **`known_hosts` revocation and removal are honoured** (CWE-295) - `@revoked` entries were ignored, so a revoked host key was accepted (and could be added by permissive policies); it is now refused whatever the policy. Keys deleted with `HostKeyStorage.remove()` are removed from the file on `save()`, including hashed entries, instead of being trusted again after a reload. `copy_from()` keeps hashed and revoked entries.
