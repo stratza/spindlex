@@ -318,7 +318,7 @@ def test_sftp_listing_does_not_follow_links_out_of_root(tmp_path):
     assert attrs.size != 12345  # the link itself, not the outside file
 
 
-def test_concurrency_limit_for_async_recursive_download(tmp_path):
+async def test_concurrency_limit_for_async_recursive_download(tmp_path):
     import asyncio
     import stat as stat_module
     from unittest.mock import AsyncMock
@@ -349,8 +349,8 @@ def test_concurrency_limit_for_async_recursive_download(tmp_path):
 
     client.get = get
 
-    asyncio.run(client.get_recursive("/d", str(tmp_path / "out"), max_concurrency=4))
-    assert peak <= 4
+    await client.get_recursive("/d", str(tmp_path / "out"), max_concurrency=4)
+    assert 0 < peak <= 4
 
 
 def test_userauth_requires_service_request_end_to_end(tmp_path):
